@@ -5,9 +5,6 @@
 // Copy / Paste
 // Page load
 
-var recording = false;
-
-
 // taken from http://stackoverflow.com/questions/2631820/im-storing-click-coordinates-in-my-db-and-then-reloading-them-later-and-showing/2631931#2631931
 function getPathTo(element) {
   if (element.id !== '')
@@ -39,7 +36,8 @@ var processEvent = function _processEvent(eventData) {
     chrome.extension.sendMessage({type: "event", value: eventMessage});
   }
 };
-$(document).on('click dblclick drag drop focus load submit click',
+
+$(document).on('click dblclick drag drop focus load submit',
                processEvent);
 
 chrome.extension.onMessage.addListener(
@@ -50,7 +48,14 @@ chrome.extension.onMessage.addListener(
     } else if (request.type == "event") {
       console.log("extension event", request)
       var e = request.value;
-      $(e.target).trigger(e.type);
+      var nodes = xPathToNodes(e.target);
+      for (var i = 0, ii = nodes.length; i < ii; ++i) {
+        simulate(nodes[i], e.type);
+      }
     }
   }
 ); 
+
+var recording = false;
+chrome.extension.sendMessage({type: "isRecording", value: null});
+

@@ -1,11 +1,12 @@
-var events = null;
 var recording = false;
+var events = null;
 
 $("#start").click(function(eventObject) {
   console.log("start");
 
-  reset(); 
+  resetEvents();
   recording = true;
+  $("#status").text("Recording");
   sendToAll({type: "recording", value: recording});
 });
 
@@ -13,6 +14,7 @@ $("#stop").click(function(eventObject) {
   console.log("stop");
 
   recording = false;
+  $("#status").text("Done recording");
   sendToAll({type: "recording", value: recording});
 });
 
@@ -24,8 +26,8 @@ $("#replay").click(function(eventObject) {
 
   if (events) {
     for (var i = 0, ii = events.length; i < ii; ++i) {
-      var e = events[i].value;
-      chrome.tabs.query({url: e.URL}, function(tabs) {
+      var e = events[i];
+      chrome.tabs.query({url: e.value.URL}, function(tabs) {
         console.log("background playback", tabs);
         if (!tabs) {
           console.log("Cannot execute:", e);
@@ -38,27 +40,36 @@ $("#replay").click(function(eventObject) {
   }
 });
 
-var reset = function() {
-  events = []
+var replay = function(events) {
+  
 }
 
-var sendToAll = function(message) {
-  chrome.tabs.query({}, function(tabs) {
-    console.log("background sending:", message);
-    for (var i = 0, ii = tabs.length; i < ii; ++i) {
-      chrome.tabs.sendMessage(tabs[i].id, message);
-    }
-  });   
-};
+var resetEvents = function() {
+  events = []
+  $("#events").empty();
+  $("#status").text(""); 
+}
+
+var addEvent = function(eventRequest) {
+  events.push(eventRequest);
+  var eventInfo = eventRequest.value;
+  var newDiv = "<div class='event wordwrap'>";
+  for (prop in eventInfo) {
+    newDiv += "<b>" + prop + ":" + "</b>" + eventInfo[prop] + "<br/>";
+  }
+  newDiv += "</div>";
+  $("#events").append(newDiv);
+}
 
 chrome.extension.onMessage.addListener(
   function(request, sender, sendResponse) {
     console.log("background receiving:", request, "from", sender);
-    if (recording) {
-      if (request.type == "event") {
-        console.log("background event:", request, "from",  sender);
-        events.push(request);
-      }
+    if (request.type == "event") {
+      console.log("background adding event");
+      addEvent(request);
+    } else if (request.type == "isRecording") {
+      chrome.tabs.sendMessage(sender.tab.id,
+                              {type: "recording", value: recording});
     }
   }
 );
