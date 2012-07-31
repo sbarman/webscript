@@ -1,0 +1,19 @@
+<html>
+  <head>
+  </head>
+  <body>
+    <script type="text/javascript">
+      // Test whether the origin of an event is distinguishable
+      // In this case, the click is caused by a mousedown and mouseup event
+      // occuring
+      // Result: not distinguishable from event object
+      document.addEventListener("mouseup", function(e) {
+        console.log(e);
+      }, true);
+
+      document.addEventListener("click", function(e) {
+        console.log(e);
+      }, true);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,34 @@
+<html>
+  <head>
+  </head>
+  <body>
+    <script type="text/javascript">
+      // Test whether a dispatched mousedown and mouseup create
+      // a click event.
+      // Result: no click event is created
+      document.addEventListener("click", function(e) {
+        console.log(e);
+      }, true);
+
+      document.addEventListener("mousedown", function(e) {
+        console.log(e);
+      }, true);
+
+      document.addEventListener("mouseup", function(e) {
+        console.log(e);
+      }, true);
+
+      var evt = document.createEvent("MouseEvents");
+      evt.initMouseEvent("mousedown", true, true, window, 0, 0, 0,
+                         0, 0, false, false, false, false, 0,
+                         null);
+      document.body.dispatchEvent(evt);
+      
+      var evt = document.createEvent("MouseEvents");
+      evt.initMouseEvent("mouseup", true, true, window, 0, 0, 0,
+                         0, 0, false, false, false, false, 0,
+                         null);
+      document.body.dispatchEvent(evt);
+    </script>
+  </body>
+</html>
