@@ -4,8 +4,8 @@
   "manifest_version": 2,
   "description": "Programing for the masses.",
   "browser_action": {
-    "default_icon": "icons/16-full-color.png",
-    "default_popup": "popup.html"
+    "default_title": "WebScript",
+    "default_icon": "icons/16-full-color.png"
   },
   "background": {
     "page": "background.html"
@@ -15,7 +15,7 @@
       "matches": ["<all_urls>"],
       "js": ["jquery-1.7.2.js", "util.js", "content_script.js"],
       "run_at": "document_start",
-      "all_frames": false
+      "all_frames": true
     }
   ],
   "omnibox": {
@@ -27,7 +27,6 @@
     "128": "icons/128-full-color.png"
   },
   "permissions": [
-    "http://api.flickr.com/",
     "tabs" // used to communicate
   ]
 }

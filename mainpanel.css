@@ -1,7 +1,21 @@
+#status {
+  font: 15px arial, sans-serif;
+  border: 1px solid black;
+  padding: 2px;
+  margin: 3px;
+}
+
+#paramsDiv {
+  font: 15px arial, sans-serif;
+  border: 1px solid black;
+  padding: 2px;
+  margin: 3px;
+}
+
 .event {
   font: 15px arial, sans-serif;
   border: 1px solid black;
-  overflow:hidden
+  overflow:hidden;
 }
 
 .wordwrap { 

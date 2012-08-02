@@ -1,3 +1,4 @@
+// send a message to all other tabs, except for yourself
 var sendToAll = function(message) {
   chrome.tabs.getCurrent(function(curTab) {
     chrome.tabs.query({}, function(tabs) {
@@ -11,8 +12,28 @@ var sendToAll = function(message) {
       }
     });
   });
-};
+}; 
 
+// taken from http://stackoverflow.com/questions/2631820/im-storing-click-coordinates-in-my-db-and-then-reloading-them-later-and-showing/2631931#2631931
+function getPathTo(element) {
+  if (element.id !== '')
+    return 'id("' + element.id + '")';
+  if (element === document.body)
+    return element.tagName;
+    
+  var ix = 0;
+  var siblings = element.parentNode.childNodes;
+  for (var i = 0, ii = siblings.length; i < ii; i++) {
+    var sibling = siblings[i];
+    if (sibling === element)
+      return getPathTo(element.parentNode) + '/' + element.tagName +
+             '[' + (ix + 1) + ']'; 
+    if (sibling.nodeType === 1 && sibling.tagName === element.tagName)
+      ix++;
+  }
+}
+
+// convert an xpath expression to an array of DOM nodes
 var xPathToNodes = function(xpath) {
   var q = document.evaluate(xpath, document, null, XPathResult.ANY_TYPE, null);
   var results = [];
@@ -25,7 +46,46 @@ var xPathToNodes = function(xpath) {
   return results;
 };
 
-// taken from http://stackoverflow.com/questions/6157929/how-to-simulate-mouse-click-using-javascript
+// List of all events and whether or not we should capture them
+var capturedEvents = {
+  'HTMLEvents': {
+    'load': false,
+    'unload': false,
+    'abort': true,
+    'error': true,
+    'select': true,
+    'change': true,
+    'submit': true,
+    'reset': true,
+    'focus': false,
+    'blur': false,
+    'resize': false,
+    'scroll': false
+  },
+  'MouseEvents': {
+    'click': true,
+    'dblclick': true,
+    'mousedown': true,
+    'mouseup': true,
+    'mouseover': false,
+    'mousemove': false,
+    'mouseout': false
+  }
+}
+
+var params = {
+  events: capturedEvents,
+  timeout: 5
+}
+
+//var eventMatchers = {
+//  'HTMLEvents': /^(?:load|unload|abort|error|select|change|submit|reset|focus|blur|resize|scroll)$/,
+//  'MouseEvents': /^(?:click|dblclick|mouse(?:down|up|over|move|out))$/
+//}
+
+
+// taken from http://stackoverflow.com/questions/6157929/how-to-simulate-mouse-
+// click-using-javascript. used to simulate events on a page
 function simulate(element, eventName) {
 
   function extend(destination, source) {
@@ -34,11 +94,6 @@ function simulate(element, eventName) {
     return destination;
   }
   
-  var eventMatchers = {
-    'HTMLEvents': /^(?:load|unload|abort|error|select|change|submit|reset|focus|blur|resize|scroll)$/,
-    'MouseEvents': /^(?:click|dblclick|mouse(?:down|up|over|move|out))$/
-  }
-
   var defaultOptions = {
     pointerX: 0,
     pointerY: 0,
@@ -86,4 +141,3 @@ function simulate(element, eventName) {
   }
   return element;
 }
-

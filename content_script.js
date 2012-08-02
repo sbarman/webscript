@@ -5,29 +5,11 @@
 // Copy / Paste
 // Page load
 
-// taken from http://stackoverflow.com/questions/2631820/im-storing-click-coordinates-in-my-db-and-then-reloading-them-later-and-showing/2631931#2631931
-function getPathTo(element) {
-  if (element.id !== '')
-    return 'id("' + element.id + '")';
-  if (element === document.body)
-    return element.tagName;
-
-  var ix = 0;
-  var siblings = element.parentNode.childNodes;
-  for (var i = 0, ii = siblings.length; i < ii; i++) {
-    var sibling = siblings[i];
-    if (sibling === element)
-      return getPathTo(element.parentNode) + '/' + element.tagName +
-             '[' + (ix + 1) + ']';
-    if (sibling.nodeType === 1 && sibling.tagName === element.tagName)
-      ix++;
-  }
-}
-
 var processEvent = function _processEvent(eventData) {
 //  var pageClone = $(document).clone(false, false);
-  console.log("extension event:", eventData);
   if (recording) {
+    console.log("extension event:", eventData);
+
     var eventMessage = {}
     eventMessage["target"] = getPathTo(eventData.target);
     eventMessage["URL"] = document.URL;
@@ -35,27 +17,63 @@ var processEvent = function _processEvent(eventData) {
     console.log("extension sending:", eventMessage);
     chrome.extension.sendMessage({type: "event", value: eventMessage});
   }
+  return true;
 };
 
-$(document).on('click dblclick drag drop focus load submit',
-               processEvent);
+var handleMessage = function(request, sender, sendResponse) {
+  console.log("extension receiving:", request, "from", sender);
+  if (request.type == "recording") {
+    recording = request.value;
+  } else if (request.type == "params") {
+    updateParams(request.value);
+  } else if (request.type == "event") {
+    console.log("extension event", request)
+    var e = request.value;
+    var nodes = xPathToNodes(e.target);
+    for (var i = 0, ii = nodes.length; i < ii; ++i) {
+      simulate(nodes[i], e.type);
+    }
+  }
+}
 
-chrome.extension.onMessage.addListener(
-  function(request, sender, sendResponse) {
-    console.log("extension receiving:", request, "from", sender);
-    if (request.type == "recording") {
-      recording = request.value;
-    } else if (request.type == "event") {
-      console.log("extension event", request)
-      var e = request.value;
-      var nodes = xPathToNodes(e.target);
-      for (var i = 0, ii = nodes.length; i < ii; ++i) {
-        simulate(nodes[i], e.type);
+var updateParams = function(newParams) {
+  var oldParams = params;
+  params = newParams;
+  
+  var oldEvents = oldParams.events; 
+  var events = params.events;
+
+  for (var eventType in events) {
+    var listOfEvents = events[eventType];
+    var oldListOfEvents = oldEvents[eventType];
+    for (var e in listOfEvents) {
+      if (listOfEvents[e] && !oldListOfEvents[e]) {
+        console.log("extension listening for " + e);
+        document.addEventListener(e, processEvent, true);
+      } else if (!listOfEvents[e] && oldListOfEvents[e]) {
+        console.log("extension stopped listening for " + e);
+        document.removeEventListener(e, processEvent, true);
       }
     }
   }
-); 
+}
 
-var recording = false;
-chrome.extension.sendMessage({type: "isRecording", value: null});
+// Attach the event handlers to their respective events
+var addListenersForRecording = function() {
+  for (var eventType in capturedEvents) {
+    var listOfEvents = capturedEvents[eventType];
+    for (var e in listOfEvents) {
+      if (listOfEvents[e]) {
+        document.addEventListener(e, processEvent, true);
+      }
+    }
+  }
+};
+addListenersForRecording();
 
+chrome.extension.onMessage.addListener(handleMessage); 
+
+// see if recording is going on
+var recording;
+chrome.extension.sendMessage({type: "getRecording", value: null});
+chrome.extension.sendMessage({type: "getParams", value: null});

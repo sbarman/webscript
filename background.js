@@ -1,17 +1,28 @@
+var panelWindow = undefined;
+
 function openMainPanel() {
-  var features = "titlebar=no,menubar=no,location=no," +
-                 "resizable=no,scrollbars=no,status=no," +
-                 "height=400,width=300";
-  var panelWindow = window.open("mainpanel.html", "mainpanel", features);
-//    context[win_id].panelWindow =
-//        window.open("panel.html", "iMacros_panel_"+win_id, features);
-//    context[win_id].panelWindow.args = {win_id: win_id};
-//    context[win_id].dockInterval = setInterval(function() {
-//        chrome.windows.get(win_id, function(win) {
-//            dockPanel(win);
-//        });
-//    }, 500);
+  // check if panel is already open
+  if (typeof panelWindow == "undefined" || panelWindow.closed) {
+//    var features = "titlebar=no,menubar=no,location=no," +
+//                   "resizable=no,scrollbars=no,status=no," +
+//                   "height=400,width=300";
+    chrome.windows.create({url: "mainpanel.html", width: 300, height: 400,
+                          focused: true, type: "panel"}, function(winInfo) {
+      panelWindow = winInfo;
+    });
+//    panelWindow = window.open("mainpanel.html", "mainpanel",
+//                              features);
+  } else {
+    chrome.windows.update(panelWindow.id, {focused: true});
+  }
 }
 
-console.log("main panel");
-openMainPanel();
+chrome.browserAction.onClicked.addListener(function(tab) {
+  openMainPanel();
+});
+
+chrome.windows.onRemoved.addListener(function(winId) {
+  if (typeof panelWindow == "object" && panelWindow.id == winId) {
+    panelWindow = undefined;
+  }
+});
