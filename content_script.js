@@ -77,3 +77,5 @@ chrome.extension.onMessage.addListener(handleMessage);
 var recording;
 chrome.extension.sendMessage({type: "getRecording", value: null});
 chrome.extension.sendMessage({type: "getParams", value: null});
+
+console.log(frames.length);

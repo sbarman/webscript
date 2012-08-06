@@ -9,8 +9,7 @@ var start = function _start() {
   recording = true;
 
   // Update the UI
-  chrome.browserAction.setBadgeBackgroundColor({color:
-      [255, 0, 0, 64]});
+  chrome.browserAction.setBadgeBackgroundColor({color:[255, 0, 0, 64]});
   chrome.browserAction.setBadgeText({text: "ON"});
   $("#status").text("Recording");
 
@@ -25,8 +24,7 @@ var stop = function _stop() {
   recording = false;
 
   // Update the UI
-  chrome.browserAction.setBadgeBackgroundColor({color:
-      [0, 0, 0, 0]});
+  chrome.browserAction.setBadgeBackgroundColor({color: [0, 0, 0, 0]});
   chrome.browserAction.setBadgeText({text: "OFF"});
   $("#status").text("Done");
 
@@ -36,41 +34,55 @@ var stop = function _stop() {
 
 // Replay the event stream, need to do this in CPS style because of the chrome
 // extension API
-var replay = function(events, index) {
-  console.log("replay");
-
+var replay = function(events, index, tabMapping) {
   if (index >= events.length)
     return;
 
-  var e = events[index];
-  chrome.tabs.query({url: e.value.URL}, function(tabs) {
-    console.log("background playback", tabs);
-    if (tabs.length == 0) {
-      chrome.tabs.create({url: e.value.URL, active: true}, 
-          function(tab) {
-            window.setTimeout(function() {
-              chrome.tabs.sendMessage(tab.id, e);
+  $("#status").text("Replay " + (index + 1));
+
+  var e = events[index].info;
+  var tab = events[index].tab;
+
+  console.log("background replay:", e, tab, tabMapping);
+
+  if (tab.id in tabMapping) {
+    chrome.tabs.sendMessage(tabMapping[tab.id], e);
+
+    window.setTimeout(function() {
+      replay(events, index + 1, tabMapping);
+    }, params.timeout);
+  } else {
+    chrome.tabs.query({url: e.value.URL}, function(tabs) {
+      if (tabs.length == 0) {
+        chrome.tabs.create({url: e.value.URL, active: true}, 
+            function(newTab) {
               window.setTimeout(function() {
-                replay(events, index + 1);
-              }, params.timeout);
-            }, 2000);
-          }
-      );
-    } else {
-      var tab = tabs[0];
-      chrome.tabs.sendMessage(tab.id, e);
-      window.setTimeout(function() {
-        replay(events, index + 1);
-      }, params.timeout);
-    }
-  });
+                tabMapping[tab.id] = newTab.id;
+                chrome.tabs.sendMessage(newTab.id, e);
+  
+                window.setTimeout(function() {
+                  replay(events, index + 1, tabMapping);
+                }, params.timeout);
+              }, 2000);
+            }
+        );
+      } else {
+        var sameUrlTab = tabs[0];
+        tabMapping[tab.id] = sameUrlTab.id;
+        chrome.tabs.sendMessage(sameUrlTab.id, e);
+        window.setTimeout(function() {
+          replay(events, index + 1, tabMapping);
+        }, params.timeout);
+      }
+    });
+  }
 }
 
 var handleMessage = function(request, sender, sendResponse) {
   console.log("background receiving:", request, "from", sender);
   if (request.type == "event") {
     console.log("background adding event");
-    addEvent(request);
+    addEvent(request, sender.tab);
   } else if (request.type == "getRecording") {
     chrome.tabs.sendMessage(sender.tab.id,{type: "recording", 
                             value: recording});
@@ -87,12 +99,18 @@ var resetEvents = function() {
 }
 
 // Add an event
-var addEvent = function(eventRequest) {
-  events.push(eventRequest);
+var addEvent = function(eventRequest, tabInfo) {
+  events.push({info: eventRequest, tab: tabInfo});
   var eventInfo = eventRequest.value;
   var newDiv = "<div class='event wordwrap'>";
+
+  newDiv += "<b>[" + events.length + "]type:" + "</b>" + eventInfo.type + 
+            "<br/>";
+
   for (prop in eventInfo) {
-    newDiv += "<b>" + prop + ":" + "</b>" + eventInfo[prop] + "<br/>";
+    if (prop != "type") {
+      newDiv += "<b>" + prop + ":" + "</b>" + eventInfo[prop] + "<br/>";
+    }
   }
   newDiv += "</div>";
   $("#events").append(newDiv);
@@ -133,6 +151,7 @@ var loadParams = function() {
   var form = $("#params");
   loadParamForm(form, params, "params");
   form.append("<input type='submit' value='Update' name='Update'/>");
+  sendToAll({type: "params", value: params});
 };
 
 var updateParams = function() {
@@ -181,7 +200,7 @@ $("#replay").click(function(eventObject) {
   stop();
 
   if (events && events.length > 0) {
-    replay(events, 0);  
+    replay(events, 0, {});  
   }
 });
 
@@ -204,6 +223,7 @@ chrome.extension.onMessage.addListener(handleMessage);
 $(window).unload( function() {
   stop();
   chrome.browserAction.setBadgeText({text: ""});
+  chrome.extension.onMessage.removeListener(handleMessage);
 });
 
 stop();

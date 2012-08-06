@@ -18,7 +18,7 @@ var sendToAll = function(message) {
 function getPathTo(element) {
   if (element.id !== '')
     return 'id("' + element.id + '")';
-  if (element === document.body)
+  if (element.tagName.toLowerCase() === "html")
     return element.tagName;
     
   var ix = 0;
@@ -75,7 +75,7 @@ var capturedEvents = {
 
 var params = {
   events: capturedEvents,
-  timeout: 5
+  timeout: 1000
 }
 
 //var eventMatchers = {
@@ -109,8 +109,8 @@ function simulate(element, eventName) {
   var options = extend(defaultOptions, arguments[2] || {});
   var oEvent, eventType = null;
 
-  for (var name in eventMatchers) {
-    if (eventMatchers[name].test(eventName)) {
+  for (var name in params.events) {
+    if (eventName in params.events[name]) {
       eventType = name;
       break;
     }
