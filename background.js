@@ -6,12 +6,13 @@ function openMainPanel() {
 //    var features = "titlebar=no,menubar=no,location=no," +
 //                   "resizable=no,scrollbars=no,status=no," +
 //                   "height=400,width=300";
+//    panelWindow = window.open("mainpanel.html", "mainpanel",
+//                              features);
+
     chrome.windows.create({url: "mainpanel.html", width: 300, height: 400,
                           focused: true, type: "panel"}, function(winInfo) {
       panelWindow = winInfo;
     });
-//    panelWindow = window.open("mainpanel.html", "mainpanel",
-//                              features);
   } else {
     chrome.windows.update(panelWindow.id, {focused: true});
   }

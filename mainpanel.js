@@ -1,3 +1,21 @@
+// Utility functions
+
+// send a message to all other tabs, except for yourself
+var sendToAll = function(message) {
+  chrome.tabs.getCurrent(function(curTab) {
+    chrome.tabs.query({}, function(tabs) {
+      console.log("background sending:", message);
+      var curId = curTab.id;
+      for (var i = 0, ii = tabs.length; i < ii; ++i) {
+        var id = tabs[i].id;
+        if (id != curId) {
+         chrome.tabs.sendMessage(tabs[i].id, message);
+        }
+      }
+    });
+  });
+};
+
 var recording = false;
 var events = null;
 
@@ -185,6 +203,11 @@ var updateParams = function() {
 }
 
 loadParams();
+
+// Utility functions
+
+
+
 
 // Attach the event handlers to their respective events
   
