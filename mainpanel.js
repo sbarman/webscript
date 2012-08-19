@@ -1,23 +1,19 @@
+// Global variables
+var ports = {}; 
+var recording = false;
+var events = null;
+var numPorts = 0;
+var portNameToTab = {};
+var tabIdToPortNames = {};
+
 // Utility functions
 
 // send a message to all other tabs, except for yourself
 var sendToAll = function(message) {
-  chrome.tabs.getCurrent(function(curTab) {
-    chrome.tabs.query({}, function(tabs) {
-      console.log("background sending:", message);
-      var curId = curTab.id;
-      for (var i = 0, ii = tabs.length; i < ii; ++i) {
-        var id = tabs[i].id;
-        if (id != curId) {
-         chrome.tabs.sendMessage(tabs[i].id, message);
-        }
-      }
-    });
-  });
+  for (var portName in ports) {
+    ports[portName].postMessage(message);
+  }
 };
-
-var recording = false;
-var events = null;
 
 // The user started recording
 var start = function _start() {
@@ -50,80 +46,120 @@ var stop = function _stop() {
   sendToAll({type: "recording", value: recording});
 };
 
+var sendEventNewTab = function(events, index, portMapping, tabMapping, tab) {
+  var port = undefined;
+
+  if (tab.id in tabIdToPortNames) {
+    var allPortsInTab = tabIdToPortNames[tab.id];
+    var portName = allPortsInTab[allPortsInTab.length - 1];
+    port = ports[portName];
+  }
+
+  if (typeof port == 'undefined') {
+    window.setTimeout(function() {
+      sendEventNewTab(events, index, portMapping, tabMapping, tab);
+    }, 1000);
+  } else {
+    port.postMessage(events[index].msg);
+    portMapping[events[index].port] = port;
+    tabMapping[events[index].tab.id] = tab.id;
+
+    window.setTimeout(function() {
+      replay(events, index + 1, portMapping, tabMapping);
+    }, params.timeout);
+  } 
+}
+
 // Replay the event stream, need to do this in CPS style because of the chrome
 // extension API
-var replay = function(events, index, tabMapping) {
+var replay = function(events, index, portMapping, tabMapping) {
   if (index >= events.length)
     return;
 
   $("#status").text("Replay " + (index + 1));
 
-  var e = events[index].info;
-  var tab = events[index].tab;
+  var e = events[index]
+  var msg = e.msg;
+  var port = e.port;
+  var tab = e.tab.id;
 
-  console.log("background replay:", e, tab, tabMapping);
+  console.log("background replay:", msg, port, tab);
 
-  if (tab.id in tabMapping) {
-    chrome.tabs.sendMessage(tabMapping[tab.id], e);
+  // we have already seen this port, reuse existing mapping
+  if (port in portMapping) {
+    portMapping[port].postMessage(msg);
 
     window.setTimeout(function() {
-      replay(events, index + 1, tabMapping);
+      replay(events, index + 1, portMapping, tabMapping);
+    }, params.timeout);
+  // we have already seen this tab, find equivalent port for tab
+  // for now we will just choose the last port added from this tab
+  } else if (tab in tabMapping) {
+    var newTabId = tabMapping[tab];
+    var tabPorts = tabIdToPortNames[newTabId];
+    var newPort = ports[tabPorts[tabPorts.length - 1]];
+    newPort.postMessage(msg);
+   
+    portMapping[port] = newPort;
+
+    window.setTimeout(function() {
+      replay(events, index + 1, portMapping, tabMapping);
     }, params.timeout);
   } else {
-    chrome.tabs.query({url: e.value.URL}, function(tabs) {
-      if (tabs.length == 0) {
-        chrome.tabs.create({url: e.value.URL, active: true}, 
-            function(newTab) {
-              window.setTimeout(function() {
-                tabMapping[tab.id] = newTab.id;
-                chrome.tabs.sendMessage(newTab.id, e);
-  
-                window.setTimeout(function() {
-                  replay(events, index + 1, tabMapping);
-                }, params.timeout);
-              }, 2000);
-            }
-        );
-      } else {
-        var sameUrlTab = tabs[0];
-        tabMapping[tab.id] = sameUrlTab.id;
-        chrome.tabs.sendMessage(sameUrlTab.id, e);
-        window.setTimeout(function() {
-          replay(events, index + 1, tabMapping);
-        }, params.timeout);
-      }
-    });
+    chrome.tabs.create({url: msg.value.URL, active: true}, 
+        function(newTab) {
+          sendEventNewTab(events, index, portMapping, tabMapping, newTab);
+        }
+    );
   }
-}
+};
 
-var handleMessage = function(request, sender, sendResponse) {
+// The first message content scripts send is to get a unique id
+var handleIdMessage = function(request, sender, sendResponse) {
   console.log("background receiving:", request, "from", sender);
+  if (request.type == "getId") {
+    numPorts++;
+    var portName = "" + numPorts
+    sendResponse({type: "id", value: portName});
+    portNameToTab[portName] = sender.tab;
+   
+    var tabId = sender.tab.id;
+    if (typeof tabIdToPortNames[tabId] == "undefined") {
+      tabIdToPortNames[tabId] = [];
+    }
+    tabIdToPortNames[tabId].push(portName);
+  }
+};
+
+// Route messages from the ports
+var handleMessage = function(port, request) {
   if (request.type == "event") {
     console.log("background adding event");
-    addEvent(request, sender.tab);
+    addEvent(request, port.name);
   } else if (request.type == "getRecording") {
-    chrome.tabs.sendMessage(sender.tab.id,{type: "recording", 
-                            value: recording});
+    port.postMessage({type: "recording", value: recording});
   } else if (request.type == "getParams") {
-    chrome.tabs.sendMessage(sender.tab.id,{type: "params", value: params});
+    port.postMessage({type: "params", value: params});
   }
-}
+};
 
 // Remove all the events
 var resetEvents = function() {
   events = []
   $("#events").empty();
   $("#status").text(""); 
-}
+};
 
 // Add an event
-var addEvent = function(eventRequest, tabInfo) {
-  events.push({info: eventRequest, tab: tabInfo});
+var addEvent = function(eventRequest, portName) {
+  events.push({msg: eventRequest, port: portName, 
+               tab: portNameToTab[portName]});
   var eventInfo = eventRequest.value;
   var newDiv = "<div class='event wordwrap'>";
 
   newDiv += "<b>[" + events.length + "]type:" + "</b>" + eventInfo.type + 
             "<br/>";
+  newDiv += "<b>port:" + "</b>" + portName + "<br/>";
 
   for (prop in eventInfo) {
     if (prop != "type") {
@@ -139,7 +175,7 @@ var addEvent = function(eventRequest, tabInfo) {
 // scripts on each page
 var loadParams = function() {
   // create a form based on parameters
-  var loadParamForm = function(form, paramObject, prefix) {
+  var loadParamForm = function(node, paramObject, prefix) {
     for (param in paramObject) {
       var paramValue = paramObject[param];
       var paramType = typeof paramValue;
@@ -151,17 +187,19 @@ var loadParams = function() {
 
         var newDiv = $("<div>" + param + "</div>");
         newDiv.append(input)
-        form.append(newDiv);
+        node.append(newDiv);
       } else if (paramType == "boolean") {
         var input = $("<input type=checkbox name=" + name + "></input>");
         input.prop('checked', paramValue);
 
         var newDiv = $("<div>" + param + "</div>");
         newDiv.append(input);
-        form.append(newDiv);
+        node.append(newDiv);
       } else if (paramType == "object") {
-        form.append("<div>" + name + "</div>");
-        loadParamForm(form, paramValue, name);
+        var newDiv = $("<div class='boxed'></div>");
+        newDiv.append("<div>" + name + "</div>");
+        loadParamForm(newDiv, paramValue, name);
+        node.append(newDiv);
       }
     }
   }
@@ -171,7 +209,9 @@ var loadParams = function() {
   form.append("<input type='submit' value='Update' name='Update'/>");
   sendToAll({type: "params", value: params});
 };
+loadParams();
 
+// Go through the form and update the params variable
 var updateParams = function() {
   var obj = {};
   var inputs = $("#params").prop("elements");
@@ -200,17 +240,9 @@ var updateParams = function() {
   }
 
   params = obj.params;
-}
-
-loadParams();
-
-// Utility functions
-
-
-
+};
 
 // Attach the event handlers to their respective events
-  
 $("#start").click(function(eventObject) {
   start();
 });
@@ -223,9 +255,11 @@ $("#replay").click(function(eventObject) {
   stop();
 
   if (events && events.length > 0) {
-    replay(events, 0, {});  
+    replay(events, 0, {}, {});  
   }
 });
+
+$("#paramsDiv").hide(1000);
 
 $("#paramsHide").click(function(eventObject) {
   $("#paramsDiv").toggle(1000);
@@ -239,7 +273,23 @@ $("#params").submit(function(eventObject) {
   return false;
 });
 
-chrome.extension.onMessage.addListener(handleMessage);
+chrome.extension.onMessage.addListener(handleIdMessage);
+
+chrome.extension.onConnect.addListener(function(port) {
+  ports[port.name] = port;
+
+  port.onMessage.addListener(function(msg) {
+    handleMessage(port, msg);
+  });
+
+  port.onDisconnect.addListener(function(evt) {
+    if (port.name in ports) {
+      delete ports[port.name];
+    } else {
+      throw "Can't find port";
+    }
+  });
+});
 
 // window is closed so tell the content scripts to stop recording and reset the
 // extension icon

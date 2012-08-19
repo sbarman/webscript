@@ -1,64 +1,12 @@
-// Mouse click
-// Select text
-// Input form
-// Back / forward button
-// Copy / Paste
-// Page load
+// Global variables
+var recording = false;
+var id = "setme";
+var port;
 
-var processEvent = function _processEvent(eventData) {
-//  var pageClone = $(document).clone(false, false);
-  if (recording) {
-    console.log("extension event:", eventData);
+// Utility functions
 
-    var eventMessage = {}
-    eventMessage["target"] = getPathTo(eventData.target);
-    eventMessage["URL"] = document.URL;
-    eventMessage["type"] = eventData.type;
-    console.log("extension sending:", eventMessage);
-    chrome.extension.sendMessage({type: "event", value: eventMessage});
-  }
-  return true;
-};
-
-var handleMessage = function(request, sender, sendResponse) {
-  console.log("extension receiving:", request, "from", sender);
-  if (request.type == "recording") {
-    recording = request.value;
-  } else if (request.type == "params") {
-    updateParams(request.value);
-  } else if (request.type == "event") {
-    console.log("extension event", request)
-    var e = request.value;
-    var nodes = xPathToNodes(e.target);
-    for (var i = 0, ii = nodes.length; i < ii; ++i) {
-      simulate(nodes[i], e.type);
-    }
-  }
-}
-
-var updateParams = function(newParams) {
-  var oldParams = params;
-  params = newParams;
-  
-  var oldEvents = oldParams.events; 
-  var events = params.events;
-
-  for (var eventType in events) {
-    var listOfEvents = events[eventType];
-    var oldListOfEvents = oldEvents[eventType];
-    for (var e in listOfEvents) {
-      if (listOfEvents[e] && !oldListOfEvents[e]) {
-        console.log("extension listening for " + e);
-        document.addEventListener(e, processEvent, true);
-      } else if (!listOfEvents[e] && oldListOfEvents[e]) {
-        console.log("extension stopped listening for " + e);
-        document.removeEventListener(e, processEvent, true);
-      }
-    }
-  }
-}
-
-// taken from http://stackoverflow.com/questions/2631820/im-storing-click-coordinates-in-my-db-and-then-reloading-them-later-and-showing/2631931#2631931
+// taken from http://stackoverflow.com/questions/2631820/im-storing-click-coor
+// dinates-in-my-db-and-then-reloading-them-later-and-showing/2631931#2631931
 function getPathTo(element) {
   if (element.id !== '')
     return 'id("' + element.id + '")';
@@ -90,82 +38,177 @@ var xPathToNodes = function(xpath) {
   return results;
 };
 
-// taken from http://stackoverflow.com/questions/6157929/how-to-simulate-mouse-
-// click-using-javascript. used to simulate events on a page
-function simulate(element, eventName) {
+// Functions to handle events
 
-  function extend(destination, source) {
-    for (var property in source)
-      destination[property] = source[property];
-    return destination;
-  }
+// Mouse click, Select text, Input form, Back / forward button, Copy / Paste
+// Page load
 
-  var defaultOptions = {
-    pointerX: 0,
-    pointerY: 0,
-    button: 0,
-    ctrlKey: false,
-    altKey: false,
-    shiftKey: false,
-    metaKey: false,
-    bubbles: true,
-    cancelable: true
-  }
-
-  var options = extend(defaultOptions, arguments[2] || {});
-  var oEvent, eventType = null;
-
-  for (var name in params.events) {
-    if (eventName in params.events[name]) {
-      eventType = name;
-      break;
+var getEventType = function(type) {
+  for (var eventType in params.events) {
+    var eventTypes = params.events[eventType];
+    for (var e in eventTypes) {
+      if (e == type) {
+        return eventType;
+      }
     }
   }
+  return null;
+};
 
-  if (!eventType)
-    throw new SyntaxError('Only HTMLEvents and MouseEvents interfaces are ' +
-                          'supported');
-
-  if (document.createEvent) {
-    oEvent = document.createEvent(eventType);
-    if (eventType == 'HTMLEvents') {
-      oEvent.initEvent(eventName, options.bubbles, options.cancelable);
-    } else {
-      oEvent.initMouseEvent(eventName, options.bubbles, options.cancelable,
-          document.defaultView, options.button, options.pointerX,
-          options.pointerY, options.pointerX, options.pointerY, options.ctrlKey,
-          options.altKey, options.shiftKey, options.metaKey, options.button,
-          element);
-    }
-    element.dispatchEvent(oEvent);
-  } else {
-    options.clientX = options.pointerX;
-    options.clientY = options.pointerY;
-    var evt = document.createEventObject();
-    oEvent = extend(evt, options);
-    element.fireEvent('on' + eventName, oEvent);
-  }
-  return element;
+var getEventProps = function(type) {
+  var eventType = getEventType(type);
+  return params.defaultProps[eventType];
 }
 
+// create an event record given the data from the event handler
+var processEvent = function _processEvent(eventData) {
+//  var pageClone = $(document).clone(false, false);
+  if (recording) {
+    var type = eventData.type;
+    var dispatchType = getEventType(type);
+    var properties = getEventProps(type);
+    console.log("[" + id + "]extension event:", eventData);
+
+    var eventMessage = {};
+    eventMessage["target"] = getPathTo(eventData.target);
+    eventMessage["URL"] = document.URL;
+    eventMessage["dispatchType"] = dispatchType;
+    //eventMessage["type"] = eventData.type;
+
+    for (var prop in properties) {
+      if (prop in eventData) {
+        eventMessage[prop] = eventData[prop];
+      }
+    }
+
+    var extension = extendEvents[type];
+    if (extension) {
+      extension.record(eventData, eventMessage);
+    }
+
+    console.log("extension sending:", eventMessage);
+    port.postMessage({type: "event", value: eventMessage});
+  }
+  return true;
+};
+
+// event handler for messages coming from the background page
+var handleMessage = function(request) {
+  console.log("[" + id + "]extension receiving:", request);
+  if (request.type == "recording") {
+    recording = request.value;
+  } else if (request.type == "params") {
+    updateParams(request.value);
+  } else if (request.type == "event") {
+    console.log("extension event", request)
+    var e = request.value;
+    var nodes = xPathToNodes(e.target);
+    for (var i = 0, ii = nodes.length; i < ii; ++i) {
+      simulate(nodes[i], e);
+    }
+  }
+}
+
+// given the new parameters, update the parameters for this content script
+var updateParams = function(newParams) {
+  var oldParams = params;
+  params = newParams;
+  
+  var oldEvents = oldParams.events; 
+  var events = params.events;
+
+  for (var eventType in events) {
+    var listOfEvents = events[eventType];
+    var oldListOfEvents = oldEvents[eventType];
+    for (var e in listOfEvents) {
+      if (listOfEvents[e] && !oldListOfEvents[e]) {
+        console.log("[" + id + "]extension listening for " + e);
+        document.addEventListener(e, processEvent, true);
+      } else if (!listOfEvents[e] && oldListOfEvents[e]) {
+        console.log("[" + id + "]extension stopped listening for " + e);
+        document.removeEventListener(e, processEvent, true);
+      }
+    }
+  }
+}
+
+function simulate(element, eventData) {
+  var eventName = eventData.type;
+  var eventType = getEventType(eventName);
+  var defaultProperties = getEventProps(eventName);
+  
+  if (!eventType)
+    throw new SyntaxError(eventData.type + ' event not supported');
+
+  var options = jQuery.extend({}, defaultProperties, eventData);
+
+  oEvent = document.createEvent(eventType);
+  if (eventType == 'Events') {
+    oEvent.initEvent(eventName, options.bubbles, options.cancelable);
+  } else if (eventType == 'MouseEvents') {
+    oEvent.initMouseEvent(eventName, options.bubbles, options.cancelable,
+        document.defaultView, options.detail, options.screenX,
+        options.screenY, options.clientX, options.clientY,
+        options.ctrlKey, options.altKey, options.shiftKey, options.metaKey,
+        options.button, element);
+  } else if (eventType == 'KeyEvents') {
+    oEvent.initKeyEvent(eventName, options.bubbles, options.cancelable,
+        document.defaultView, options.ctrlKey, options.altKey,
+        options.shiftKey, options.metaKey, options.keyCode,
+        options.charCode);
+  } else if (eventType == 'TextEvents') {
+    oEvent.initTextEvent(eventName, options.bubbles, options.cancelable,
+        document.defaultView, options.data, options.inputMethod,
+        options.locale);
+  } else {
+    console.log("Unknown type of event");
+  }
+  element.dispatchEvent(oEvent);
+
+  var extension = extendEvents[eventData.type];
+  if (extension) {
+    extension.replay(element, eventData);
+  }
+
+//  } else {
+//    options.clientX = options.pointerX;
+//    options.clientY = options.pointerY;
+//    var evt = document.createEventObject();
+//    oEvent = extend(evt, options);
+//    element.fireEvent('on' + eventName, oEvent);
+}
 
 // Attach the event handlers to their respective events
 var addListenersForRecording = function() {
-  for (var eventType in capturedEvents) {
-    var listOfEvents = capturedEvents[eventType];
+  var events = params.events;
+  for (var eventType in events) {
+    var listOfEvents = events[eventType];
     for (var e in listOfEvents) {
       listOfEvents[e] = true;
       document.addEventListener(e, processEvent, true);
     }
   }
 };
+
+// We need to add all the events now before and other event listners are 
+// added to the page. We will remove the unwanted handlers once params is
+// updated
 addListenersForRecording();
 
-chrome.extension.onMessage.addListener(handleMessage); 
+// Add all the other handlers
+chrome.extension.sendMessage({type: "getId", value: null}, function(resp) {
+  id = resp.value;
+  port = chrome.extension.connect({name: id});
+  port.onMessage.addListener(handleMessage);
 
-// see if recording is going on
-var recording;
-chrome.extension.sendMessage({type: "getRecording", value: null});
-chrome.extension.sendMessage({type: "getParams", value: null});
+  // see if recording is going on
+  port.postMessage({type: "getRecording", value: null});
+  port.postMessage({type: "getParams", value: null});
+});
 
-console.log(frames.length);
+var oldCreateEvent = document.addEventListener;
+document.addEventListener = function(params) {
+  console.log("interpose");
+  oldCreateEvent(params);
+}
+

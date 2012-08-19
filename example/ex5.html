@@ -1,0 +1,54 @@
+<html>
+  <head>
+  </head>
+  <body>
+    <div id="test">I am a div</div>
+    <div id="test1">I am also div</div>
+    <script type="text/javascript">
+      // Test order of DOM Level 0 and level 2 events
+      // Result: level 0 events fire first, but events in the capture phase
+      // are fired before those in the bubble phase. level 0 events seem to fire
+      // in the bubble phase
+      var testDiv = document.getElementById("test");
+      testDiv.addEventListener("mousedown", function(e) {
+        console.log("Div / Level 0", e);
+        //e.preventDefault();
+        //e.stopImmediatePropagation();
+        //e.stopPropagation();
+        return false;
+      }, false);
+     
+      testDiv.onmousedown = function(e) {
+        console.log("Div / Level 2", e);
+      }
+
+      document.addEventListener("mousedown", function(e) {
+        console.log("document mousedown", e);
+      }, true);
+
+      document.onmousedown = function(e) {
+        console.log("document mousedown / level 0", e);
+      }
+
+      document.addEventListener("click", function(e) {
+        console.log("document click", e);
+      }, true);
+
+      document.addEventListener("mouseup", function(e) {
+        console.log("document mouseup", e);
+      }, true);
+
+      //var evt = document.createEvent("MouseEvents");
+      //evt.initMouseEvent("mousedown", true, true, window, 0, 0, 0,
+      //                   0, 0, false, false, false, false, 0,
+      //                   null);
+      //document.body.dispatchEvent(evt);
+      //
+      //var evt = document.createEvent("MouseEvents");
+      //evt.initMouseEvent("mouseup", true, true, window, 0, 0, 0,
+      //                   0, 0, false, false, false, false, 0,
+      //                   null);
+      //document.body.dispatchEvent(evt);
+    </script>
+  </body>
+</html>
