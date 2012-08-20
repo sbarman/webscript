@@ -1,6 +1,6 @@
 var panelWindow = undefined;
 
-function openMainPanel() {
+function openMainPanel(hide) {
   // check if panel is already open
   if (typeof panelWindow == "undefined" || panelWindow.closed) {
 //    var features = "titlebar=no,menubar=no,location=no," +
@@ -27,3 +27,5 @@ chrome.windows.onRemoved.addListener(function(winId) {
     panelWindow = undefined;
   }
 });
+
+openMainPanel();

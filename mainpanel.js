@@ -1,3 +1,5 @@
+var $$ = $;
+
 // Global variables
 var ports = {}; 
 var recording = false;
@@ -5,6 +7,7 @@ var events = null;
 var numPorts = 0;
 var portNameToTab = {};
 var tabIdToPortNames = {};
+
 
 // Utility functions
 
@@ -76,12 +79,14 @@ var replay = function(events, index, portMapping, tabMapping) {
   if (index >= events.length)
     return;
 
-  $("#status").text("Replay " + (index + 1));
-
   var e = events[index]
   var msg = e.msg;
   var port = e.port;
   var tab = e.tab.id;
+
+  $("#status").text("Replay " + e.num);
+  $("#" + e.id).get(0).scrollIntoView();
+  //$("#container").scrollTop($("#" + e.id).prop("offsetTop"));
 
   console.log("background replay:", msg, port, tab);
 
@@ -152,12 +157,14 @@ var resetEvents = function() {
 
 // Add an event
 var addEvent = function(eventRequest, portName) {
-  events.push({msg: eventRequest, port: portName, 
-               tab: portNameToTab[portName]});
+  var seqNum = events.length;
+  var id = "event" + seqNum 
+  events.push({msg: eventRequest, port: portName, tab: portNameToTab[portName],
+               num: seqNum, id: id});
   var eventInfo = eventRequest.value;
-  var newDiv = "<div class='event wordwrap'>";
+  var newDiv = "<div class='event wordwrap' id='" + id + "'>";
 
-  newDiv += "<b>[" + events.length + "]type:" + "</b>" + eventInfo.type + 
+  newDiv += "<b>[" + seqNum + "]type:" + "</b>" + eventInfo.type + 
             "<br/>";
   newDiv += "<b>port:" + "</b>" + portName + "<br/>";
 
