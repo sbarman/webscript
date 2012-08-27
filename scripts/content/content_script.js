@@ -1,3 +1,8 @@
+/* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
+
+'use strict';
+
 // Global variables
 var recording = false;
 var id = "setme";
@@ -229,6 +234,14 @@ chrome.extension.sendMessage({type: "getId", value: value}, function(resp) {
   // see if recording is going on
   port.postMessage({type: "getRecording", value: null});
   port.postMessage({type: "getParams", value: null});
+});
+
+console.log(window.id, window.name)
+
+$(document).ready(function() {
+$("iframe").each(function(i, e) {
+  console.log(e.contentDocument.documentElement);
+});
 });
 
 /*var oldCreateEvent = document.addEventListener;

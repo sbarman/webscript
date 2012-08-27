@@ -1,4 +1,7 @@
-var $$ = $;
+/* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
+
+'use strict';
 
 // Global variables
 var recording = false;
@@ -256,7 +259,7 @@ var addEvent = function(eventRequest, portName) {
   newDiv += "<b>topFrame:" + "</b>" + topFrame + "<br/>";
   newDiv += "<b>iframeIndex:" + "</b>" + iframeIndex + "<br/>";
 
-  for (prop in eventInfo) {
+  for (var prop in eventInfo) {
     if (prop != "type") {
       newDiv += "<b>" + prop + ":" + "</b>" + eventInfo[prop] + "<br/>";
     }
@@ -271,7 +274,7 @@ var addEvent = function(eventRequest, portName) {
 var loadParams = function() {
   // create a form based on parameters
   var loadParamForm = function(node, paramObject, prefix) {
-    for (param in paramObject) {
+    for (var param in paramObject) {
       var paramValue = paramObject[param];
       var paramType = typeof paramValue;
       var name = prefix + "." + param;

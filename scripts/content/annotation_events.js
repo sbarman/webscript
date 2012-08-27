@@ -1,35 +1,46 @@
-var clickOptionReplay = function(element, eventMessage) {
-  element.selected = true;
-};
+/* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
 
-var clickSelectRecord = function(eventData, eventMessage) {
-  eventMessage.value = eventData.target.value;
-};
+'use strict';
 
-var clickSelectReplay = function(element, eventMessage) {
-  element.value = eventMessage.value;
-};
+var annotationEvents = {};
 
-var annotationEvents = {
-  "keypress": {
-    guard: function(eventData, eventMessage) {
-      return false;
+(function() {
+  function clickOptionReplay(element, eventMessage) {
+    element.selected = true;
+  }
+  
+  function clickSelectRecord(eventData, eventMessage) {
+    eventMessage.value = eventData.target.value;
+  }
+  
+  function clickSelectReplay(element, eventMessage) {
+    element.value = eventMessage.value;
+  }
+  
+  annotationEvents = {
+    "keypress": {
+      guard: function(eventData, eventMessage) {
+        return false;
+      },
+      record: null,
+      replay: null
     },
-    record: null,
-    replay: null
-  },
-  "clickOption": {
-    guard: function(eventData, eventMessage) {
-      return eventMessage.nodeName == "option" && eventMessage.type == "click";
+    "clickOption": {
+      guard: function(eventData, eventMessage) {
+        return eventMessage.nodeName == "option" &&
+               eventMessage.type == "click";
+      },
+      record: null,
+      replay: clickOptionReplay
     },
-    record: null,
-    replay: clickOptionReplay
-  },
-  "clickSelect": {
-    guard: function(eventData, eventMessage) {
-      return eventMessage.nodeName == "select" && eventMessage.type == "click";
+    "clickSelect": {
+      guard: function(eventData, eventMessage) {
+        return eventMessage.nodeName == "select" &&
+               eventMessage.type == "click";
+      },
+      record: clickSelectRecord,
+      replay: clickSelectReplay
     },
-    record: clickSelectRecord,
-    replay: clickSelectReplay
-  },
-};
+  };
+})();
