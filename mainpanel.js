@@ -1,13 +1,14 @@
 var $$ = $;
 
 // Global variables
-var ports = {}; 
 var recording = false;
 var events = null;
 var numPorts = 0;
-var portNameToTab = {};
-var tabIdToPortNames = {};
 
+var ports = {}; 
+var portNameToTabId = {};
+var tabIdToPortNames = {};
+var tabIdToCurrentPortInfo = {};
 
 // Utility functions
 
@@ -51,11 +52,30 @@ var stop = function _stop() {
 
 var sendEventNewTab = function(events, index, portMapping, tabMapping, tab) {
   var port = undefined;
-
-  if (tab.id in tabIdToPortNames) {
-    var allPortsInTab = tabIdToPortNames[tab.id];
-    var portName = allPortsInTab[allPortsInTab.length - 1];
-    port = ports[portName];
+  var e = events[index];
+  var tabId = tab.id;
+  
+  if (tabId in tabIdToCurrentPortInfo) {
+    var portInfo = tabIdToCurrentPortInfo[tabId];
+    var newPort = null;
+    if (e.topFrame) {
+      port = ports[portInfo.top.portName];
+    } else {
+      var frames = portInfo.frames;
+      //port = frames[e.iframeIndex].portName;
+      for (var i = frames.length - 1; i >= 0; i--) {
+        if (frames[i].URL == e.msg.value.URL) {
+          port = ports[frames[i].portName];
+          break;
+        }
+      }
+      if (!port) {
+        window.setTimeout(function() {
+          sendEventNewTab(events, index, portMapping, tabMapping, tab);
+        }, 1000);
+        return;
+      }
+    }
   }
 
   if (typeof port == 'undefined') {
@@ -63,9 +83,9 @@ var sendEventNewTab = function(events, index, portMapping, tabMapping, tab) {
       sendEventNewTab(events, index, portMapping, tabMapping, tab);
     }, 1000);
   } else {
-    port.postMessage(events[index].msg);
-    portMapping[events[index].port] = port;
-    tabMapping[events[index].tab.id] = tab.id;
+    port.postMessage(e.msg);
+    portMapping[e.port] = port;
+    tabMapping[e.tab] = tabId;
 
     window.setTimeout(function() {
       replay(events, index + 1, portMapping, tabMapping);
@@ -82,17 +102,27 @@ var replay = function(events, index, portMapping, tabMapping) {
   var e = events[index]
   var msg = e.msg;
   var port = e.port;
-  var tab = e.tab.id;
+  var tab = e.tab;
+  var id = e.id;
+  var url = e.topURL;
+  var topFrame = e.topFrame;
+  var iframeIndex = e.iframeIndex;
 
   $("#status").text("Replay " + e.num);
-  $("#" + e.id).get(0).scrollIntoView();
+  $("#" + id).get(0).scrollIntoView();
   //$("#container").scrollTop($("#" + e.id).prop("offsetTop"));
 
-  console.log("background replay:", msg, port, tab);
+  console.log("background replay:", id, msg, port, tab);
 
   // we have already seen this port, reuse existing mapping
   if (port in portMapping) {
-    portMapping[port].postMessage(msg);
+    try {
+      portMapping[port].postMessage(msg);
+    } catch(err) {
+      console.log(err.message);
+    }
+   
+    // console.log(portMapping[port]);
 
     window.setTimeout(function() {
       replay(events, index + 1, portMapping, tabMapping);
@@ -101,8 +131,27 @@ var replay = function(events, index, portMapping, tabMapping) {
   // for now we will just choose the last port added from this tab
   } else if (tab in tabMapping) {
     var newTabId = tabMapping[tab];
-    var tabPorts = tabIdToPortNames[newTabId];
-    var newPort = ports[tabPorts[tabPorts.length - 1]];
+    var portInfo = tabIdToCurrentPortInfo[newTabId];
+    var newPort = null;
+    if (topFrame) {
+      newPort = ports[portInfo.top.portName];
+    } else {
+      var frames = portInfo.frames;
+      //newPort = frames[iframeIndex];
+      for (var i = frames.length - 1; i >= 0; i--) {
+        if (frames[i].URL == msg.value.URL) {
+          newPort = ports[frames[i].portName];
+          break;
+        }
+      }
+      if (!newPort) {
+        window.setTimeout(function() {
+          replay(events, index, portMapping, tabMapping);
+        }, 1000);
+        return;
+      }
+    }
+
     newPort.postMessage(msg);
    
     portMapping[port] = newPort;
@@ -111,7 +160,7 @@ var replay = function(events, index, portMapping, tabMapping) {
       replay(events, index + 1, portMapping, tabMapping);
     }, params.timeout);
   } else {
-    chrome.tabs.create({url: msg.value.URL, active: true}, 
+    chrome.tabs.create({url: url, active: true}, 
         function(newTab) {
           sendEventNewTab(events, index, portMapping, tabMapping, newTab);
         }
@@ -126,13 +175,25 @@ var handleIdMessage = function(request, sender, sendResponse) {
     numPorts++;
     var portName = "" + numPorts
     sendResponse({type: "id", value: portName});
-    portNameToTab[portName] = sender.tab;
-   
+
+    // Update various mappings
     var tabId = sender.tab.id;
+
+    portNameToTabId[portName] = tabId;
+   
     if (typeof tabIdToPortNames[tabId] == "undefined") {
       tabIdToPortNames[tabId] = [];
     }
     tabIdToPortNames[tabId].push(portName);
+    
+    var value = request.value;
+    value.portName = portName;
+    if (value.top) {
+      tabIdToCurrentPortInfo[tabId] = {top: value, frames: []};
+    } else {
+      var portInfo = tabIdToCurrentPortInfo[tabId];
+      portInfo.frames.push(value);
+    }
   }
 };
 
@@ -157,16 +218,43 @@ var resetEvents = function() {
 
 // Add an event
 var addEvent = function(eventRequest, portName) {
-  var seqNum = events.length;
-  var id = "event" + seqNum 
-  events.push({msg: eventRequest, port: portName, tab: portNameToTab[portName],
-               num: seqNum, id: id});
+  var num = events.length;
+  var id = "event" + num 
+  
+  var tab = portNameToTabId[portName];
+  var portInfo = tabIdToCurrentPortInfo[tab]
+  var topURL = portInfo.top.URL;
+  
+  var topFrame = false;
+  var iframeIndex = -1;
+  if (portInfo.top.portName == portName) {
+    topFrame == true;
+  } else {
+    var frames = portInfo.frames;
+    for (var i = 0, ii = frames.length; i < ii; ++i) {
+      var frame = frames[i];
+      if (frame.portName == portName) {
+        iframeIndex = i;
+        break;
+      }
+    }
+  }
+  var topFrame = (portInfo.top.portName == portName);
+
+  events.push({msg: eventRequest, port: portName, topURL: topURL,
+               topFrame: topFrame, iframeIndex: iframeIndex, tab: tab,
+               num: num, id: id});
+
   var eventInfo = eventRequest.value;
   var newDiv = "<div class='event wordwrap' id='" + id + "'>";
 
-  newDiv += "<b>[" + seqNum + "]type:" + "</b>" + eventInfo.type + 
+  newDiv += "<b>[" + num + "]type:" + "</b>" + eventInfo.type + 
             "<br/>";
+  newDiv += "<b>tab:" + "</b>" + tab + "<br/>";
+  newDiv += "<b>topURL:" + "</b>" + topURL + "<br/>";
   newDiv += "<b>port:" + "</b>" + portName + "<br/>";
+  newDiv += "<b>topFrame:" + "</b>" + topFrame + "<br/>";
+  newDiv += "<b>iframeIndex:" + "</b>" + iframeIndex + "<br/>";
 
   for (prop in eventInfo) {
     if (prop != "type") {
@@ -204,7 +292,7 @@ var loadParams = function() {
         node.append(newDiv);
       } else if (paramType == "object") {
         var newDiv = $("<div class='boxed'></div>");
-        newDiv.append("<div>" + name + "</div>");
+        newDiv.append("<div>" + param + "</div>");
         loadParamForm(newDiv, paramValue, name);
         node.append(newDiv);
       }
@@ -283,17 +371,34 @@ $("#params").submit(function(eventObject) {
 chrome.extension.onMessage.addListener(handleIdMessage);
 
 chrome.extension.onConnect.addListener(function(port) {
-  ports[port.name] = port;
+  console.log("background connecting:", port);
+  var portName = port.name;
+
+  ports[portName] = port;
 
   port.onMessage.addListener(function(msg) {
     handleMessage(port, msg);
   });
 
   port.onDisconnect.addListener(function(evt) {
-    if (port.name in ports) {
-      delete ports[port.name];
+    if (portName in ports) {
+      delete ports[portName];
     } else {
       throw "Can't find port";
+    }
+
+    var tabId = portNameToTabId[portName];
+    var portInfo = tabIdToCurrentPortInfo[tabId];
+    if (portInfo.topFrame.portName == portName) {
+      delete tabIdToCurrentPortInfo[tabId];
+    } else {
+      var frames = portInfo.frames;
+      for (var i = 0, ii = frames.length; i < ii; ++i) {
+        if (frames[i].portName == portName) {
+          frames.splice(i, 1);
+          break;
+        }
+      }
     }
   });
 });

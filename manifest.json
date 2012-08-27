@@ -14,7 +14,7 @@
     {
       "matches": ["<all_urls>"],
       "js": ["jquery-1.7.2.js", "params.js", "extend_events.js", 
-             "content_script.js"],
+             "annotation_events.js", "content_script.js"],
       "run_at": "document_start",
       // Bug with Chrome extensions doesn't allow extension code to access
       // frames within a page. Instead we need to load the content script

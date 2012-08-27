@@ -83,8 +83,13 @@ var defaultOptions = {
   }
 }
 
+// default node is document
+var node = {
+  'HashChange': window
+}
+
 var params = {
   events: capturedEvents,
-  timeout: 1000,
+  timeout: 2000,
   defaultProps: defaultOptions
 }

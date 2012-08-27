@@ -8,8 +8,8 @@ var port;
 // taken from http://stackoverflow.com/questions/2631820/im-storing-click-coor
 // dinates-in-my-db-and-then-reloading-them-later-and-showing/2631931#2631931
 function getPathTo(element) {
-  if (element.id !== '')
-    return 'id("' + element.id + '")';
+//  if (element.id !== '')
+//    return 'id("' + element.id + '")';
   if (element.tagName.toLowerCase() === "html")
     return element.tagName;
 
@@ -69,10 +69,14 @@ var processEvent = function _processEvent(eventData) {
     var properties = getEventProps(type);
     console.log("[" + id + "]extension event:", eventData);
 
+    var target = eventData.target;
+    var nodeName = target.nodeName.toLowerCase();
+
     var eventMessage = {};
-    eventMessage["target"] = getPathTo(eventData.target);
+    eventMessage["target"] = getPathTo(target);
     eventMessage["URL"] = document.URL;
     eventMessage["dispatchType"] = dispatchType;
+    eventMessage["nodeName"] = nodeName;
     //eventMessage["type"] = eventData.type;
 
     for (var prop in properties) {
@@ -84,6 +88,13 @@ var processEvent = function _processEvent(eventData) {
     var extension = extendEvents[type];
     if (extension) {
       extension.record(eventData, eventMessage);
+    }
+    
+    for (var i in annotationEvents) {
+      var annotation = annotationEvents[i];
+      if (annotation.record && annotation.guard(eventData, eventMessage)) {
+        annotation.record(eventData, eventMessage);
+      }
     }
 
     console.log("extension sending:", eventMessage);
@@ -165,9 +176,18 @@ function simulate(element, eventData) {
   }
   element.dispatchEvent(oEvent);
 
+  // handle any quirks with the event type
   var extension = extendEvents[eventData.type];
   if (extension) {
     extension.replay(element, eventData);
+  }
+
+  // handle any more quirks with a specific version of the event type
+  for (var i in annotationEvents) {
+    var annotation = annotationEvents[i];
+    if (annotation.replay && annotation.guard(element, eventData)) {
+      annotation.replay(element, eventData);
+    }
   }
 
 //  } else {
@@ -195,8 +215,13 @@ var addListenersForRecording = function() {
 // updated
 addListenersForRecording();
 
+// need to check if we are in an iframe
+var value = {}
+value.top = (self == top);
+value.URL = document.URL;
+
 // Add all the other handlers
-chrome.extension.sendMessage({type: "getId", value: null}, function(resp) {
+chrome.extension.sendMessage({type: "getId", value: value}, function(resp) {
   id = resp.value;
   port = chrome.extension.connect({name: id});
   port.onMessage.addListener(handleMessage);
@@ -206,9 +231,15 @@ chrome.extension.sendMessage({type: "getId", value: null}, function(resp) {
   port.postMessage({type: "getParams", value: null});
 });
 
-var oldCreateEvent = document.addEventListener;
+/*var oldCreateEvent = document.addEventListener;
 document.addEventListener = function(params) {
   console.log("interpose");
   oldCreateEvent(params);
-}
+};*/
+/*
+console.log(document, document.parentElement, document.parentNode, document.frames);
 
+console.log("here");
+$("div").each(function(index, element) {
+  console.log("blah", element.contentWindow);
+});*/
