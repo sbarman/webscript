@@ -37,8 +37,12 @@ var Panel = (function PanelClosure() {
         replay();
       });
 
-      $("pause").click(function(eventObject) {
+      $("#pause").click(function(eventObject) {
         pause();
+      });
+
+      $("#replayReset").click(function(eventObject) {
+        replayReset();
       });
       
       $("#paramsDiv").hide(1000);
@@ -171,9 +175,7 @@ var RecordReplay = (function RecordReplayClosure() {
     this.timeoutHandle = null;
 
     // replay variables
-    this.index = 0;
-    this.portMapping = {};
-    this.tabMapping = {};
+    this.replayReset();
   }
 
   var State = {
@@ -240,8 +242,6 @@ var RecordReplay = (function RecordReplayClosure() {
       this.panel.clearEvents();
     },
     replay: function _replay() {
-      this.replayReset();
-
       var recordReplay = this;
       this.timeoutHandle = setTimeout(function() {
         recordReplay.replayGuts();
@@ -405,6 +405,10 @@ var replay = function _replay() {
 var pause = function _replay() {
   recordReplay.replayPause();
 };
+
+var replayReset = function _replayReset() {
+  recordReplay.replayReset();
+}
 
 // The first message content scripts send is to get a unique id
 var handleIdMessage = function(request, sender, sendResponse) {

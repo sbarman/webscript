@@ -7,7 +7,8 @@ var changeRecord = function(eventData, eventMessage) {
   var element = eventData.srcElement;
   var nodeName = element.nodeName.toLowerCase();
   if (nodeName == "select") {
-    throw "not sure what needs to be done";
+    eventMessage.value = element.value;
+    //throw "not sure what needs to be done";
   } else if (nodeName == "textarea") {
     eventMessage.value = element.value;
   } else if (nodeName == "input") {
@@ -25,7 +26,8 @@ var changeRecord = function(eventData, eventMessage) {
 var changeReplay = function(element, eventMessage) {
   var nodeName = element.nodeName.toLowerCase();
   if (nodeName == "select") {
-    throw "not sure what needs to be done";
+    element.value = eventMessage.value;
+    //throw "not sure what needs to be done";
   } else if (nodeName == "textarea") {
     element.value = eventMessage.value;
   } else if (nodeName == "input") {

@@ -149,6 +149,21 @@ var updateParams = function(newParams) {
 }
 
 function simulate(element, eventData) {
+
+  // handle any quirks with the event type
+  var extension = extendEvents[eventData.type];
+  if (extension) {
+    extension.replay(element, eventData);
+  }
+
+  // handle any more quirks with a specific version of the event type
+  for (var i in annotationEvents) {
+    var annotation = annotationEvents[i];
+    if (annotation.replay && annotation.guard(element, eventData)) {
+      annotation.replay(element, eventData);
+    }
+  }
+
   var eventName = eventData.type;
   var eventType = getEventType(eventName);
   var defaultProperties = getEventProps(eventName);
@@ -180,20 +195,6 @@ function simulate(element, eventData) {
     console.log("Unknown type of event");
   }
   element.dispatchEvent(oEvent);
-
-  // handle any quirks with the event type
-  var extension = extendEvents[eventData.type];
-  if (extension) {
-    extension.replay(element, eventData);
-  }
-
-  // handle any more quirks with a specific version of the event type
-  for (var i in annotationEvents) {
-    var annotation = annotationEvents[i];
-    if (annotation.replay && annotation.guard(element, eventData)) {
-      annotation.replay(element, eventData);
-    }
-  }
 
 //  } else {
 //    options.clientX = options.pointerX;
