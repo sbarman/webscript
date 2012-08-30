@@ -158,7 +158,7 @@ function simulate(element, eventData) {
 
   var options = jQuery.extend({}, defaultProperties, eventData);
 
-  oEvent = document.createEvent(eventType);
+  var oEvent = document.createEvent(eventType);
   if (eventType == 'Events') {
     oEvent.initEvent(eventName, options.bubbles, options.cancelable);
   } else if (eventType == 'MouseEvents') {
