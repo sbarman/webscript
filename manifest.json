@@ -15,6 +15,7 @@
       "matches": ["<all_urls>"],
       "js": ["scripts/common/jquery-1.7.2.js",
              "scripts/common/params.js",
+             "scripts/content/dom_to_json.js", 
              "scripts/content/extend_events.js", 
              "scripts/content/annotation_events.js",
              "scripts/content/content_script.js"],
