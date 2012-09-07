@@ -171,39 +171,44 @@ var RecordReplay = (function RecordReplayClosure() {
     this.panel = panel;
     this.events = [];
     this.workQueue = [];
-    this.state = State.STOPPED;
+    this.recordState = RecordState.STOPPED;
     this.timeoutHandle = null;
 
     // replay variables
     this.replayReset();
   }
 
-  var State = {
+  var RecordState = {
     RECORDING: 0,
-    REPLAYING: 1,
     STOPPED: 2
   };
 
+  var ReplayState = {
+    REPLAYING: 0,
+    TABID: 1,
+    STOPPED: 2
+  }
+
   RecordReplay.prototype = {
     isRecording: function _isRecording() {
-      return this.state == State.RECORDING;
+      return this.recordState == RecordState.RECORDING;
     },
     startRecording: function _startRecording() {
-      this.state = State.RECORDING;
+      this.recordState = RecordState.RECORDING;
       this.panel.startRecording();
 
       // Tell the content scripts to begin recording
       sendToAll({type: "recording", value: this.isRecording()});
     },
     stopRecording: function _stopRecording() {
-      this.state = State.STOPPED;
+      this.recordState = RecordState.STOPPED;
       this.panel.stopRecording();
 
       // Tell the content scripts to stop recording
       sendToAll({type: "recording", value: this.isRecording()});
     },
     addEvent: function _addEvent(eventRequest, portName) {
-      if (this.state == State.RECORDING) {
+      if (this.recordState == RecordState.RECORDING) {
         var events = this.events;
         var num = events.length;
         var id = "event" + num 
@@ -251,11 +256,14 @@ var RecordReplay = (function RecordReplayClosure() {
       this.index = 0;
       this.portMapping = {};
       this.tabMapping = {};
+      this.replayState = ReplayState.REPLAYING;
     },
     replayPause: function _replayPause() {
       clearTimeout(this.timeoutHandle);
     },
-    replayFindPortInTab: function _replayFindPortInTab(tab, topFrame) {
+    replayFindPortInTab: function _replayFindPortInTab(tab, topFrame,
+        snapshot, msg) {
+
       var newTabId = this.tabMapping[tab];
       var portInfo = tabIdToCurrentPortInfo[newTabId];
       if (!portInfo) {
@@ -266,10 +274,65 @@ var RecordReplay = (function RecordReplayClosure() {
         newPort = ports[portInfo.top.portName];
       } else {
         var frames = portInfo.frames;
-        for (var i = frames.length - 1; i >= 0; i--) {
+        var urlFrames = [];
+        for (var i = 0, ii = frames.length; i < ii; i++) {
           if (frames[i].URL == msg.value.URL) {
-            newPort = ports[frames[i].portName];
+            urlFrames.push(frames[i]);
+          }
+        }
+        
+        var allFrameSnapshots = true;
+        for (var i = 0, ii = urlFrames.length; i < ii; i++) {
+          if (!portToSnapshot[urlFrames[i].portName]) {
+            allFrameSnapshots = false;
             break;
+          }
+        }
+
+        if (allFrameSnapshots) {
+          var similar = function(node1, node2) {
+            if (typeof node1 != "object" || typeof node2 != "object") {
+              return 0;
+            }
+            var score = 0;
+            var attr1 = node1.attr;
+            var attr2 = node2.attr;
+            for (var a in attr1) {
+              if (a in attr2) {
+                score++;
+              }
+            }
+             
+            var children1 = node1.children;
+            var children2 = node2.children;
+            var c1length = children1.length;
+            var c2length = children2.length;
+            if (c1length < c2length) {
+              var length = c1length;
+            } else {
+              var length = c2length;
+            }
+            for (var i = 0; i < length; ++i) {
+              score += similar(children1[i], children2[i]);
+            }
+            return score;
+          }
+          var topScore = -1;
+          var index = -1;
+          for (var i = 0, ii = urlFrames.length; i < ii; ++i) {
+            var score = similar(snapshot,
+                                portToSnapshot[urlFrames[i].portName]);
+            if (score > topScore) {
+              index = i;
+              topScore = score;
+            }
+          }
+          newPort = ports[urlFrames[index].portName];
+          portToSnapshot = {}; 
+        } else {
+          for (var i = 0, ii = urlFrames.length; i < ii; i++) {
+            var port = ports[urlFrames[i].portName];
+            port.postMessage({type: "snapshot", value: null});
           }
         }
       }
@@ -294,6 +357,7 @@ var RecordReplay = (function RecordReplayClosure() {
       var url = e.topURL;
       var topFrame = e.topFrame;
       var iframeIndex = e.iframeIndex;
+      var snapshot = msg.value.snapshot;
 
       $("#status").text("Replay " + e.num);
       $("#" + id).get(0).scrollIntoView();
@@ -319,7 +383,7 @@ var RecordReplay = (function RecordReplayClosure() {
       // we have already seen this tab, find equivalent port for tab
       // for now we will just choose the last port added from this tab
       } else if (tab in tabMapping) {
-        var newPort = this.replayFindPortInTab(tab, topFrame);
+        var newPort = this.replayFindPortInTab(tab, topFrame, snapshot, msg);
 
         if (newPort) {
           portMapping[port] = newPort;
@@ -362,6 +426,7 @@ var ports = {};
 var portNameToTabId = {};
 var tabIdToPortNames = {};
 var tabIdToCurrentPortInfo = {};
+var portToSnapshot = {}
 
 // Utility functions
 
@@ -448,6 +513,8 @@ var handleMessage = function(port, request) {
     port.postMessage({type: "recording", value: recordReplay.isRecording()});
   } else if (request.type == "getParams") {
     port.postMessage({type: "params", value: params});
+  } else if (request.type == "snapshot") {
+    portToSnapshot[port.name] = request.value;  
   }
 };
 

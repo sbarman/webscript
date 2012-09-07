@@ -82,6 +82,7 @@ var processEvent = function _processEvent(eventData) {
     eventMessage["URL"] = document.URL;
     eventMessage["dispatchType"] = dispatchType;
     eventMessage["nodeName"] = nodeName;
+    eventMessage["snapshot"] = DOMToJSON.build(document);
     //eventMessage["type"] = eventData.type;
 
     for (var prop in properties) {
@@ -122,6 +123,8 @@ var handleMessage = function(request) {
     for (var i = 0, ii = nodes.length; i < ii; ++i) {
       simulate(nodes[i], e);
     }
+  } else if (request.type == "snapshot") {
+    port.postMessage({type: "snapshot", value: DOMToJSON.build(document)});
   }
 }
 
