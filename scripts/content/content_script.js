@@ -69,6 +69,7 @@ var getEventProps = function(type) {
 var processEvent = function _processEvent(eventData) {
 //  var pageClone = $(document).clone(false, false);
   if (recording) {
+    console.log(eventData);
     var type = eventData.type;
     var dispatchType = getEventType(type);
     var properties = getEventProps(type);

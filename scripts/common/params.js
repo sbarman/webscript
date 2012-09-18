@@ -36,8 +36,8 @@ var capturedEvents = {
 //    'dragleave': false,
   },
   'KeyEvents': {
-    'keydown': false,
-    'keyup': false,
+    'keydown': true,
+    'keyup': true,
     'keypress': true,
   },
   'TextEvents': {
@@ -49,7 +49,8 @@ var defaultOptions = {
   'Events': {
     'type': true,
     'bubbles': true,
-    'cancelable': true
+    'cancelable': true,
+    'timeStamp': 0
   },
   'MouseEvents': {
     'type': true,
@@ -65,18 +66,19 @@ var defaultOptions = {
     'shiftKey': false,
     'metaKey': false,
     'button': 0,
+    'timeStamp': 0
   },
   'KeyEvents': {
     'type': true,
     'bubbles': true,
     'cancelable': true,
-    'view': null,
     'ctrlKey': false,
     'altKey': false,
     'shiftKey': false,
     'metaKey': false,
     'keyCode': 0,
-    'charCode': 0
+    'charCode': 0,
+    'timeStamp': 0
   },
   'TextEvents': {
     'type': true,
@@ -84,7 +86,8 @@ var defaultOptions = {
     'cancelable': true,
     'data': '',
     'inputMethod': 0,
-    'locale': ''
+    'locale': '',
+    'timeStamp': 0
   }
 }
 
