@@ -474,6 +474,39 @@ var RecordReplay = (function RecordReplayClosure() {
 		recordReplay.simultaneousReplayGutsInTab(e,desiredTab);
       });
   },
+  
+  checkDivergence: function _checkDivergence(tabId1,tabId2){
+	  var port1 = chrome.tabs.connect(tabId1, {});
+	  var port2 = chrome.tabs.connect(tabId2, {});
+	  //var port1 = tabIdToPortNames[tabId1];
+	  //var port2 = tabIdToPortNames[tabId2];
+	  console.log("here1");
+	  //var portMapping = this.portMapping;
+	  port1.onMessage.addListener(function(msg1) {
+		  if (msg1.type== "snapshot"){
+			  port2.onMessage.addListener(function(msg2) {
+				  if (msg2.type=="snapshot"){
+					var tree1 = msg1.value;
+					var tree2 = msg2.value;
+					console.log("here");
+				  }
+			  });
+			  port2.postMessage({type: "snapshot"});
+		  }
+		});
+	  port1.postMessage({type: "snapshot"});
+		
+	  
+	  /*
+	  chrome.tabs.sendMessage(tabid1, {type:"snapshot"}, function(response1) {
+		  console.log("got DOM 1");
+		  chrome.tabs.sendMessage(tabid2, {type:"snapshot"}, function(response2) {
+			  console.log("got DOM 2");
+		  });
+	  });
+	  */
+	  
+  },
       
   simultaneousReplayGutsInTab: function _simultaneousReplayGuts(e, desiredTab) {
       var portMapping = this.portMapping;
@@ -491,13 +524,14 @@ var RecordReplay = (function RecordReplayClosure() {
       console.log("simultaneous replay in tab:", id, msg, desiredTab);
       
       //to check if we already have a port for the tab in which we want to play the event, we have to get the port for the tab we want to use
-	  port = tabIdToPortNames[desiredTab.id];
+	  var desiredPort = tabIdToPortNames[desiredTab.id];
       
       // we have already seen this port, reuse existing mapping
-      if (port in portMapping) {
+      if (desiredPort in portMapping) {
 		console.log("PORT IN MAPPING");
         try {
-          portMapping[port].postMessage(msg);
+          portMapping[desiredPort].postMessage(msg);
+          this.checkDivergence(tab,desiredTab.id);
         } catch(err) {
           console.log(err.message);
         }
@@ -515,6 +549,7 @@ var RecordReplay = (function RecordReplayClosure() {
           portMapping[newPort.name] = newPort;
 		  console.log("simultaneous replay in window", desiredTab.windowId, "and index", desiredTab.index);
           newPort.postMessage(msg);
+          this.checkDivergence(tab,desiredTab.id);
         } else {
 		  console.log("NO NEW PORT");
           var recordReplay = this;
@@ -522,19 +557,7 @@ var RecordReplay = (function RecordReplayClosure() {
             recordReplay.simultaneousReplayGutsInTab(e,desiredTab);
           }, params.timeout);
         }  
-      // need to open new tab
-      /*
-       * sometimes this opens extra tabs because we want to replay more 
-       * events (or the same event) before the tab has had a chance to
-       * open
-       * not like normal replay because you don't increment the index
-       * to get another event to replay - it just gets triggered
-       * by user actions
-       * so for example we get three events from the same tab but they 
-       * all arrive before the tab is made, so they all get 'tab not
-       * in mapping', then next they all get 'tab in mapping' and
-       * 'new port', and then we're good from there
-      */
+
       } else {
 		if (!this.makingTab){
 			//prevent other events from making a new tab while one is
