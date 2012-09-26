@@ -7,14 +7,14 @@
 var recording = false;
 var id = "setme";
 var port;
+var curSnapshot;
 
 // Utility functions
 
-var snapshot = function() {
+function snapshot() {
   return snapshotDom(document);
 }
-
-var curSnapshot = snapshot();
+curSnapshot = snapshot();
 
 // taken from http://stackoverflow.com/questions/2631820/im-storing-click-coor
 // dinates-in-my-db-and-then-reloading-them-later-and-showing/2631931#2631931
@@ -37,7 +37,7 @@ function getPathTo(element) {
 }
 
 // convert an xpath expression to an array of DOM nodes
-var xPathToNodes = function(xpath) {
+function xPathToNodes(xpath) {
   var q = document.evaluate(xpath, document, null, XPathResult.ANY_TYPE, null);
   var results = [];
 
@@ -50,11 +50,10 @@ var xPathToNodes = function(xpath) {
 };
 
 // Functions to handle events
-
 // Mouse click, Select text, Input form, Back / forward button, Copy / Paste
 // Page load
 
-var getEventType = function(type) {
+function getEventType(type) {
   for (var eventType in params.events) {
     var eventTypes = params.events[eventType];
     for (var e in eventTypes) {
@@ -66,14 +65,13 @@ var getEventType = function(type) {
   return null;
 };
 
-var getEventProps = function(type) {
+function getEventProps(type) {
   var eventType = getEventType(type);
   return params.defaultProps[eventType];
 }
 
 // create an event record given the data from the event handler
-var processEvent = function _processEvent(eventData) {
-//  var pageClone = $(document).clone(false, false);
+function processEvent(eventData) {
   if (recording) {
     console.log(eventData);
     var type = eventData.type;
@@ -90,11 +88,9 @@ var processEvent = function _processEvent(eventData) {
     eventMessage["dispatchType"] = dispatchType;
     eventMessage["nodeName"] = nodeName;
 
-    var oldSnapshot = curSnapshot;
+    eventMessage["snapshotBefore"] = curSnapshot;
     curSnapshot = snapshot();
-    eventMessage["snapshot"] = curSnapshot;
-    compareDom(oldSnapshot, curSnapshot);
-    //eventMessage["type"] = eventData.type;
+    eventMessage["snapshotAfter"] = curSnapshot;
 
     for (var prop in properties) {
       if (prop in eventData) {
@@ -121,7 +117,7 @@ var processEvent = function _processEvent(eventData) {
 };
 
 // event handler for messages coming from the background page
-var handleMessage = function(request) {
+function handleMessage(request) {
   console.log("[" + id + "]extension receiving:", request);
   if (request.type == "recording") {
     recording = request.value;
@@ -140,7 +136,7 @@ var handleMessage = function(request) {
 }
 
 // given the new parameters, update the parameters for this content script
-var updateParams = function(newParams) {
+function updateParams(newParams) {
   var oldParams = params;
   params = newParams;
   
@@ -212,7 +208,7 @@ function simulate(element, eventData) {
 }
 
 // Attach the event handlers to their respective events
-var addListenersForRecording = function() {
+function addListenersForRecording() {
   var events = params.events;
   for (var eventType in events) {
     var listOfEvents = events[eventType];
@@ -242,12 +238,4 @@ chrome.extension.sendMessage({type: "getId", value: value}, function(resp) {
   // see if recording is going on
   port.postMessage({type: "getRecording", value: null});
   port.postMessage({type: "getParams", value: null});
-});
-
-console.log(window.id, window.name)
-
-$(document).ready(function() {
-$("iframe").each(function(i, e) {
-  console.log(e.contentDocument.documentElement);
-});
 });
