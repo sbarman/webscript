@@ -3,7 +3,7 @@
 
 'use strict';
 
-var params;
+var params = null;
 
 (function() {
   // List of all events and whether or not we should capture them
@@ -46,7 +46,7 @@ var params;
     'TextEvents': {
       'textInput': false,  // similar to input event, doesn trigger with cp/pst
     }
-  }
+  };
   
   var defaultOptions = {
     'Events': {
@@ -92,12 +92,12 @@ var params;
       'locale': '',
       'timeStamp': 0
     }
-  }
+  };
   
   params = {
     events: capturedEvents,
     timeout: 2000,
     defaultProps: defaultOptions
-  }
+  };
 
 })();
