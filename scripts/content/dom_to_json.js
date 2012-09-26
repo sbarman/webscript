@@ -3,11 +3,14 @@
 
 'use strict';
 
-var DOMToJSON = new (function() {
+var snapshotDom = null;
+var compareDom = null;
+ 
+(function() {
 
   function createObjTree(oNode) {
-    var vReturnVal = {children: [], attr: {}};
-    vReturnVal.attr["nodeName"] = oNode.nodeName.toLowerCase();
+    var vReturnVal = {children: [], prop: {}};
+    vReturnVal.prop["nodeName"] = oNode.nodeName.toLowerCase();
 
     if (oNode.hasChildNodes()) {
       for (var oChild, nItem = 0; nItem < oNode.childNodes.length; nItem++) {
@@ -26,19 +29,40 @@ var DOMToJSON = new (function() {
           children.push(child);
         }
       }
-    }
+    }    
 
-    if (oNode.hasAttributes()) {
-      var nAttrLen = oNode.attributes.length;
-      for (var oAttrib, nAttrib = 0; nAttrib < nAttrLen; nAttrib++) {
-        oAttrib = oNode.attributes.item(nAttrib);
-        vReturnVal.attr[oAttrib.name.toLowerCase()] = oAttrib.value.trim();
+    // possible failure due to cross-domain browser restrictions
+    if (oNode.nodeName.toLowerCase() != "iframe") {
+    for (var prop in oNode) {
+      try {
+        var val = oNode[prop];
+        if (typeof val == 'string' || typeof val == 'number' || 
+            typeof val == 'boolean') {
+          vReturnVal.prop[prop] = val;
+        }
+      } catch(e) {
+        // do nothing
       }
+    }
     }
     return vReturnVal;
   }
+
+  function getDifferences(tree1, tree2) {
+    var props1 = tree1.prop;
+    var props2 = tree2.prop;
+    
+    for (var p1 in props1) {
+      if (p1 in props2 && props1[p1] == props2[p1]) {
+        // do nothin
+      } else {
+      }
+    }
+
+  }
   
-  this.build = createObjTree;
+  snapshotDom = createObjTree;
+  compareDom = getDifferences;
 
 })();
 

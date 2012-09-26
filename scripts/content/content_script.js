@@ -10,6 +10,12 @@ var port;
 
 // Utility functions
 
+var snapshot = function() {
+  return snapshotDom(document);
+}
+
+var curSnapshot = snapshot();
+
 // taken from http://stackoverflow.com/questions/2631820/im-storing-click-coor
 // dinates-in-my-db-and-then-reloading-them-later-and-showing/2631931#2631931
 function getPathTo(element) {
@@ -83,7 +89,11 @@ var processEvent = function _processEvent(eventData) {
     eventMessage["URL"] = document.URL;
     eventMessage["dispatchType"] = dispatchType;
     eventMessage["nodeName"] = nodeName;
-    eventMessage["snapshot"] = DOMToJSON.build(document);
+
+    var oldSnapshot = curSnapshot;
+    curSnapshot = snapshot();
+    eventMessage["snapshot"] = curSnapshot;
+    compareDom(oldSnapshot, curSnapshot);
     //eventMessage["type"] = eventData.type;
 
     for (var prop in properties) {
@@ -125,7 +135,7 @@ var handleMessage = function(request) {
       simulate(nodes[i], e);
     }
   } else if (request.type == "snapshot") {
-    port.postMessage({type: "snapshot", value: DOMToJSON.build(document)});
+    port.postMessage({type: "snapshot", value: snapshotDom(document)});
   }
 }
 
@@ -199,13 +209,6 @@ function simulate(element, eventData) {
     console.log("Unknown type of event");
   }
   element.dispatchEvent(oEvent);
-
-//  } else {
-//    options.clientX = options.pointerX;
-//    options.clientY = options.pointerY;
-//    var evt = document.createEventObject();
-//    oEvent = extend(evt, options);
-//    element.fireEvent('on' + eventName, oEvent);
 }
 
 // Attach the event handlers to their respective events
@@ -248,16 +251,3 @@ $("iframe").each(function(i, e) {
   console.log(e.contentDocument.documentElement);
 });
 });
-
-/*var oldCreateEvent = document.addEventListener;
-document.addEventListener = function(params) {
-  console.log("interpose");
-  oldCreateEvent(params);
-};*/
-/*
-console.log(document, document.parentElement, document.parentNode, document.frames);
-
-console.log("here");
-$("div").each(function(index, element) {
-  console.log("blah", element.contentWindow);
-});*/
