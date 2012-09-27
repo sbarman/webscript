@@ -475,6 +475,7 @@ var RecordReplay = (function RecordReplayClosure() {
       });
   },
   
+  /*
   checkDivergence: function _checkDivergence(tabId1,tabId2){
 	  var port1 = chrome.tabs.connect(tabId1, {});
 	  var port2 = chrome.tabs.connect(tabId2, {});
@@ -497,16 +498,17 @@ var RecordReplay = (function RecordReplayClosure() {
 	  port1.postMessage({type: "snapshot"});
 		
 	  
-	  /*
+	  //this one doesn't work
 	  chrome.tabs.sendMessage(tabid1, {type:"snapshot"}, function(response1) {
 		  console.log("got DOM 1");
 		  chrome.tabs.sendMessage(tabid2, {type:"snapshot"}, function(response2) {
 			  console.log("got DOM 2");
 		  });
 	  });
-	  */
+	  
 	  
   },
+  */
       
   simultaneousReplayGutsInTab: function _simultaneousReplayGuts(e, desiredTab) {
       var portMapping = this.portMapping;
@@ -531,7 +533,6 @@ var RecordReplay = (function RecordReplayClosure() {
 		console.log("PORT IN MAPPING");
         try {
           portMapping[desiredPort].postMessage(msg);
-          this.checkDivergence(tab,desiredTab.id);
         } catch(err) {
           console.log(err.message);
         }
@@ -549,7 +550,6 @@ var RecordReplay = (function RecordReplayClosure() {
           portMapping[newPort.name] = newPort;
 		  console.log("simultaneous replay in window", desiredTab.windowId, "and index", desiredTab.index);
           newPort.postMessage(msg);
-          this.checkDivergence(tab,desiredTab.id);
         } else {
 		  console.log("NO NEW PORT");
           var recordReplay = this;

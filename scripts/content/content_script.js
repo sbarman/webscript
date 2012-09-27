@@ -15,6 +15,26 @@ function snapshot() {
   return snapshotDom(document);
 }
 curSnapshot = snapshot();
+console.log("content script console logging");
+
+//add a div that will report current state of replay actions
+
+/*
+function addReplayStatusDiv(){
+	replayStatusDiv = document.createElement('script');
+	replayStatusDiv.setAttribute('innerHTML', 'test temporary');
+	replayStatusDiv.setAttribute('z-index','9999999999999999999999999999999999999999999');
+	replayStatusDiv.setAttribute('background-color', 'yellow');
+	replayStatusDiv.setAttribute('position','absolute');
+	replayStatusDiv.setAttribute('left','0px');
+	replayStatusDiv.setAttribute('top','0px');
+	replayStatusDiv.setAttribute('id','replayStatus');
+	document.body.appendChild(replayStatusDiv);	
+}
+window.onload = function(){
+	addReplayStatusDiv();
+};
+* */
 
 // taken from http://stackoverflow.com/questions/2631820/im-storing-click-coor
 // dinates-in-my-db-and-then-reloading-them-later-and-showing/2631931#2631931
@@ -124,6 +144,7 @@ function handleMessage(request) {
   } else if (request.type == "params") {
     updateParams(request.value);
   } else if (request.type == "event") {
+	//simulate events here
     console.log("extension event", request)
     var e = request.value;
     var nodes = xPathToNodes(e.target);
@@ -205,6 +226,14 @@ function simulate(element, eventData) {
     console.log("Unknown type of event");
   }
   element.dispatchEvent(oEvent);
+  
+  //let's update a div letting us know what event we just got
+	var replayStatusDiv = document.createElement("div");
+	replayStatusDiv.setAttribute('class','replayStatus');
+	replayStatusDiv.setAttribute('style','z-index:99999999999999999999999999;background-color:yellow;position:fixed;left:0px;top:0px;width:200px;font-size:10px');
+	replayStatusDiv.innerHTML = "Received Event: "+eventData.type;
+	document.body.appendChild(replayStatusDiv);	
+	console.log("appended child", replayStatusDiv.innerHTML);
 }
 
 // Attach the event handlers to their respective events
