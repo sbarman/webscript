@@ -234,7 +234,61 @@ function simulate(element, eventData) {
 	replayStatusDiv.innerHTML = "Received Event: "+eventData.type;
 	document.body.appendChild(replayStatusDiv);	
 	console.log("appended child", replayStatusDiv.innerHTML);
+	
+  //let's try seeing divergence
+    var recordDom = eventData.snapshotAfter;
+    var replayDom = snapshotDom(document);
+    console.log(recordDom);
+    console.log(replayDom);
+    checkDomDivergence(recordDom,replayDom);
 }
+
+function checkDomDivergence(recordDom, replayDom){
+	var divergences = recursiveVisit(recordDom, replayDom);
+	console.log("DIVERGENCES");
+	console.log(divergences);
+};
+
+function recursiveVisit(obj1,obj2){
+	console.log("recursiveVisit", obj1,obj2);
+	if (obj1 && obj2 && obj1.children && obj2.children){
+		console.log("have children");
+		var divergences = [];
+		var children1 = obj1.children;
+		var children2 = obj2.children;
+		var numChildren = children1.length;
+		for (var i=0; i<numChildren; i++){
+			if (!(children1[i]==children2[i])){
+				divergences.concat(recursiveVisit(children1[i],children2[i]));
+			}	
+		}
+		return divergences;
+	}
+	else{
+		console.log("no children. report divergence");
+		console.log([{"record":obj1,"replay":obj2}]);
+		return[{"record":obj1,"replay":obj2}];
+	}
+}
+
+//this function from http://stackoverflow.com/questions/2549320/looping-through-an-object-tree
+/*
+function children(obj1,obj2){
+	if (obj1==obj2)
+		return []
+	var divergences = [];
+    for (var k in obj1){
+        if (typeof obj1[k] == "object")
+            divergences.concat(eachRecursive(obj1[k],obj2[k]));
+        else if (!(obj1[k]==obj2[k]))
+			console.log("time to mark a divergence");
+			console.log(typeof obj1[k]);
+			console.log(obj1[k],obj2[k]);
+			divergences.push({"1":obj1[k],"2":obj2[k]});
+    }
+    return divergences
+}
+* */
 
 // Attach the event handlers to their respective events
 function addListenersForRecording() {

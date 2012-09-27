@@ -527,6 +527,8 @@ var RecordReplay = (function RecordReplayClosure() {
       
       //to check if we already have a port for the tab in which we want to play the event, we have to get the port for the tab we want to use
 	  var desiredPort = tabIdToPortNames[desiredTab.id];
+	  
+	  console.log("msg", msg);
       
       // we have already seen this port, reuse existing mapping
       if (desiredPort in portMapping) {
