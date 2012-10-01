@@ -37,6 +37,7 @@
   },
   "permissions": [
     "tabs", // used to communicate
-    "webNavigation" // used to listen to load events
+    "webNavigation", // used to listen to load events
+    "http://*/"
   ]
 }

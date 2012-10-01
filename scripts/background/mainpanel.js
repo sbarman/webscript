@@ -3,7 +3,7 @@
 
 'use strict';
 
-var PortManager = (function PortManager() {
+var PortManager = (function PortManagerClosure() {
   function PortManager() {
   }
   
@@ -11,6 +11,84 @@ var PortManager = (function PortManager() {
   };
 
   return PortManager;
+})();
+
+
+var ScriptServer = (function ScriptServerClosure() {
+  function ScriptServer(server) {
+    this.server = server;
+  }
+
+  ScriptServer.prototype = {
+    saveScript: function _saveScript(name, events) {
+      var server = this.server;
+      var postMsg = {};
+      postMsg["name"] = name;
+      postMsg["user"] = "/api/v1/user/1/";
+      postMsg["events"] = [];
+      var req = $.ajax({
+        success: function(data, textStatus, jqXHR) {
+          console.log(data, jqXHR, textStatus);
+          var scriptUrl = jqXHR.getResponseHeader("Location");
+          console.log(scriptUrl);
+     
+          for (var i = 0, ii = events.length; i < ii; ++i) {
+            var postMsg = {};
+            var e = events[i];
+            postMsg["dom_post_event_state"] = "";
+            postMsg["dom_pre_event_state"] = "";
+            postMsg["event_type"] = e.type;
+            postMsg["execution_order"] = i;
+            postMsg["parameters"] = [];
+            postMsg["script"] = scriptUrl.substr(scriptUrl.indexOf("/api"));
+            $.ajax({
+              success: function(data, textStatus, jqXHR) {
+                console.log(data, jqXHR, textStatus);
+                var eventUrl = jqXHR.getResponseHeader("Location");
+                console.log(eventUrl);
+                for (var prop in e) {
+                  var postMsg = {};
+                  postMsg["name"] = prop;
+                  postMsg["value"] = e[prop];
+                  postMsg["event"] = eventUrl.substr(eventUrl.indexOf("/api"));
+                  $.ajax({
+                    complete: function(s, x) {
+                      console.log(s, x);
+                    },
+                    contentType: "application/json",
+                    data: JSON.stringify(postMsg),
+                    dataType: "json",
+                    processData: false,
+                    type: "POST",
+                    url: server + "parameter/",
+                  });
+                }
+              },
+              contentType: "application/json",
+              data: JSON.stringify(postMsg),
+              dataType: "json",
+              processData: false,
+              type: "POST",
+              url: server + "event/",
+
+            });
+          }
+
+        },
+        contentType: "application/json",
+        data: JSON.stringify(postMsg),
+        dataType: "json",
+        processData: false,
+        type: "POST",
+        url: server + "script/",
+      });
+      console.log(req);
+    },
+    getScript: function _getScript(name) {
+    }
+  };
+
+  return ScriptServer;
 })();
 
 var Panel = (function PanelClosure() {
@@ -49,6 +127,11 @@ var Panel = (function PanelClosure() {
       
       $("#paramsHide").click(function(eventObject) {
         $("#paramsDiv").toggle(1000);
+      });
+
+      $("#save").click(function(eventObject) {
+        var name = $("#scriptname").prop("value");
+        saveScript(name);
       });
       
       var panel = this;
@@ -475,6 +558,12 @@ var replayReset = function _replayReset() {
   recordReplay.replayReset();
 }
 
+function saveScript(name) {
+  console.log("saving script");
+  var events = recordReplay.events;
+  scriptServer.saveScript(name, events); 
+}
+
 // The first message content scripts send is to get a unique id
 var handleIdMessage = function(request, sender, sendResponse) {
   console.log("background receiving:", request, "from", sender);
@@ -574,6 +663,7 @@ $(window).unload( function() {
 
 var panel = new Panel(); 
 var recordReplay = new RecordReplay(panel);
+var scriptServer = new ScriptServer("http://localhost:8000/api/v1/");
 
 
 sendToAll({type: "params", value: params});

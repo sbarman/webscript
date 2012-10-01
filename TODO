@@ -1,9 +1,0 @@
-Stop extra events from popping up
-
-Add listeners to all events
-
-Use hacks to get around content script bug
-https://groups.google.com/a/chromium.org/forum/?fromgroups#!topic/chromium-extensions/8fuyh-betwo
-https://code.google.com/p/chromium/issues/detail?id=20773
-
-Create port from each content script sandbox to background page
