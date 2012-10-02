@@ -200,7 +200,7 @@ var Panel = (function PanelClosure() {
       });
       
       $("#replay").click(function(eventObject) {
-        controller.replay();
+        controller.replayScript();
       });
 
       $("#pause").click(function(eventObject) {
@@ -410,6 +410,9 @@ var Record = (function RecordClosure() {
       this.events = []
       this.panel.clearEvents();
     },
+    getEvents: function _getEvents() {
+      return this.events.slice(0);
+    }
   };
   
   return Record;
@@ -435,9 +438,9 @@ var Replay = (function ReplayClosure() {
 
   Replay.prototype = {
     replay: function _replay() {
-      var recordReplay = this;
+      var replay = this;
       this.timeoutHandle = setTimeout(function() {
-        recordReplay.replayGuts();
+        replay.replayGuts();
       }, 0);
     },
     replayReset: function _replayReset() {
@@ -564,9 +567,9 @@ var Replay = (function ReplayClosure() {
 
         this.index++;
        
-        var recordReplay = this;
+        var replay = this;
         this.timeoutHandle = setTimeout(function() {
-          recordReplay.replayGuts();
+          replay.replayGuts();
         }, params.timeout);
 
       // we have already seen this tab, find equivalent port for tab
@@ -580,25 +583,25 @@ var Replay = (function ReplayClosure() {
         
           this.index++;
 
-          var recordReplay = this;
+          var replay = this;
           this.timeoutHandle = setTimeout(function() {
-            recordReplay.replayGuts();
+            replay.replayGuts();
           }, params.timeout);
         } else {
-          var recordReplay = this;
+          var replay = this;
           this.timeoutHandle = setTimeout(function() {
-            recordReplay.replayGuts();
+            replay.replayGuts();
           }, params.timeout);
         }
       // need to open new tab
       } else {
-        var recordReplay = this;
+        var replay = this;
         chrome.tabs.create({url: url, active: true}, 
           function(newTab) {
             var newTabId = newTab.id;
-            recordReplay.tabMapping[tab] = newTabId;
-            recordReplay.timeoutHandle = setTimeout(function() {
-              recordReplay.replayGuts();
+            replay.tabMapping[tab] = newTabId;
+            replay.timeoutHandle = setTimeout(function() {
+              replay.replayGuts();
             }, 1000);
           }
         );
@@ -612,13 +615,16 @@ var Replay = (function ReplayClosure() {
 // Utility functions
 
 var Controller = (function ControllerClosure() {
-  function Controller(record, replay, scriptServer) {
+  function Controller(record, scriptServer, ports) {
     this.record = record;
-    this.replay = replay;
     this.scriptServer = scriptServer;
+    this.ports = ports;
   }
   
   Controller.prototype = {
+    setPanel: function(panel) {
+      this.panel = panel;
+    },
     // The user started recording
     start: function() {
       console.log("start");
@@ -640,10 +646,12 @@ var Controller = (function ControllerClosure() {
       console.log("reset");
       this.record.clearEvents();
     },    
-    replay: function() {
+    replayScript: function() {
       console.log("replay");
       this.stop();
-      this.replay.replay();
+      var replay = new Replay(this.record.getEvents(), this.panel, this.ports);
+      this.replay = replay;
+      replay.replay();
     },
     pause: function() {
       this.replay.replayPause();
@@ -653,7 +661,7 @@ var Controller = (function ControllerClosure() {
     },
     saveScript: function(name) {
       console.log("saving script");
-      var events = recordReplay.events;
+      var events = this.record.getEvents();
       this.scriptServer.saveScript(name, events); 
     }
   }
@@ -665,9 +673,10 @@ var Controller = (function ControllerClosure() {
 var ports = new PortManager();
 var record = new Record(ports);
 var scriptServer = new ScriptServer("http://localhost:8000/api/v1/");
-var controller = new Controller(record, replay, scriptServer);
+var controller = new Controller(record, scriptServer, ports);
 var panel = new Panel(controller, ports); 
 
+controller.setPanel(panel);
 record.setPanel(panel);
 
 // Add event handlers
