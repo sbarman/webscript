@@ -20,11 +20,17 @@ var PortManager = (function PortManagerClosure() {
         ports[portName].postMessage(message);
       }
     },
-    getTab: function(port) {
+    getTab: function(portName) {
       return this.portNameToTabId[portName];
     },
     getTabInfo: function(tab) {
       return this.tabIdToCurrentPortInfo[tab]
+    },
+    getPort: function(portName) {
+      return this.ports[portName];
+    },
+    getSnapshot: function(portName) {
+      return this.portToSnapshot[portName];
     },
     addSnapshot: function(name, snapshot) {
       this.portToSnapshot[name] = snapshot;
@@ -39,7 +45,7 @@ var PortManager = (function PortManagerClosure() {
       this.portNameToTabId[portName] = tabId;
      
       var tabIdToPortNames = this.tabIdToPortNames;
-      if (!(tabId in tabIdToPortNames[tabId])) {
+      if (!(tabId in tabIdToPortNames)) {
         tabIdToPortNames[tabId] = [];
       }
       tabIdToPortNames[tabId].push(portName);
@@ -51,6 +57,7 @@ var PortManager = (function PortManagerClosure() {
         var portInfo = this.tabIdToCurrentPortInfo[tabId];
         portInfo.frames.push(value);
       }
+      return portName;
     },
     connectPort: function(port) {
       var portName = port.name;
@@ -62,6 +69,7 @@ var PortManager = (function PortManagerClosure() {
         handleMessage(port, msg);
       });
     
+      var portManager = this;
       port.onDisconnect.addListener(function(evt) {
         if (portName in ports) {
           delete ports[portName];
@@ -69,9 +77,9 @@ var PortManager = (function PortManagerClosure() {
           throw "Can't find port";
         }
     
-        var tabIdToCurrentPortInfo = this.tabIdToCurrentPortInfo;
-        var tabId = this.portNameToTabId[portName];
-        var portInfo = tabIdToCurrentPortInfo[tabId];
+        var tabIdToCurrentPortInfo = portManager.tabIdToCurrentPortInfo;
+        var tabId = portManager.portNameToTabId[portName];
+        var portInfo = portManager.tabIdToCurrentPortInfo[tabId];
 
         if (portInfo.top.portName == portName) {
           delete tabIdToCurrentPortInfo[tabId];
@@ -180,7 +188,7 @@ var Panel = (function PanelClosure() {
   Panel.prototype = {
     attachHandlers: function _attachHandlers(controller) {
       $("#start").click(function(eventObject) {
-        constroller.start();
+        controller.start();
       });
       
       $("#stop").click(function(eventObject) {
@@ -330,8 +338,7 @@ var Panel = (function PanelClosure() {
 })();
 
 var Record = (function RecordClosure() {
-  function Record(panel, ports) {
-    this.panel = panel;
+  function Record(ports) {
     this.ports = ports;
     this.events = [];
     this.recordState = RecordState.STOPPED;
@@ -343,6 +350,9 @@ var Record = (function RecordClosure() {
   };
 
   Record.prototype = {
+    setPanel: function _setPanel(panel) {
+      this.panel = panel;
+    },
     isRecording: function _isRecording() {
       return this.recordState == RecordState.RECORDING;
     },
@@ -450,7 +460,7 @@ var Replay = (function ReplayClosure() {
       }
       var newPort = null;
       if (topFrame) {
-        newPort = ports[portInfo.top.portName];
+        newPort = ports.getPort(portInfo.top.portName);
       } else {
         var frames = portInfo.frames;
         var urlFrames = [];
@@ -462,7 +472,7 @@ var Replay = (function ReplayClosure() {
         
         var allFrameSnapshots = true;
         for (var i = 0, ii = urlFrames.length; i < ii; i++) {
-          if (!portToSnapshot[urlFrames[i].portName]) {
+          if (!ports.getSnapshot(urlFrames[i].portName)) {
             allFrameSnapshots = false;
             break;
           }
@@ -500,7 +510,7 @@ var Replay = (function ReplayClosure() {
           var index = -1;
           for (var i = 0, ii = urlFrames.length; i < ii; ++i) {
             var score = similar(snapshot,
-                                portToSnapshot[urlFrames[i].portName]);
+                                ports.getSnapshot(urlFrames[i].portName));
             if (score > topScore) {
               index = i;
               topScore = score;
@@ -510,7 +520,7 @@ var Replay = (function ReplayClosure() {
           portToSnapshot = {}; 
         } else {
           for (var i = 0, ii = urlFrames.length; i < ii; i++) {
-            var port = ports[urlFrames[i].portName];
+            var port = ports.getPort(urlFrames[i].portName);
             port.postMessage({type: "snapshot", value: null});
           }
         }
@@ -602,14 +612,17 @@ var Replay = (function ReplayClosure() {
 // Utility functions
 
 var Controller = (function ControllerClosure() {
-  function Controller() {
+  function Controller(record, replay, scriptServer) {
+    this.record = record;
+    this.replay = replay;
+    this.scriptServer = scriptServer;
   }
   
   Controller.prototype = {
     // The user started recording
     start: function() {
       console.log("start");
-      record.startRecording();
+      this.record.startRecording();
 
       // Update the UI
       chrome.browserAction.setBadgeBackgroundColor({color:[255, 0, 0, 64]});
@@ -617,7 +630,7 @@ var Controller = (function ControllerClosure() {
     },
     stop: function() {
       console.log("stop");
-      record.stopRecording();
+      this.record.stopRecording();
     
       // Update the UI
       chrome.browserAction.setBadgeBackgroundColor({color: [0, 0, 0, 0]});
@@ -625,18 +638,18 @@ var Controller = (function ControllerClosure() {
     },
     reset: function() {
       console.log("reset");
-      record.clearEvents();
+      this.record.clearEvents();
     },    
     replay: function() {
       console.log("replay");
       this.stop();
-      replay.replay();
+      this.replay.replay();
     },
     pause: function() {
-      replay.replayPause();
+      this.replay.replayPause();
     },
     replayReset: function() {
-      replay.replayReset();
+      this.replay.replayReset();
     },
     saveScript: function(name) {
       console.log("saving script");
@@ -650,11 +663,12 @@ var Controller = (function ControllerClosure() {
 
 // Instantiate components
 var ports = new PortManager();
-var record = new Record(panel, ports);
-var replay = new Replay(panel, ports);
+var record = new Record(ports);
 var scriptServer = new ScriptServer("http://localhost:8000/api/v1/");
-var controller = new Controller();
-var panel = new Panel(controller, ports, scriptServer); 
+var controller = new Controller(record, replay, scriptServer);
+var panel = new Panel(controller, ports); 
+
+record.setPanel(panel);
 
 // Add event handlers
 
