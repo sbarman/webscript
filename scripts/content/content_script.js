@@ -3,6 +3,8 @@
 
 'use strict';
 
+(function() {
+
 // Global variables
 var recording = false;
 var id = "setme";
@@ -239,3 +241,5 @@ chrome.extension.sendMessage({type: "getId", value: value}, function(resp) {
   port.postMessage({type: "getRecording", value: null});
   port.postMessage({type: "getParams", value: null});
 });
+
+})()
