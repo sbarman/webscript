@@ -3,8 +3,6 @@
 
 'use strict';
 
-(function() {
-
 // Global variables
 var recording = false;
 var id = "setme";
@@ -17,6 +15,26 @@ function snapshot() {
   return snapshotDom(document);
 }
 curSnapshot = snapshot();
+console.log("content script console logging");
+
+//add a div that will report current state of replay actions
+
+/*
+function addReplayStatusDiv(){
+	replayStatusDiv = document.createElement('script');
+	replayStatusDiv.setAttribute('innerHTML', 'test temporary');
+	replayStatusDiv.setAttribute('z-index','9999999999999999999999999999999999999999999');
+	replayStatusDiv.setAttribute('background-color', 'yellow');
+	replayStatusDiv.setAttribute('position','absolute');
+	replayStatusDiv.setAttribute('left','0px');
+	replayStatusDiv.setAttribute('top','0px');
+	replayStatusDiv.setAttribute('id','replayStatus');
+	document.body.appendChild(replayStatusDiv);	
+}
+window.onload = function(){
+	addReplayStatusDiv();
+};
+* */
 
 // taken from http://stackoverflow.com/questions/2631820/im-storing-click-coor
 // dinates-in-my-db-and-then-reloading-them-later-and-showing/2631931#2631931
@@ -126,6 +144,7 @@ function handleMessage(request) {
   } else if (request.type == "params") {
     updateParams(request.value);
   } else if (request.type == "event") {
+	//simulate events here
     console.log("extension event", request)
     var e = request.value;
     var nodes = xPathToNodes(e.target);
@@ -207,7 +226,72 @@ function simulate(element, eventData) {
     console.log("Unknown type of event");
   }
   element.dispatchEvent(oEvent);
+  
+  //let's update a div letting us know what event we just got
+	var replayStatusDiv = document.createElement("div");
+	replayStatusDiv.setAttribute('class','replayStatus');
+	replayStatusDiv.setAttribute('style','z-index:99999999999999999999999999;background-color:yellow;position:fixed;left:0px;top:0px;width:200px;font-size:10px');
+	replayStatusDiv.innerHTML = "Received Event: "+eventData.type;
+	document.body.appendChild(replayStatusDiv);	
+	console.log("appended child", replayStatusDiv.innerHTML);
+	
+  //let's try seeing divergence
+    var recordDom = eventData.snapshotAfter;
+    var replayDom = snapshotDom(document);
+    console.log(recordDom);
+    console.log(replayDom);
+    checkDomDivergence(recordDom,replayDom);
 }
+
+function checkDomDivergence(recordDom, replayDom){
+	var divergences = recursiveVisit(recordDom, replayDom);
+	console.log("DIVERGENCES");
+	console.log(divergences);
+};
+
+function recursiveVisit(obj1,obj2){
+	console.log("recursiveVisit", obj1,obj2);
+	if (obj1 && obj2 && obj1.children && obj2.children){
+		console.log("have children");
+		var divergences = [];
+		var children1 = obj1.children;
+		var children2 = obj2.children;
+		var numChildren = children1.length;
+		for (var i=0; i<numChildren; i++){
+			if (!(children1[i]==children2[i])){
+				var moreDivergences = (recursiveVisit(children1[i],children2[i]));
+				divergences = divergences.concat(moreDivergences);
+				console.log("divergence to add", moreDivergences);
+				console.log("the new divergence list at this level", divergences);
+			}	
+		}
+		return divergences;
+	}
+	else{
+		console.log("no children. report divergence");
+		console.log("the new divergence", [{"record":obj1,"replay":obj2}]);
+		return[{"record":obj1,"replay":obj2}];
+	}
+}
+
+//this function from http://stackoverflow.com/questions/2549320/looping-through-an-object-tree
+/*
+function children(obj1,obj2){
+	if (obj1==obj2)
+		return []
+	var divergences = [];
+    for (var k in obj1){
+        if (typeof obj1[k] == "object")
+            divergences.concat(eachRecursive(obj1[k],obj2[k]));
+        else if (!(obj1[k]==obj2[k]))
+			console.log("time to mark a divergence");
+			console.log(typeof obj1[k]);
+			console.log(obj1[k],obj2[k]);
+			divergences.push({"1":obj1[k],"2":obj2[k]});
+    }
+    return divergences
+}
+* */
 
 // Attach the event handlers to their respective events
 function addListenersForRecording() {
@@ -241,5 +325,3 @@ chrome.extension.sendMessage({type: "getId", value: value}, function(resp) {
   port.postMessage({type: "getRecording", value: null});
   port.postMessage({type: "getParams", value: null});
 });
-
-})()
