@@ -207,6 +207,52 @@ function simulate(element, eventData) {
     console.log("Unknown type of event");
   }
   element.dispatchEvent(oEvent);
+  
+  //let's update a div letting us know what event we just got
+  var replayStatusDiv = document.createElement("div");
+  replayStatusDiv.setAttribute('class','replayStatus');
+  replayStatusDiv.setAttribute('style','z-index:99999999999999999999999999;background-color:yellow;position:fixed;left:0px;top:0px;width:200px;font-size:10px');
+  replayStatusDiv.innerHTML = "Received Event: "+eventData.type;
+  document.body.appendChild(replayStatusDiv);	
+  console.log("appended child", replayStatusDiv.innerHTML);
+  
+  //let's try seeing divergence
+  var recordDom = eventData.snapshotAfter;
+  var replayDom = snapshotDom(document);
+  console.log(recordDom);
+  console.log(replayDom);
+  checkDomDivergence(recordDom,replayDom);
+}
+
+function checkDomDivergence(recordDom, replayDom){
+  var divergences = recursiveVisit(recordDom, replayDom);
+  console.log("DIVERGENCES");
+  console.log(divergences);
+};
+
+function recursiveVisit(obj1,obj2){
+  console.log("recursiveVisit", obj1,obj2);
+  if (obj1 && obj2 && obj1.children && obj2.children){
+    console.log("have children");
+    var divergences = [];
+    var children1 = obj1.children;
+    var children2 = obj2.children;
+    var numChildren = children1.length;
+    for (var i=0; i<numChildren; i++){
+	  if (!(children1[i]==children2[i])){
+        var moreDivergences = (recursiveVisit(children1[i],children2[i]));
+        divergences = divergences.concat(moreDivergences);
+        console.log("divergence to add", moreDivergences);
+        console.log("the new divergence list at this level", divergences);
+      }
+    }
+    return divergences;
+  }
+  else{
+    console.log("no children. report divergence");
+    console.log("the new divergence", [{"record":obj1,"replay":obj2}]);
+    return[{"record":obj1,"replay":obj2}];
+  }
 }
 
 // Attach the event handlers to their respective events
