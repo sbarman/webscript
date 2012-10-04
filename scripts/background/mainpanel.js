@@ -124,30 +124,20 @@ var ScriptServer = (function ScriptServerClosure() {
             postMsg["dom_pre_event_state"] = "";
             postMsg["event_type"] = e.type;
             postMsg["execution_order"] = i;
-            postMsg["parameters"] = [];
+
+            var parameters = [];
+            for (var prop in e) {
+              var propMsg = {};
+              propMsg["name"] = prop;
+              propMsg["value"] = e[prop];
+              parameters.push(propMsg);
+            }
+            postMsg["parameters"] = parameters;
             postMsg["script"] = scriptUrl.substr(scriptUrl.indexOf("/api"));
+            
             $.ajax({
               success: function(data, textStatus, jqXHR) {
                 console.log(data, jqXHR, textStatus);
-                var eventUrl = jqXHR.getResponseHeader("Location");
-                console.log(eventUrl);
-                for (var prop in e) {
-                  var postMsg = {};
-                  postMsg["name"] = prop;
-                  postMsg["value"] = e[prop];
-                  postMsg["event"] = eventUrl.substr(eventUrl.indexOf("/api"));
-                  $.ajax({
-                    complete: function(s, x) {
-                      console.log(s, x);
-                    },
-                    contentType: "application/json",
-                    data: JSON.stringify(postMsg),
-                    dataType: "json",
-                    processData: false,
-                    type: "POST",
-                    url: server + "parameter/",
-                  });
-                }
               },
               contentType: "application/json",
               data: JSON.stringify(postMsg),
@@ -169,7 +159,43 @@ var ScriptServer = (function ScriptServerClosure() {
       });
       console.log(req);
     },
-    getScript: function _getScript(name) {
+    getScript: function _getScript(name, controller) {
+      var server = this.server;
+      $.ajax({
+        success: function(data, textStatus, jqXHR) {
+          console.log(data, textStatus, jqXHR);
+          var scripts = data.objects;
+          if (scripts.length != 0) {
+            var script = scripts[0];
+            for (var i = 0, ii = scripts.length; i < ii; ++i) {
+              var s = scripts[i];
+              if (parseInt(script.id) < parseInt(s.id)) {
+                script = s;
+              }
+            }
+            var events = [];
+            var serverEvents = script.events;
+            for (var i = 0, ii = serverEvents.length; i < ii; ++i) {
+              var e = serverEvents[i];
+              var serverParams = e.parameters;
+              var event = {}
+              for (var j = 0, jj = serverParams.length; j < jj; ++j) {
+                var p = serverParams[j];
+                event[p.name] = p.value
+              }
+              events.push(event);
+            }
+            controller.setEvents(events);
+          }
+        },
+        url: server + "script/?name=" + name + "&format=json",
+        type: 'GET',
+//        contentType: "application/json",
+        processData: false,
+        accepts: 'application/json',
+        dataType: 'json'
+      })
+      return [];
     }
   };
 
@@ -220,6 +246,11 @@ var Panel = (function PanelClosure() {
       $("#save").click(function(eventObject) {
         var name = $("#scriptname").prop("value");
         controller.saveScript(name);
+      });
+
+      $("#load").click(function(eventObject) {
+        var name = $("#scriptname").prop("value");
+        controller.getScript(name);
       });
       
       var panel = this;
@@ -412,6 +443,13 @@ var Record = (function RecordClosure() {
     },
     getEvents: function _getEvents() {
       return this.events.slice(0);
+    },
+    setEvents: function _setEvents(events) {
+      this.events = events;
+      this.panel.clearEvents();
+      for (var i = 0, ii = events.length; i < ii; ++i) {
+        this.panel.addEvent(events[i]);
+      }
     }
   };
   
@@ -663,6 +701,13 @@ var Controller = (function ControllerClosure() {
       console.log("saving script");
       var events = this.record.getEvents();
       this.scriptServer.saveScript(name, events); 
+    },
+    getScript: function(name) {
+      console.log("getting script");
+      var events = this.scriptServer.getScript(name, this); 
+    },
+    setEvents: function(events) {
+      this.record.setEvents(events);
     }
   }
 
