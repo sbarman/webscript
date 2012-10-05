@@ -231,29 +231,150 @@ function checkDomDivergence(recordDom, replayDom){
 };
 
 function recursiveVisit(obj1,obj2){
-  console.log("recursiveVisit", obj1,obj2);
-  if (obj1 && obj2 && obj1.children && obj2.children){
-    console.log("have children");
+  if (obj1.children && obj2.children){
     var divergences = [];
     var children1 = obj1.children;
     var children2 = obj2.children;
-    var numChildren = children1.length;
+    var numChildren1 = children1.length;
+    var numChildren2 = children2.length;
+    
+    //if a different number of children, definitely want to assume
+    //these objects have messy children that need matching
+    if (numChildren1!=numChildren2){
+      divergences.concat(recursiveVisitMismatchedChildren(obj1,obj2);
+    }
+    
+    //proceed on the assumption that we can just index into these
+    //children without difficulty, only change our mind if we find
+    //any of the children don't match
     for (var i=0; i<numChildren; i++){
-	  if (!(children1[i]==children2[i])){
-        var moreDivergences = (recursiveVisit(children1[i],children2[i]));
-        divergences = divergences.concat(moreDivergences);
-        console.log("divergence to add", moreDivergences);
-        console.log("the new divergence list at this level", divergences);
+      if (!(children1[i]==children2[i])){
+        divergences.concat(recursiveVisitMismatchedChildren(obj1,obj2);
       }
     }
+    
+    //if all children matched, we'll hit this point and just return
+    //an empty list.  else things will have been added to divergences
     return divergences;
   }
   else{
-    console.log("no children. report divergence");
-    console.log("the new divergence", [{"record":obj1,"replay":obj2}]);
-    return[{"record":obj1,"replay":obj2}];
+    //we hit this if only one of obj1 and obj2 has children
+    //this is bad stuff.  we matched all the parents, but things went
+    //bad here, so this should definitely be a divergence
+    //seems like probably a dom node was added to or removed from
+    //obj1 or obj2
+    if(obj1.children)
+      return[{"type":"A node or nodes is missing that was present in the original page.","record":obj1,"replay":obj2, "relevantChildren":obj1.children}];
+    if(obj2.children)
+      return[{"type":"A node or nodes is present that was not present in the original page.","record":obj1,"replay":obj2, "relevantChildren":obj2.children}];
+    //we also hit this if neither node has children.
+    //then we've hit leaves, and the leaves must diverge, or we
+    //wouldn't have called this method on them
+    else
+      //neither has children
+      return[{"type":"We expect these nodes to be the same, but they're not.","record":obj1,"replay":obj2}];
   }
-}
+};
+
+//try to match up children before traversing the rest of the subtree
+//we know that both obj1 and obj2 have children
+//all we have to do is find a mapping between children
+//then call our recursive visit method on the pairs if they're unequal
+function recursiveVisitMismatchedChildren(obj1,obj2){
+  var divergences = [];
+  var children1 = obj1.children;
+  var children2 = obj2.children;
+  var numChildren1 = children1.length;
+  var numChildren2 = children2.length;
+  var children1NumMatches = [];
+  var children2MatchedWith = [];
+  
+  for(var i=0;i<numChildren1;i++){
+    children1NumMatches.append(0);
+  }
+  for(var i=0;i<numChildren2;i++){
+    children2MatchedWith.append(-1);
+  }
+  
+  //let's iterate through obj2's children and try to find a
+  //corresponding child in obj1's children
+  //we'll make a mapping
+  
+  for(var i=0;i<numChildren2;i++){
+    var child2 = children2[i];
+    var maxSimilarityScore=0;
+    var maxSimilarityScoreIndex=0;
+    for (var j=0;j<numChildren1;j++){
+      var child1 = children1[j];
+      if(child2==child1){
+        //we can rest assured about child1 and child2
+        //add to the mapping
+        children2MatchedWith[i]=j;
+        children1NumMatches++;
+        break;
+      }
+      //if we haven't matched it yet, we have to keep computing
+      //similarity scores
+      var similarityScore = similarity(child2,child1);
+      if(similarityScore>maxSimilarityScore){
+        maxSimilarityScore = similarityScore;
+        maxSimilarityScoreIndex = j;
+      }
+    }
+    //if our maxSimilarityScore is sufficiently high, go ahead and
+    //add the pairing to our mapping
+    if (similarityScore>.9){
+	  children2MatchedWith[i]=maxSimilarityScoreIndex;
+      children1NumMatches[maxSimilarityScoreIndex]++;
+    }
+    //otherwise, let's assume we haven't found a match for child2
+    //and it was added to obj2's page
+    divergences.append({"type":"A node is present that was  not present in the original page.","record":obj1,"replay":obj2, "relevantChildren":[child2]});
+  }
+  
+  //now we need to see which of obj1's children didn't have any obj2
+  //children mapped to them
+  //if such a child is similar to other obj1 children that did get
+  //mapped to, it looks like a different number of children type problem
+  //and we should report that
+  //otherwise it looks as though there was a child removed, and we
+  //should report that
+  
+  //note that in this scheme, we don't actually traverse things that
+  //seem to be in classes of siblings...things that seem to be similar
+  //we adopt this because at that point we expect it to be a template
+  //for differing content
+  
+  for (var i=0;i<numChildren1;i++){
+	  if(children1NumMatches[i]>0){
+		  //potential sibling class
+		  var numSiblingsInObj1Page = 0
+		  for (var j=0;j<numChildren1;j++){
+			  if(children1NumMatches[i]==0 && (children1[i]==children1[j] || similarity(children1[1],children1[j])>.9)){
+				  //we have a match!
+				  numSiblingsInObj1Page++;
+				  //let's not catch this later when we report nodes
+				  //missing from obj2's page but present in obj1's
+				  children1NumMatches[j]=-1;
+			  }
+		  }
+		  divergences.append({"type":"The original page had "+numSiblingsInObj1Page+"instances of a particular kind of node, but this page has "+children1NumMatches[i]+".","record":obj1,"replay":obj2, "relevantChildren":[children1[i]]});
+	  }
+  }
+  
+  //now we've taken care of any page 1 nodes that were just missed
+  //because page 2 preferred its siblings
+  //so anything that still hasn't been matched is something that
+  //was actually removed
+  
+  for(var i=0;i<numChildren1;i++){
+	  if(children1NumMatches[i]==0){
+		divergences.append({"type":"A node is missing that was present in the original page.","record":obj1,"replay":obj2, "relevantChildren":[children1[i]]});
+	  }
+  }
+  
+  return divergences;
+};
 
 // Attach the event handlers to their respective events
 function addListenersForRecording() {
