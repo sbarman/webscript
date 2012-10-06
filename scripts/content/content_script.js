@@ -241,15 +241,15 @@ function recursiveVisit(obj1,obj2){
     //if a different number of children, definitely want to assume
     //these objects have messy children that need matching
     if (numChildren1!=numChildren2){
-      divergences.concat(recursiveVisitMismatchedChildren(obj1,obj2);
+      divergences.concat(recursiveVisitMismatchedChildren(obj1,obj2));
     }
     
     //proceed on the assumption that we can just index into these
     //children without difficulty, only change our mind if we find
     //any of the children don't match
-    for (var i=0; i<numChildren; i++){
+    for (var i=0; i<numChildren1; i++){
       if (!(children1[i]==children2[i])){
-        divergences.concat(recursiveVisitMismatchedChildren(obj1,obj2);
+        divergences.concat(recursiveVisitMismatchedChildren(obj1,obj2));
       }
     }
     
@@ -287,13 +287,17 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
   var numChildren1 = children1.length;
   var numChildren2 = children2.length;
   var children1NumMatches = [];
+  var children1MatchedWith = [];
   var children2MatchedWith = [];
   
   for(var i=0;i<numChildren1;i++){
-    children1NumMatches.append(0);
+    children1NumMatches.push(0);
+  }
+  for(var i=0;i<numChildren1;i++){
+    children1MatchedWith.push(-1);
   }
   for(var i=0;i<numChildren2;i++){
-    children2MatchedWith.append(-1);
+    children2MatchedWith.push(-1);
   }
   
   //let's iterate through obj2's children and try to find a
@@ -310,6 +314,7 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
         //we can rest assured about child1 and child2
         //add to the mapping
         children2MatchedWith[i]=j;
+        children1MatchedWtih[j]=i;
         children1NumMatches++;
         break;
       }
@@ -324,12 +329,13 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
     //if our maxSimilarityScore is sufficiently high, go ahead and
     //add the pairing to our mapping
     if (similarityScore>.9){
-	  children2MatchedWith[i]=maxSimilarityScoreIndex;
+      children2MatchedWith[i]=maxSimilarityScoreIndex;
+      children1MatchedWith[maxSimilarityScoreIndex]=i;
       children1NumMatches[maxSimilarityScoreIndex]++;
     }
     //otherwise, let's assume we haven't found a match for child2
     //and it was added to obj2's page
-    divergences.append({"type":"A node is present that was  not present in the original page.","record":obj1,"replay":obj2, "relevantChildren":[child2]});
+    divergences.push({"type":"A node is present that was  not present in the original page.","record":obj1,"replay":obj2, "relevantChildren":[child2]});
   }
   
   //now we need to see which of obj1's children didn't have any obj2
@@ -348,7 +354,7 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
   for (var i=0;i<numChildren1;i++){
 	  if(children1NumMatches[i]>0){
 		  //potential sibling class
-		  var numSiblingsInObj1Page = 0
+		  var numSiblingsInObj1Page = 1; //starts at 1 because item i
 		  for (var j=0;j<numChildren1;j++){
 			  if(children1NumMatches[i]==0 && (children1[i]==children1[j] || similarity(children1[1],children1[j])>.9)){
 				  //we have a match!
@@ -358,7 +364,15 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
 				  children1NumMatches[j]=-1;
 			  }
 		  }
-		  divergences.append({"type":"The original page had "+numSiblingsInObj1Page+"instances of a particular kind of node, but this page has "+children1NumMatches[i]+".","record":obj1,"replay":obj2, "relevantChildren":[children1[i]]});
+		  //let's distinguish between 1-1 mappings and sibling classes here
+		  if (numSiblingsInObj1Page>1 || children1NumMatches[i]>1){
+        //this is a case of having multiple similar siblings
+        divergences.push({"type":"The original page had "+numSiblingsInObj1Page+"instances of a particular kind of node, but this page has "+children1NumMatches[i]+" different instances.","record":obj1,"replay":obj2, "relevantChildren":[children1[i]]});
+		  }
+		  else{
+        //1-1 mapping, so let's keep descending to find out what's going on
+			  divergences.concat(recursiveVisit(children1[i],children2[children1MatchedWith[i]]));
+		  }
 	  }
   }
   
@@ -369,11 +383,52 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
   
   for(var i=0;i<numChildren1;i++){
 	  if(children1NumMatches[i]==0){
-		divergences.append({"type":"A node is missing that was present in the original page.","record":obj1,"replay":obj2, "relevantChildren":[children1[i]]});
+      divergences.push({"type":"A node is missing that was present in the original page.","record":obj1,"replay":obj2, "relevantChildren":[children1[i]]});
 	  }
   }
   
   return divergences;
+};
+
+function similarity(obj1,obj2){
+	//how about just traversing the trees and seeing if they have the same structure, just not the same content?
+	//maybe just put down tags.  that'd be nice I think
+  console.log("in similarity", obj1, obj2);
+  var ret = tagMatchesAndTotalTags(obj1,obj2);
+  return ret.tagMatches/ret.totalTags;
+};
+
+function tagMatchesAndTotalTags(obj1,obj2){
+  var totalTags=1;
+  var tagMatches=0;
+  if(!(obj1 && obj2))
+    return {"totalTags": totalTags, "tagMatches": tagMatches};
+  if (obj1.prop && obj2.prop && obj1.prop.tagName && obj2.prop.tagName && obj1.prop.tagName==obj2.prop.tagName)
+    tagMatches++;
+  if (!(obj1.children && obj2.children))
+    return {"totalTags": totalTags, "tagMatches": tagMatches};
+  
+  var children1 = obj1.children;
+  var children2 = obj2.children;
+  var numChildren1 = obj1.children.length;
+  var numChildren2 = obj2.children.length;
+  var extra;
+  var smallLength;
+  if (numChildren1>numChildren2){
+    extra = numChildren1-numChildren2;
+    smallLength=numChildren2;
+  }
+  else {
+    extra = numChildren2-numChildren1;
+    smallLength=numChildren1;
+  }
+  totalTags+=extra;
+  for (var i=0;i<smallLength;i++){
+    var ret = tagMatchesAndTotalTags(children1[i],children2[i]);
+    totalTags+=ret.totalTags;
+    tagMatches+=ret.tagMatches;
+  }
+  return {"totalTags": totalTags, "tagMatches": tagMatches};
 };
 
 // Attach the event handlers to their respective events
