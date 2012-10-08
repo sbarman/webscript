@@ -10,6 +10,7 @@ var recording = false;
 var id = "setme";
 var port;
 var curSnapshot;
+var similarityThreshold = .6;
 
 // Utility functions
 
@@ -221,7 +222,8 @@ function simulate(element, eventData) {
   var replayDom = snapshotDom(document);
   console.log(recordDom);
   console.log(replayDom);
-  checkDomDivergence(recordDom,replayDom);
+  //commented the statement below because it's currently slow
+  //checkDomDivergence(recordDom,replayDom);
 }
 
 function checkDomDivergence(recordDom, replayDom){
@@ -314,7 +316,7 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
         //we can rest assured about child1 and child2
         //add to the mapping
         children2MatchedWith[i]=j;
-        children1MatchedWtih[j]=i;
+        children1MatchedWith[j]=i;
         children1NumMatches++;
         break;
       }
@@ -328,14 +330,17 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
     }
     //if our maxSimilarityScore is sufficiently high, go ahead and
     //add the pairing to our mapping
-    if (similarityScore>.9){
+    console.log("our max similarity score is ", maxSimilarityScore);
+    if (maxSimilarityScore>similarityThreshold){
       children2MatchedWith[i]=maxSimilarityScoreIndex;
       children1MatchedWith[maxSimilarityScoreIndex]=i;
       children1NumMatches[maxSimilarityScoreIndex]++;
     }
     //otherwise, let's assume we haven't found a match for child2
     //and it was added to obj2's page
-    divergences.push({"type":"A node is present that was  not present in the original page.","record":obj1,"replay":obj2, "relevantChildren":[child2]});
+    else{
+      divergences.push({"type":"A node is present that was  not present in the original page.","record":obj1,"replay":obj2, "relevantChildren":[child2]});
+    }
   }
   
   //now we need to see which of obj1's children didn't have any obj2
@@ -356,7 +361,7 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
 		  //potential sibling class
 		  var numSiblingsInObj1Page = 1; //starts at 1 because item i
 		  for (var j=0;j<numChildren1;j++){
-			  if(children1NumMatches[i]==0 && (children1[i]==children1[j] || similarity(children1[1],children1[j])>.9)){
+			  if(children1NumMatches[i]==0 && (children1[i]==children1[j] || similarity(children1[1],children1[j])>similarityThreshold)){
 				  //we have a match!
 				  numSiblingsInObj1Page++;
 				  //let's not catch this later when we report nodes
@@ -393,8 +398,8 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
 function similarity(obj1,obj2){
 	//how about just traversing the trees and seeing if they have the same structure, just not the same content?
 	//maybe just put down tags.  that'd be nice I think
-  console.log("in similarity", obj1, obj2);
   var ret = tagMatchesAndTotalTags(obj1,obj2);
+  console.log("similarity of ", obj1, " and ", obj2, " is ", ret.tagMatches/ret.totalTags);
   return ret.tagMatches/ret.totalTags;
 };
 
