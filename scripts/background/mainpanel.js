@@ -139,7 +139,10 @@ var ScriptServer = (function ScriptServerClosure() {
               parameters.push(propMsg);
             }
             
-            for (var prop in msgValue) {
+            msgprop: for (var prop in msgValue) {
+              if (prop == "snapshotBefore" || prop == "snapshotAfter") {
+                continue msgprop;
+              }
               var propMsg = {};
               var val = msgValue[prop];
               propMsg["name"] = prop;
@@ -148,31 +151,32 @@ var ScriptServer = (function ScriptServerClosure() {
               parameters.push(propMsg);
             }
 
-            postMsg["parameters"] = parameters;
-//            postMsg["parameters"] = [];
+//            postMsg["parameters"] = parameters;
+            postMsg["parameters"] = [];
             postMsg["script"] = scriptUrl.substr(scriptUrl.indexOf("/api"));
             console.log("ajax thing");
             $.ajax({
               success: function(data, textStatus, jqXHR) {
                 console.log(data, jqXHR, textStatus);
-/*                 var eventUrl = jqXHR.getResponseHeader("Location");
+                 var eventUrl = jqXHR.getResponseHeader("Location");
                  console.log(eventUrl);
                  for (var j = 0, jj = parameters.length; j < jj; ++j) {
                    var postMsg = parameters[j];
                    postMsg["event"] = eventUrl.substr(eventUrl.indexOf("/api"));
-                 }
+                 
                    $.ajax({
                      complete: function(s, x) {
                        console.log(s, x);
                      },
                      contentType: "application/json",
-                     data: JSON.stringify({objects: parameters}),
+                     data: JSON.stringify(postMsg),
                      dataType: "json",
                      processData: false,
-                     type: "PATCH",
+                     type: "POST",
                      url: server + "parameter/",
+                     async: false
                    });
-*/                  
+                 } 
               },
 //              async: false,
               contentType: "application/json",
