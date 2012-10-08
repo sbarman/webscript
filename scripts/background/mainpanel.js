@@ -121,49 +121,73 @@ var ScriptServer = (function ScriptServerClosure() {
           console.log(data, jqXHR, textStatus);
           var scriptUrl = jqXHR.getResponseHeader("Location");
           console.log(scriptUrl);
-     
+
           for (var i = 0, ii = events.length; i < ii; ++i) {
             var postMsg = {};
             var e = events[i];
-            postMsg["dom_post_event_state"] = "";
-            postMsg["dom_pre_event_state"] = "";
+            var msgValue = e.msg.value;
+            postMsg["dom_post_event_state"] = msgValue.snapshotAfter;
+            postMsg["dom_pre_event_state"] = msgValue.snapshotBefore;
             postMsg["event_type"] = e.type;
             postMsg["execution_order"] = i;
-            postMsg["parameters"] = [];
+
+            var parameters = [];
+            prop: for (var prop in e) {
+              if (prop == "msg") {
+                continue prop;
+              }
+              var propMsg = {};
+              var val = e[prop];
+              propMsg["name"] = "_" + prop;
+              propMsg["value"] = JSON.stringify(val);
+              propMsg["data_type"] = typeof val; 
+              parameters.push(propMsg);
+            }
+            
+            for (var prop in msgValue) {
+              var propMsg = {};
+              var val = msgValue[prop];
+              propMsg["name"] = prop;
+              propMsg["value"] = JSON.stringify(val);
+              propMsg["data_type"] = typeof val; 
+              parameters.push(propMsg);
+            }
+
+            postMsg["parameters"] = parameters;
+//            postMsg["parameters"] = [];
             postMsg["script"] = scriptUrl.substr(scriptUrl.indexOf("/api"));
+            console.log("ajax thing");
             $.ajax({
               success: function(data, textStatus, jqXHR) {
                 console.log(data, jqXHR, textStatus);
-                var eventUrl = jqXHR.getResponseHeader("Location");
-                console.log(eventUrl);
-                for (var prop in e) {
-                  var postMsg = {};
-                  postMsg["name"] = prop;
-                  postMsg["value"] = e[prop];
-                  postMsg["event"] = eventUrl.substr(eventUrl.indexOf("/api"));
-                  $.ajax({
-                    complete: function(s, x) {
-                      console.log(s, x);
-                    },
-                    contentType: "application/json",
-                    data: JSON.stringify(postMsg),
-                    dataType: "json",
-                    processData: false,
-                    type: "POST",
-                    url: server + "parameter/",
-                  });
-                }
+/*                 var eventUrl = jqXHR.getResponseHeader("Location");
+                 console.log(eventUrl);
+                 for (var j = 0, jj = parameters.length; j < jj; ++j) {
+                   var postMsg = parameters[j];
+                   postMsg["event"] = eventUrl.substr(eventUrl.indexOf("/api"));
+                 }
+                   $.ajax({
+                     complete: function(s, x) {
+                       console.log(s, x);
+                     },
+                     contentType: "application/json",
+                     data: JSON.stringify({objects: parameters}),
+                     dataType: "json",
+                     processData: false,
+                     type: "PATCH",
+                     url: server + "parameter/",
+                   });
+*/                  
               },
+//              async: false,
               contentType: "application/json",
               data: JSON.stringify(postMsg),
               dataType: "json",
               processData: false,
               type: "POST",
               url: server + "event/",
-
             });
           }
-
         },
         contentType: "application/json",
         data: JSON.stringify(postMsg),
@@ -174,7 +198,49 @@ var ScriptServer = (function ScriptServerClosure() {
       });
       console.log(req);
     },
-    getScript: function _getScript(name) {
+    getScript: function _getScript(name, controller) {
+      var server = this.server;
+      $.ajax({
+        success: function(data, textStatus, jqXHR) {
+          console.log(data, textStatus, jqXHR);
+          var scripts = data.objects;
+          if (scripts.length != 0) {
+            var script = scripts[0];
+            for (var i = 0, ii = scripts.length; i < ii; ++i) {
+              var s = scripts[i];
+              if (parseInt(script.id) < parseInt(s.id)) {
+                script = s;
+              }
+            }
+            var events = [];
+            var serverEvents = script.events;
+            for (var i = 0, ii = serverEvents.length; i < ii; ++i) {
+              var e = serverEvents[i];
+              var serverParams = e.parameters;
+              var event = {}
+              event.msg = {type: "event", value: {}};
+              var msgValue = event.msg.value;
+              for (var j = 0, jj = serverParams.length; j < jj; ++j) {
+                var p = serverParams[j];
+                if (p.name.charAt(0) == '_') {
+                  event[p.name.slice(1)] = JSON.parse(p.value);
+                } else {
+                  msgValue[p.name] = JSON.parse(p.value);
+                }
+              }
+              events.push(event);
+            }
+            controller.setEvents(events);
+          }
+        },
+        url: server + "script/?name=" + name + "&format=json",
+        type: 'GET',
+//        contentType: "application/json",
+        processData: false,
+        accepts: 'application/json',
+        dataType: 'json'
+      })
+      return [];
     }
   };
 
@@ -225,6 +291,11 @@ var Panel = (function PanelClosure() {
       $("#save").click(function(eventObject) {
         var name = $("#scriptname").prop("value");
         controller.saveScript(name);
+      });
+
+      $("#load").click(function(eventObject) {
+        var name = $("#scriptname").prop("value");
+        controller.getScript(name);
       });
       
       var panel = this;
@@ -428,6 +499,13 @@ var Record = (function RecordClosure() {
     },
     getEvents: function _getEvents() {
       return this.events.slice(0);
+    },
+    setEvents: function _setEvents(events) {
+      this.events = events;
+      this.panel.clearEvents();
+      for (var i = 0, ii = events.length; i < ii; ++i) {
+        this.panel.addEvent(events[i]);
+      }
     }
   };
   
@@ -776,7 +854,8 @@ var Controller = (function ControllerClosure() {
 // Instantiate components
 var ports = new PortManager();
 var record = new Record(ports);
-var scriptServer = new ScriptServer("http://localhost:8000/api/v1/");
+//var scriptServer = new ScriptServer("http://localhost:8000/api/v1/");
+var scriptServer = new ScriptServer("http://webscriptdb.herokuapp.com/api/v1/");
 var controller = new Controller(record, scriptServer, ports);
 var panel = new Panel(controller, ports); 
 
