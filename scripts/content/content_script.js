@@ -162,9 +162,16 @@ function updateParams(newParams) {
 }
 
 function simulate(element, eventData) {
+  var eventName = eventData.type;
 
+  if (eventName == "custom") {
+    var script = eval(eventData.script);
+    script(element, eventData);
+    return;
+  }
+   
   // handle any quirks with the event type
-  var extension = extendEvents[eventData.type];
+  var extension = extendEvents[eventName];
   if (extension) {
     extension.replay(element, eventData);
   }
@@ -177,7 +184,6 @@ function simulate(element, eventData) {
     }
   }
 
-  var eventName = eventData.type;
   var eventType = getEventType(eventName);
   var defaultProperties = getEventProps(eventName);
   
