@@ -111,13 +111,16 @@ var ScriptServer = (function ScriptServerClosure() {
       postMsg["name"] = name;
       postMsg["user"] = "/api/v1/user/1/";
       postMsg["events"] = [];
+      console.log("script:", postMsg);
+
       var req = $.ajax({
         success: function(data, textStatus, jqXHR) {
-          console.log(data, jqXHR, textStatus);
           var scriptUrl = jqXHR.getResponseHeader("Location");
-          console.log(scriptUrl);
+          console.log(data, jqXHR, textStatus, scriptUrl);
 
           for (var i = 0, ii = events.length; i < ii; ++i) {
+          // need to create new scope to variables don't get clobbered
+          (function() {
             var postMsg = {};
             var e = events[i];
             var msgValue = e.msg.value;
@@ -151,34 +154,37 @@ var ScriptServer = (function ScriptServerClosure() {
               parameters.push(propMsg);
             }
 
-//            postMsg["parameters"] = parameters;
-            postMsg["parameters"] = [];
+            postMsg["parameters"] = parameters;
+//            postMsg["parameters"] = [];
             postMsg["script"] = scriptUrl.substr(scriptUrl.indexOf("/api"));
-            console.log("ajax thing");
+            console.log("event:", postMsg);
             $.ajax({
               success: function(data, textStatus, jqXHR) {
-                console.log(data, jqXHR, textStatus);
-                 var eventUrl = jqXHR.getResponseHeader("Location");
-                 console.log(eventUrl);
-                 for (var j = 0, jj = parameters.length; j < jj; ++j) {
-                   var postMsg = parameters[j];
-                   postMsg["event"] = eventUrl.substr(eventUrl.indexOf("/api"));
-                 
-                   $.ajax({
-                     complete: function(s, x) {
-                       console.log(s, x);
-                     },
-                     contentType: "application/json",
-                     data: JSON.stringify(postMsg),
-                     dataType: "json",
-                     processData: false,
-                     type: "POST",
-                     url: server + "parameter/",
-                     async: false
-                   });
-                 } 
+                var eventUrl = jqXHR.getResponseHeader("Location");
+                console.log(data, jqXHR, textStatus, eventUrl);
+
+/*
+                for (var j = 0, jj = parameters.length; j < jj; ++j) {
+                  var postMsg = parameters[j];
+                  postMsg["event"] = eventUrl.substr(eventUrl.indexOf("/api"));
+                  console.log("param:", postMsg);
+ 
+                  $.ajax({
+                    complete: function(s, x) {
+                      console.log(s, x);
+                    },
+                    contentType: "application/json",
+                    data: JSON.stringify(postMsg),
+                    dataType: "json",
+                    processData: false,
+                    type: "POST",
+                    url: server + "parameter/",
+                    async: false
+                  });
+                } 
+*/
               },
-//              async: false,
+              async: false,
               contentType: "application/json",
               data: JSON.stringify(postMsg),
               dataType: "json",
@@ -186,6 +192,7 @@ var ScriptServer = (function ScriptServerClosure() {
               type: "POST",
               url: server + "event/",
             });
+          })();
           }
         },
         contentType: "application/json",
@@ -212,7 +219,10 @@ var ScriptServer = (function ScriptServerClosure() {
               }
             }
             var events = [];
-            var serverEvents = script.events;
+            var serverEvents = script.events.sort(function(a,b) {
+              return a.execution_order > b.execution_order;
+            });
+
             for (var i = 0, ii = serverEvents.length; i < ii; ++i) {
               var e = serverEvents[i];
               var serverParams = e.parameters;
