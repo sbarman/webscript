@@ -871,6 +871,13 @@ var Controller = (function ControllerClosure() {
       console.log("saving script");
       var events = this.record.getEvents();
       this.scriptServer.saveScript(name, events); 
+    },
+    getScript: function(name) {
+      console.log("getting script");
+      var events = this.scriptServer.getScript(name, this);
+    },
+    setEvents: function(events) {
+      this.record.setEvents(events);
     }
   }
 
