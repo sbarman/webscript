@@ -391,7 +391,7 @@ var Panel = (function PanelClosure() {
       var num = eventRecord.num;
       var tab = eventRecord.tab;
       var topURL = eventRecord.topURL;
-      var portName = eventRecord.portName;
+      var portName = eventRecord.port;
       var topFrame = eventRecord.topFrame;
       var iframeIndex = eventRecord.iframeIndex;
       
