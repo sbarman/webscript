@@ -416,11 +416,12 @@ var Panel = (function PanelClosure() {
 })();
 
 var Record = (function RecordClosure() {
-  function Record(ports) {
+  function Record(ports, isSimultaneouslyReplaying) {
     this.ports = ports;
     this.events = [];
     this.recordState = RecordState.STOPPED;
     this.simultaneousReplayer = null;
+    this.isSimultaneouslyReplaying = isSimultaneouslyReplaying;
   }
 
   var RecordState = {
@@ -490,7 +491,9 @@ var Record = (function RecordClosure() {
 
         this.events.push(eventRecord);
         this.panel.addEvent(eventRecord);
-        this.simultaneousReplayer.simultaneousReplay(eventRecord);
+        if(this.isSimultaneouslyReplaying){
+          this.simultaneousReplayer.simultaneousReplay(eventRecord);
+        }
       }
     },
     clearEvents: function _clearEvents() {
@@ -798,23 +801,32 @@ var Controller = (function ControllerClosure() {
     // The user started recording
     start: function() {
       console.log("start");
-      //make the window in which we will simulataneously replay events
-      var panel = this.panel;
-      var record = this.record;
-      chrome.windows.create({}, 
-        function(newWin) {
-          //let the panel know which events it shoudn't record
-          panel.twinWindow = newWin.id;
-          //let replay know where to simultaneously replay
-          record.simultaneousReplayer.twinWindow = newWin.id;
-          //start record
-          record.startRecording();
-          
-          // Update the UI
-          chrome.browserAction.setBadgeBackgroundColor({color:[255, 0, 0, 64]});
-          chrome.browserAction.setBadgeText({text: "ON"});
-        }
-      );
+      if (this.record.isSimultaneouslyReplaying){
+        //make the window in which we will simulataneously replay events
+        var panel = this.panel;
+        var record = this.record;
+        chrome.windows.create({}, 
+          function(newWin) {
+            //let the panel know which events it shoudn't record
+            panel.twinWindow = newWin.id;
+            //let replay know where to simultaneously replay
+            record.simultaneousReplayer.twinWindow = newWin.id;
+            //start record
+            record.startRecording();
+            
+            // Update the UI
+            chrome.browserAction.setBadgeBackgroundColor({color:[255, 0, 0, 64]});
+            chrome.browserAction.setBadgeText({text: "ON"});
+          }
+        );
+      }
+      else{
+        this.record.startRecording();
+
+        // Update the UI
+        chrome.browserAction.setBadgeBackgroundColor({color:[255, 0, 0, 64]});
+        chrome.browserAction.setBadgeText({text: "ON"});
+      }
     },
     stop: function() {
       console.log("stop");
@@ -853,7 +865,7 @@ var Controller = (function ControllerClosure() {
 
 // Instantiate components
 var ports = new PortManager();
-var record = new Record(ports);
+var record = new Record(ports,false);
 //var scriptServer = new ScriptServer("http://localhost:8000/api/v1/");
 var scriptServer = new ScriptServer("http://webscriptdb.herokuapp.com/api/v1/");
 var controller = new Controller(record, scriptServer, ports);
