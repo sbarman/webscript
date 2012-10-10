@@ -317,7 +317,7 @@ var Panel = (function PanelClosure() {
       // content scripts so that everything is kept insync
       $("#params").submit(function(eventObject) {
         panel.updateParams();
-        this.ports.sendToAll({type: "params", value: params});
+        panel.ports.sendToAll({type: "params", value: params});
         return false;
       });
     },
@@ -430,12 +430,11 @@ var Panel = (function PanelClosure() {
 })();
 
 var Record = (function RecordClosure() {
-  function Record(ports, isSimultaneouslyReplaying) {
+  function Record(ports) {
     this.ports = ports;
     this.events = [];
     this.recordState = RecordState.STOPPED;
     this.simultaneousReplayer = null;
-    this.isSimultaneouslyReplaying = isSimultaneouslyReplaying;
   }
 
   var RecordState = {
@@ -506,7 +505,7 @@ var Record = (function RecordClosure() {
 
         this.events.push(eventRecord);
         this.panel.addEvent(eventRecord);
-        if(this.isSimultaneouslyReplaying){
+        if(params.simultaneous){
           this.simultaneousReplayer.simultaneousReplay(eventRecord);
         }
       }
@@ -829,7 +828,7 @@ var Controller = (function ControllerClosure() {
     // The user started recording
     start: function() {
       console.log("start");
-      if (this.record.isSimultaneouslyReplaying){
+      if (params.simultaneous){
         //make the window in which we will simulataneously replay events
         var panel = this.panel;
         var record = this.record;
@@ -900,7 +899,7 @@ var Controller = (function ControllerClosure() {
 
 // Instantiate components
 var ports = new PortManager();
-var record = new Record(ports, true);
+var record = new Record(ports);
 //var scriptServer = new ScriptServer("http://localhost:8000/api/v1/");
 var scriptServer = new ScriptServer("http://webscriptdb.herokuapp.com/api/v1/");
 var controller = new Controller(record, scriptServer, ports);
