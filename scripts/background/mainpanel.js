@@ -394,7 +394,7 @@ var Panel = (function PanelClosure() {
       var portName = eventRecord.port;
       var topFrame = eventRecord.topFrame;
       var iframeIndex = eventRecord.iframeIndex;
-      
+      var waitTime = eventRecord.waitTime;  
 
 
       var newDiv = "<div class='event wordwrap' id='" + id + "'>";
@@ -406,6 +406,7 @@ var Panel = (function PanelClosure() {
       newDiv += "<b>port:" + "</b>" + portName + "<br/>";
       newDiv += "<b>topFrame:" + "</b>" + topFrame + "<br/>";
       newDiv += "<b>iframeIndex:" + "</b>" + iframeIndex + "<br/>";
+      newDiv += "<b>waitTime:" + "</b>" + waitTime + "<br/>";
 
       for (var prop in eventInfo) {
         if (prop != "type") {
@@ -435,6 +436,7 @@ var Record = (function RecordClosure() {
     this.events = [];
     this.recordState = RecordState.STOPPED;
     this.simultaneousReplayer = null;
+    this.lastTime = 0;
   }
 
   var RecordState = {
@@ -498,10 +500,19 @@ var Record = (function RecordClosure() {
           }
         }
         var topFrame = (portInfo.top.portName == portName);
+      
+        var time = eventRequest.value.timeStamp;
+        var lastTime = this.lastTime;
+        if (lastTime == 0) {
+          var waitTime = 0;
+        } else {
+          var waitTime = time - lastTime;
+        }
+        this.lastTime = time;
 
         var eventRecord = {msg: eventRequest, port: portName, topURL: topURL,
             topFrame: topFrame, iframeIndex: iframeIndex, tab: tab, num: num,
-            id: id};
+            id: id, waitTime: waitTime};
 
         this.events.push(eventRecord);
         this.panel.addEvent(eventRecord);
@@ -551,13 +562,31 @@ var Replay = (function ReplayClosure() {
       var replay = this;
       this.timeoutHandle = setTimeout(function() {
         replay.replayGuts();
-      }, 0);
+      }, this.getNextTime());
     },
     replayReset: function _replayReset() {
       this.index = 0;
       this.portMapping = {};
       this.tabMapping = {};
       this.replayState = ReplayState.REPLAYING;
+    },
+    getNextTime: function _getNextTime() {
+      var timing = params.timing;
+      var index = this.index;
+      var events = this.events;
+
+      if (index == 0)
+        return 0;
+
+      if (timing == 0) {
+        var waitTime = events[index].waitTime;
+        if (waitTime > 10000)
+          waitTime = 10000;
+
+        return waitTime;
+      } else {
+        return timing;
+      }
     },
     replayPause: function _replayPause() {
       clearTimeout(this.timeoutHandle);
@@ -680,7 +709,7 @@ var Replay = (function ReplayClosure() {
         var replay = this;
         this.timeoutHandle = setTimeout(function() {
           replay.replayGuts();
-        }, params.timeout);
+        }, this.getNextTime());
 
       // we have already seen this tab, find equivalent port for tab
       // for now we will just choose the last port added from this tab
@@ -696,12 +725,12 @@ var Replay = (function ReplayClosure() {
           var replay = this;
           this.timeoutHandle = setTimeout(function() {
             replay.replayGuts();
-          }, params.timeout);
+          }, this.getNextTime());
         } else {
           var replay = this;
           this.timeoutHandle = setTimeout(function() {
             replay.replayGuts();
-          }, params.timeout);
+          }, this.getNextTime());
         }
       // need to open new tab
       } else {
@@ -772,7 +801,7 @@ var SimultaneousReplay = (function SimultaneousReplayClosure() {
         var replay = this;
         this.timeoutHandle = setTimeout(function() {
           replay.simultaneousReplayGuts(e);
-        }, params.timeout);
+        }, this.getNextTime());
       }
     }
     //we haven't made a tab to correspond to the source tab
@@ -804,7 +833,7 @@ var SimultaneousReplay = (function SimultaneousReplayClosure() {
           function() {
             //a tab is being made.  let's come back around soon
             replay.simultaneousReplayGuts(e);
-          }, params.timeout);
+          }, this.getNextTime());
       }
     }
   };
