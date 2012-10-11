@@ -317,7 +317,7 @@ var Panel = (function PanelClosure() {
       // content scripts so that everything is kept insync
       $("#params").submit(function(eventObject) {
         panel.updateParams();
-        this.ports.sendToAll({type: "params", value: params});
+        panel.ports.sendToAll({type: "params", value: params});
         return false;
       });
     },
@@ -394,7 +394,7 @@ var Panel = (function PanelClosure() {
       var portName = eventRecord.port;
       var topFrame = eventRecord.topFrame;
       var iframeIndex = eventRecord.iframeIndex;
-      
+      var waitTime = eventRecord.waitTime;  
 
 
       var newDiv = "<div class='event wordwrap' id='" + id + "'>";
@@ -406,6 +406,7 @@ var Panel = (function PanelClosure() {
       newDiv += "<b>port:" + "</b>" + portName + "<br/>";
       newDiv += "<b>topFrame:" + "</b>" + topFrame + "<br/>";
       newDiv += "<b>iframeIndex:" + "</b>" + iframeIndex + "<br/>";
+      newDiv += "<b>waitTime:" + "</b>" + waitTime + "<br/>";
 
       for (var prop in eventInfo) {
         if (prop != "type") {
@@ -430,12 +431,12 @@ var Panel = (function PanelClosure() {
 })();
 
 var Record = (function RecordClosure() {
-  function Record(ports, isSimultaneouslyReplaying) {
+  function Record(ports) {
     this.ports = ports;
     this.events = [];
     this.recordState = RecordState.STOPPED;
     this.simultaneousReplayer = null;
-    this.isSimultaneouslyReplaying = isSimultaneouslyReplaying;
+    this.lastTime = 0;
   }
 
   var RecordState = {
@@ -499,14 +500,23 @@ var Record = (function RecordClosure() {
           }
         }
         var topFrame = (portInfo.top.portName == portName);
+      
+        var time = eventRequest.value.timeStamp;
+        var lastTime = this.lastTime;
+        if (lastTime == 0) {
+          var waitTime = 0;
+        } else {
+          var waitTime = time - lastTime;
+        }
+        this.lastTime = time;
 
         var eventRecord = {msg: eventRequest, port: portName, topURL: topURL,
             topFrame: topFrame, iframeIndex: iframeIndex, tab: tab, num: num,
-            id: id};
+            id: id, waitTime: waitTime};
 
         this.events.push(eventRecord);
         this.panel.addEvent(eventRecord);
-        if(this.isSimultaneouslyReplaying){
+        if(params.simultaneous){
           this.simultaneousReplayer.simultaneousReplay(eventRecord);
         }
       }
@@ -552,13 +562,31 @@ var Replay = (function ReplayClosure() {
       var replay = this;
       this.timeoutHandle = setTimeout(function() {
         replay.replayGuts();
-      }, 0);
+      }, this.getNextTime());
     },
     replayReset: function _replayReset() {
       this.index = 0;
       this.portMapping = {};
       this.tabMapping = {};
       this.replayState = ReplayState.REPLAYING;
+    },
+    getNextTime: function _getNextTime() {
+      var timing = params.timing;
+      var index = this.index;
+      var events = this.events;
+
+      if (index == 0)
+        return 0;
+
+      if (timing == 0) {
+        var waitTime = events[index].waitTime;
+        if (waitTime > 10000)
+          waitTime = 10000;
+
+        return waitTime;
+      } else {
+        return timing;
+      }
     },
     replayPause: function _replayPause() {
       clearTimeout(this.timeoutHandle);
@@ -681,7 +709,7 @@ var Replay = (function ReplayClosure() {
         var replay = this;
         this.timeoutHandle = setTimeout(function() {
           replay.replayGuts();
-        }, params.timeout);
+        }, this.getNextTime());
 
       // we have already seen this tab, find equivalent port for tab
       // for now we will just choose the last port added from this tab
@@ -697,12 +725,12 @@ var Replay = (function ReplayClosure() {
           var replay = this;
           this.timeoutHandle = setTimeout(function() {
             replay.replayGuts();
-          }, params.timeout);
+          }, this.getNextTime());
         } else {
           var replay = this;
           this.timeoutHandle = setTimeout(function() {
             replay.replayGuts();
-          }, params.timeout);
+          }, this.getNextTime());
         }
       // need to open new tab
       } else {
@@ -776,7 +804,7 @@ var SimultaneousReplay = (function SimultaneousReplayClosure() {
         var replay = this;
         this.timeoutHandle = setTimeout(function() {
           replay.simultaneousReplayGuts(e);
-        }, params.timeout);
+        }, this.getNextTime());
       }
     }
     //we haven't made a tab to correspond to the source tab
@@ -808,7 +836,7 @@ var SimultaneousReplay = (function SimultaneousReplayClosure() {
           function() {
             //a tab is being made.  let's come back around soon
             replay.simultaneousReplayGuts(e);
-          }, params.timeout);
+          }, this.getNextTime());
       }
     }
   };
@@ -832,7 +860,7 @@ var Controller = (function ControllerClosure() {
     // The user started recording
     start: function() {
       console.log("start");
-      if (this.record.isSimultaneouslyReplaying){
+      if (params.simultaneous){
         //make the window in which we will simulataneously replay events
         var panel = this.panel;
         var record = this.record;
@@ -903,7 +931,7 @@ var Controller = (function ControllerClosure() {
 
 // Instantiate components
 var ports = new PortManager();
-var record = new Record(ports, true);
+var record = new Record(ports);
 //var scriptServer = new ScriptServer("http://localhost:8000/api/v1/");
 var scriptServer = new ScriptServer("http://webscriptdb.herokuapp.com/api/v1/");
 var controller = new Controller(record, scriptServer, ports);

@@ -96,7 +96,8 @@ var params = null;
   
   params = {
     events: capturedEvents,
-    timeout: 2000,
+    simultaneous: false,
+    timing: 0,
     defaultProps: defaultOptions
   };
 
