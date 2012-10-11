@@ -752,6 +752,9 @@ var SimultaneousReplay = (function SimultaneousReplayClosure() {
     var replay = this;
     var msg = e.msg;
     
+    console.log("MESSAGE", msg);
+    console.log("EVENT", e);
+    
     var desiredPort = this.portToTwinPortMapping[port];
     var desiredTab = this.tabToTwinTabMapping[tab];
     //we've already found an appropriate twin port, stored in mapping
