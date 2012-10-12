@@ -228,8 +228,7 @@ function simulate(element, eventData) {
   var replayDom = snapshotDom(document);
   console.log(recordDom);
   console.log(replayDom);
-  //commented the statement below because it's currently slow
-  //checkDomDivergence(recordDom,replayDom);
+  checkDomDivergence(recordDom,replayDom);
 }
 
 function checkDomDivergence(recordDom, replayDom){
@@ -249,15 +248,17 @@ function recursiveVisit(obj1,obj2){
     //if a different number of children, definitely want to assume
     //these objects have messy children that need matching
     if (numChildren1!=numChildren2){
-      divergences.concat(recursiveVisitMismatchedChildren(obj1,obj2));
+      divergences = divergences.concat(recursiveVisitMismatchedChildren(obj1,obj2));
     }
     
     //proceed on the assumption that we can just index into these
     //children without difficulty, only change our mind if we find
-    //any of the children don't match
+    //any of the children's properties don't match
     for (var i=0; i<numChildren1; i++){
-      if (!(children1[i]==children2[i])){
-        divergences.concat(recursiveVisitMismatchedChildren(obj1,obj2));
+      if (!(nodeEquals(children1[i],children2[i]))){
+        console.log("with tag name", children1[i].prop.tagName, children1[i], "and", children2[i], "don't match");
+        var newDivergences = recursiveVisitMismatchedChildren(obj1,obj2);
+        divergences = divergences.concat(newDivergences);
       }
     }
     
@@ -271,16 +272,19 @@ function recursiveVisit(obj1,obj2){
     //bad here, so this should definitely be a divergence
     //seems like probably a dom node was added to or removed from
     //obj1 or obj2
-    if(obj1.children)
+    if(obj1.children){
       return[{"type":"A node or nodes is missing that was present in the original page.","record":obj1,"replay":obj2, "relevantChildren":obj1.children}];
-    if(obj2.children)
+    }
+    else if(obj2.children){
       return[{"type":"A node or nodes is present that was not present in the original page.","record":obj1,"replay":obj2, "relevantChildren":obj2.children}];
+    }
     //we also hit this if neither node has children.
     //then we've hit leaves, and the leaves must diverge, or we
     //wouldn't have called this method on them
-    else
+    else{
       //neither has children
       return[{"type":"We expect these nodes to be the same, but they're not.","record":obj1,"replay":obj2}];
+    }
   }
 };
 
@@ -297,6 +301,8 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
   var children1NumMatches = [];
   var children1MatchedWith = [];
   var children2MatchedWith = [];
+  
+  console.log("recursive visit mismatched children", obj1, obj2);
   
   for(var i=0;i<numChildren1;i++){
     children1NumMatches.push(0);
@@ -318,7 +324,7 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
     var maxSimilarityScoreIndex=0;
     for (var j=0;j<numChildren1;j++){
       var child1 = children1[j];
-      if(child2==child1){
+      if(nodeEquals(child2,child1)){
         //we can rest assured about child1 and child2
         //add to the mapping
         children2MatchedWith[i]=j;
@@ -349,6 +355,11 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
     }
   }
   
+  console.log("iterated through all children, assigned anything with sufficiently high similarity score");
+  console.log("children1NumMatches", children1NumMatches);
+  console.log("children1MatchedWith", children1MatchedWith);
+  console.log("children2MatchedWith", children2MatchedWith);
+  
   //now we need to see which of obj1's children didn't have any obj2
   //children mapped to them
   //if such a child is similar to other obj1 children that did get
@@ -367,7 +378,7 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
 		  //potential sibling class
 		  var numSiblingsInObj1Page = 1; //starts at 1 because item i
 		  for (var j=0;j<numChildren1;j++){
-			  if(children1NumMatches[i]==0 && (children1[i]==children1[j] || similarity(children1[1],children1[j])>similarityThreshold)){
+			  if(children1NumMatches[i]==0 && (nodeEquals(children1[i],children1[j]) || similarity(children1[1],children1[j])>similarityThreshold)){
 				  //we have a match!
 				  numSiblingsInObj1Page++;
 				  //let's not catch this later when we report nodes
@@ -382,7 +393,7 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
 		  }
 		  else{
         //1-1 mapping, so let's keep descending to find out what's going on
-			  divergences.concat(recursiveVisit(children1[i],children2[children1MatchedWith[i]]));
+			  divergences = divergences.concat(recursiveVisit(children1[i],children2[children1MatchedWith[i]]));
 		  }
 	  }
   }
@@ -397,26 +408,60 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
       divergences.push({"type":"A node is missing that was present in the original page.","record":obj1,"replay":obj2, "relevantChildren":[children1[i]]});
 	  }
   }
-  
   return divergences;
 };
 
 function similarity(obj1,obj2){
+  if (obj1 && obj2 && obj1.children && obj2.children){
+    
+    var obj1String=obj1.prop.tagName;
+    var children1 = obj1.children;
+    var numChildren1=obj1.children.length;
+    
+    var obj2String=obj2.prop.tagName;
+    var children2 = obj2.children;
+    var numChildren2=obj2.children.length;
+    
+    for (var i=0;i<numChildren1;i++){
+      if (children1[i].prop) obj1String+=children1[i].prop.tagName;
+    }
+    
+    for (var i=0;i<numChildren2;i++){
+      if (children2[i].prop) obj2String+=children2[i].prop.tagName;
+    }
+    
+    if (obj1String==obj2String){
+      return 1;
+    }
+    else{
+      console.log("NOT SIMILAR", obj1String, obj2String);
+      return 0;
+    }
+  }
+  return 0;
+}
+
+function similarityBackup(obj1,obj2){
 	//how about just traversing the trees and seeing if they have the same structure, just not the same content?
 	//maybe just put down tags.  that'd be nice I think
-  var ret = tagMatchesAndTotalTags(obj1,obj2);
-  console.log("similarity of ", obj1, " and ", obj2, " is ", ret.tagMatches/ret.totalTags);
+  //we'll check to depth 4
+  return 1;
+  var ret = tagMatchesAndTotalTags(obj1,obj2,2);
   return ret.tagMatches/ret.totalTags;
 };
 
-function tagMatchesAndTotalTags(obj1,obj2){
+function tagMatchesAndTotalTags(obj1,obj2, depth){
   var totalTags=1;
   var tagMatches=0;
+  
+  //if don't have two objects, we have a mismatch and we'll return
   if(!(obj1 && obj2))
     return {"totalTags": totalTags, "tagMatches": tagMatches};
+  //if the current tagNames match, increment the number of matches
   if (obj1.prop && obj2.prop && obj1.prop.tagName && obj2.prop.tagName && obj1.prop.tagName==obj2.prop.tagName)
     tagMatches++;
-  if (!(obj1.children && obj2.children))
+  //if there are no children or if we're at depth limit, don't continue
+  if (!(obj1.children && obj2.children) || depth<=0)
     return {"totalTags": totalTags, "tagMatches": tagMatches};
   
   var children1 = obj1.children;
@@ -425,6 +470,7 @@ function tagMatchesAndTotalTags(obj1,obj2){
   var numChildren2 = obj2.children.length;
   var extra;
   var smallLength;
+  
   if (numChildren1>numChildren2){
     extra = numChildren1-numChildren2;
     smallLength=numChildren2;
@@ -434,11 +480,13 @@ function tagMatchesAndTotalTags(obj1,obj2){
     smallLength=numChildren1;
   }
   totalTags+=extra;
+  
   for (var i=0;i<smallLength;i++){
-    var ret = tagMatchesAndTotalTags(children1[i],children2[i]);
+    var ret = tagMatchesAndTotalTags(children1[i],children2[i], depth-1);
     totalTags+=ret.totalTags;
     tagMatches+=ret.tagMatches;
   }
+  
   return {"totalTags": totalTags, "tagMatches": tagMatches};
 };
 
@@ -452,6 +500,63 @@ function addListenersForRecording() {
       document.addEventListener(e, processEvent, true);
     }
   }
+};
+
+function nodeEquals(node1,node2){
+  return _.isEqual(node1.prop, node2.prop);
+};
+
+function nodeEqualsAlternative(node1,node2){
+  var relevantProperties = ["accessKey",
+                            "baseURI", 
+                            "childElementCount",
+                            "className",
+                            "clientHeight",
+                            "clientLeft",
+                            "clientTop",
+                            "clientWidth",
+                            "content",
+                            "contentEditable",
+                            "dir",
+                            "draggable",
+                            "hidden",
+                            "httpEquiv",
+                            "id",
+                            "innerHTML",
+                            "innerText",
+                            "isContentEditable",
+                            "lang",
+                            "localName",
+                            "name",
+                            "namespaceURI",
+                            "nodeName",
+                            "nodeType",
+                            "offsetHeight",
+                            "offsetLeft",
+                            "offsetTop",
+                            "offsetWidth",
+                            "outerHTML",
+                            "outerText",
+                            "scheme",
+                            "scrollHeight",
+                            "scrollLeft",
+                            "scrollTop",
+                            "scrollWidth",
+                            "spellcheck",
+                            "tabIndex",
+                            "tagName",
+                            "textContent",
+                            "title",
+                            "translate",
+                            "webkitRegionOverset",
+                            "webkitdropzone"];
+  var lsLength = relevantProperties.length;
+  for (var i=0;i<lsLength;i++){
+    if (node1[relevantProperties[i]]!=node2[relevantProperties[i]]){
+      return false;
+    }
+  }
+  return true;
 };
 
 // We need to add all the events now before and other event listners are 
