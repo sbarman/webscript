@@ -96,7 +96,7 @@ var params = null;
   
   params = {
     events: capturedEvents,
-    simultaneous: false,
+    simultaneous: true,
     timing: 0,
     defaultProps: defaultOptions
   };
