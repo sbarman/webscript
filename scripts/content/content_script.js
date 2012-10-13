@@ -10,7 +10,9 @@ var recording = false;
 var id = "setme";
 var port;
 var curSnapshot;
-var similarityThreshold = .6;
+var similarityThreshold = 1;
+var ignoreTagNames = {"SCRIPT":true, "STYLE":true};
+var acceptTags = {"HTML":true, "BODY":true, "HEAD":true};
 
 // Utility functions
 
@@ -232,12 +234,54 @@ function simulate(element, eventData) {
 }
 
 function checkDomDivergence(recordDom, replayDom){
-  var divergences = recursiveVisit(recordDom, replayDom);
+  var body1 = findBody(recordDom);
+  var body2 = findBody(replayDom);
+  var divergences = recursiveVisit(body1, body2);
   console.log("DIVERGENCES");
   console.log(divergences);
 };
 
+function findBody(dom){
+  if (dom){
+    if (dom.prop && dom.prop.tagName && dom.prop.tagName.toUpperCase()=="BODY"){
+      return dom;
+    }
+    if (dom.children){
+      var children = dom.children;
+      var numChildren = children.length;
+      for (var i=0;i<numChildren;i++){
+        var ret = findBody(children[i]);
+        if (ret){
+          return ret;
+        }
+      }
+    }
+  }
+};
+
 function recursiveVisit(obj1,obj2){
+  
+  console.log("recursiveVisit", obj1, obj2);
+  
+  
+  //deal with tags that don't matter to the user experience
+  if (obj1.prop.tagName in ignoreTagNames){
+    if (obj1.prop.tagName==obj2.prop.tagName){
+      return([]);
+    }
+    else {
+      return[{"type":"A node is present that was not present in the original page.","record":obj1,"replay":obj2, "relevantChildren":obj2}];
+    }
+  }
+  if (obj2.tagName in ignoreTagNames){
+    if (obj1.prop.tagName==obj2.prop.tagName){
+      return([]);
+    }
+    else {
+      return[{"type":"A node is missing that was present in the original page.","record":obj1,"replay":obj2, "relevantChildren":obj1}];
+    }
+  }
+  
   if (obj1.children && obj2.children){
     var divergences = [];
     var children1 = obj1.children;
@@ -301,35 +345,44 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
   var children1NumMatches = [];
   var children1MatchedWith = [];
   var children2MatchedWith = [];
+  var children1ToIgnore = [];
+  var children2ToIgnore = [];
   
-  console.log("recursive visit mismatched children", obj1, obj2);
+  console.log("recursive visit mismatched children",obj1.prop.tagName,obj2.prop.tagName, obj1, obj2);
   
   for(var i=0;i<numChildren1;i++){
     children1NumMatches.push(0);
-  }
-  for(var i=0;i<numChildren1;i++){
     children1MatchedWith.push(-1);
+    children1ToIgnore.push(children1[i].prop.tagName in ignoreTagNames);
   }
   for(var i=0;i<numChildren2;i++){
     children2MatchedWith.push(-1);
+    children2ToIgnore.push(children2[i].prop.tagName in ignoreTagNames);
   }
   
   //let's iterate through obj2's children and try to find a
   //corresponding child in obj1's children
   //we'll make a mapping
   
+  
   for(var i=0;i<numChildren2;i++){
     var child2 = children2[i];
+    if (children2ToIgnore[i]){
+      continue;
+    }
     var maxSimilarityScore=0;
     var maxSimilarityScoreIndex=0;
     for (var j=0;j<numChildren1;j++){
+      if (children1ToIgnore[j]){
+        continue;
+      }
       var child1 = children1[j];
-      if(nodeEquals(child2,child1)){
+      if(nodeEquals(child2,child1) || (child2.prop.tagName==child1.prop.tagName && (child2.prop.tagName in acceptTags))){
         //we can rest assured about child1 and child2
         //add to the mapping
         children2MatchedWith[i]=j;
         children1MatchedWith[j]=i;
-        children1NumMatches++;
+        children1NumMatches[j]++;
         break;
       }
       //if we haven't matched it yet, we have to keep computing
@@ -350,7 +403,9 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
     }
     //otherwise, let's assume we haven't found a match for child2
     //and it was added to obj2's page
-    else{
+    else if (children2MatchedWith[i]==-1){
+      console.log("Scenario 1 divergence, couldn't find a match for child2", child2, "in the original page");
+      console.log(obj1,obj2);
       divergences.push({"type":"A node is present that was  not present in the original page.","record":obj1,"replay":obj2, "relevantChildren":[child2]});
     }
   }
@@ -374,7 +429,10 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
   //for differing content
   
   for (var i=0;i<numChildren1;i++){
+    //this case should never catch any of the children we want to ignore
+    console.log("trying to find mappings", children1NumMatches);
 	  if(children1NumMatches[i]>0){
+      console.log("check for siblings");
 		  //potential sibling class
 		  var numSiblingsInObj1Page = 1; //starts at 1 because item i
 		  for (var j=0;j<numChildren1;j++){
@@ -389,9 +447,12 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
 		  //let's distinguish between 1-1 mappings and sibling classes here
 		  if (numSiblingsInObj1Page>1 || children1NumMatches[i]>1){
         //this is a case of having multiple similar siblings
+        console.log("Scenario 2 divergence, different numbers of children like", children1NumMatches[i]);
+        console.log(obj1,obj2);
         divergences.push({"type":"The original page had "+numSiblingsInObj1Page+"instances of a particular kind of node, but this page has "+children1NumMatches[i]+" different instances.","record":obj1,"replay":obj2, "relevantChildren":[children1[i]]});
 		  }
 		  else{
+        console.log("This is where we should go for one-to-one mappings");
         //1-1 mapping, so let's keep descending to find out what's going on
 			  divergences = divergences.concat(recursiveVisit(children1[i],children2[children1MatchedWith[i]]));
 		  }
@@ -404,14 +465,17 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
   //was actually removed
   
   for(var i=0;i<numChildren1;i++){
-	  if(children1NumMatches[i]==0){
+	  if(children1NumMatches[i]==0 && !children1ToIgnore[i]){
+      console.log("Scenario 3 divergence, couldn't find a match for child1", children1[i], "in the new page");
+      console.log(children1NumMatches);
+      console.log(obj1,obj2);
       divergences.push({"type":"A node is missing that was present in the original page.","record":obj1,"replay":obj2, "relevantChildren":[children1[i]]});
 	  }
   }
   return divergences;
 };
 
-function similarity(obj1,obj2){
+function similarityBackup(obj1,obj2){
   if (obj1 && obj2 && obj1.children && obj2.children){
     
     var obj1String=obj1.prop.tagName;
@@ -431,6 +495,7 @@ function similarity(obj1,obj2){
     }
     
     if (obj1String==obj2String){
+      console.log("SIMILAR", obj1String, obj2String);
       return 1;
     }
     else{
@@ -441,13 +506,34 @@ function similarity(obj1,obj2){
   return 0;
 }
 
-function similarityBackup(obj1,obj2){
+function similarityString(obj1){
+  if (obj1 && obj1.children){
+    
+    var obj1String=obj1.prop.tagName;
+    var children1 = obj1.children;
+    var numChildren1=obj1.children.length;
+    
+    for (var i=0;i<numChildren1;i++){
+      if (children1[i].prop) obj1String+=children1[i].prop.tagName;
+    }
+    return obj1String;
+  }
+  else{
+    return "";
+  } 
+}
+
+function similarity(obj1,obj2){
 	//how about just traversing the trees and seeing if they have the same structure, just not the same content?
 	//maybe just put down tags.  that'd be nice I think
   //we'll check to depth 4
-  return 1;
-  var ret = tagMatchesAndTotalTags(obj1,obj2,2);
-  return ret.tagMatches/ret.totalTags;
+  var ret = tagMatchesAndTotalTags(obj1,obj2,1);
+  console.log("similarity of ", similarityString(obj1), " and ", similarityString(obj2), "is", ret.tagMatches/ret.totalTags);
+  var score = ret.tagMatches/ret.totalTags;
+  if (obj1 && obj2 && obj1.prop && obj2.prop && obj1.prop.innerText && obj2.prop.innerText && obj1.prop.innerText==obj2.prop.innerText){
+    score+=.3;
+  }
+  return score;
 };
 
 function tagMatchesAndTotalTags(obj1,obj2, depth){
@@ -503,7 +589,19 @@ function addListenersForRecording() {
 };
 
 function nodeEquals(node1,node2){
-  return _.isEqual(node1.prop, node2.prop);
+  if (node1 && node2 && node1.prop && node2.prop){
+    if (node1.prop.innerText && node2.prop.innerText){
+      if(node1.prop.innerText==node2.prop.innerText){
+        return true;
+      }
+    }
+    else{
+      //hypothesize that there is no effect on user if no innerText
+      return true;
+    }
+    return _.isEqual(node1.prop, node2.prop);
+  }
+  return node1==node2;
 };
 
 function nodeEqualsAlternative(node1,node2){
