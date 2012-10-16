@@ -5,6 +5,7 @@
 
 var snapshotDom = null;
 var compareDom = null;
+var replayDivs = ["replayStatus"];
  
 (function() {
 
@@ -23,8 +24,8 @@ var compareDom = null;
         } else if (oChild.nodeType === 3) {
           var value = oChild.nodeValue.trim();
           if (value)
-            children.push(value); /* nodeType is "Text" (3) */
-        } else if (oChild.nodeType === 1 && !oChild.prefix) {
+            children.push(value); /* nodeType is "Text" (3) */ 
+        } else if (oChild.nodeType === 1 && !oChild.prefix && !(_.reduce(replayDivs, function(acc,div){return acc && oChild.classList.contains(div);},true))) {
           var child = createObjTree(oChild); /* nodeType is "Element" (1) */
           children.push(child);
         }

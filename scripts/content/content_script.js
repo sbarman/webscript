@@ -220,7 +220,14 @@ function simulate(element, eventData) {
   //let's update a div letting us know what event we just got
   var replayStatusDiv = document.createElement("div");
   replayStatusDiv.setAttribute('class','replayStatus');
-  replayStatusDiv.setAttribute('style','z-index:99999999999999999999999999;background-color:yellow;position:fixed;left:0px;top:0px;width:200px;font-size:10px');
+  replayStatusDiv.setAttribute('style',
+    'z-index:99999999999999999999999999; \
+    background-color:yellow; \
+    position:fixed; \
+    left:0px; \
+    top:0px; \
+    width:200px; \
+    font-size:10px');
   replayStatusDiv.innerHTML = "Received Event: "+eventData.type;
   document.body.appendChild(replayStatusDiv);	
   console.log("appended child", replayStatusDiv.innerHTML);
@@ -243,7 +250,8 @@ function checkDomDivergence(recordDom, replayDom){
 
 function findBody(dom){
   if (dom){
-    if (dom.prop && dom.prop.tagName && dom.prop.tagName.toUpperCase()=="BODY"){
+    if (dom.prop && dom.prop.tagName && 
+      dom.prop.tagName.toUpperCase() == "BODY"){
       return dom;
     }
     if (dom.children){
@@ -263,14 +271,17 @@ function recursiveVisit(obj1,obj2){
   
   console.log("recursiveVisit", obj1, obj2);
   
-  
   //deal with tags that don't matter to the user experience
   if (obj1.prop.tagName in ignoreTagNames){
     if (obj1.prop.tagName==obj2.prop.tagName){
       return([]);
     }
     else {
-      return[{"type":"A node is present that was not present in the original page.","record":obj1,"replay":obj2, "relevantChildren":obj2}];
+      return[
+        {"type":"A node is present that was not present in the original page.",
+        "record":obj1,
+        "replay":obj2,
+        "relevantChildren":obj2}];
     }
   }
   if (obj2.tagName in ignoreTagNames){
@@ -278,7 +289,11 @@ function recursiveVisit(obj1,obj2){
       return([]);
     }
     else {
-      return[{"type":"A node is missing that was present in the original page.","record":obj1,"replay":obj2, "relevantChildren":obj1}];
+      return[
+        {"type":"A node is missing that was present in the original page.",
+        "record":obj1,
+        "replay":obj2,
+        "relevantChildren":obj1}];
     }
   }
   
@@ -303,11 +318,13 @@ function recursiveVisit(obj1,obj2){
         console.log("with tag name", children1[i].prop.tagName, children1[i], "and", children2[i], "don't match");
         var newDivergences = recursiveVisitMismatchedChildren(obj1,obj2);
         divergences = divergences.concat(newDivergences);
+        break;
       }
     }
     
     //if all children matched, we'll hit this point and just return
     //an empty list.  else things will have been added to divergences
+    console.log("About to return from recursiveVisit and divergences are: ", divergences);
     return divergences;
   }
   else{
@@ -317,17 +334,28 @@ function recursiveVisit(obj1,obj2){
     //seems like probably a dom node was added to or removed from
     //obj1 or obj2
     if(obj1.children){
-      return[{"type":"A node or nodes is missing that was present in the original page.","record":obj1,"replay":obj2, "relevantChildren":obj1.children}];
+      return[
+        {"type":"A node or nodes is missing that was present in the original page.",
+        "record":obj1,
+        "replay":obj2,
+        "relevantChildren":obj1.children}];
     }
     else if(obj2.children){
-      return[{"type":"A node or nodes is present that was not present in the original page.","record":obj1,"replay":obj2, "relevantChildren":obj2.children}];
+      return[
+        {"type":"A node or nodes is present that was not present in the original page.",
+        "record":obj1,
+        "replay":obj2,
+        "relevantChildren":obj2.children}];
     }
     //we also hit this if neither node has children.
     //then we've hit leaves, and the leaves must diverge, or we
     //wouldn't have called this method on them
     else{
       //neither has children
-      return[{"type":"We expect these nodes to be the same, but they're not.","record":obj1,"replay":obj2}];
+      return[
+        {"type":"We expect these nodes to be the same, but they're not.",
+        "record":obj1,
+        "replay":obj2}];
     }
   }
 };
@@ -348,7 +376,7 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
   var children1ToIgnore = [];
   var children2ToIgnore = [];
   
-  console.log("recursive visit mismatched children",obj1.prop.tagName,obj2.prop.tagName, obj1, obj2);
+  console.log("recursive visit mismatched children", obj1, obj2);
   
   for(var i=0;i<numChildren1;i++){
     children1NumMatches.push(0);
@@ -364,49 +392,74 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
   //corresponding child in obj1's children
   //we'll make a mapping
   
-  
   for(var i=0;i<numChildren2;i++){
     var child2 = children2[i];
     if (children2ToIgnore[i]){
       continue;
     }
-    var maxSimilarityScore=0;
-    var maxSimilarityScoreIndex=0;
-    for (var j=0;j<numChildren1;j++){
-      if (children1ToIgnore[j]){
-        continue;
-      }
-      var child1 = children1[j];
-      if(nodeEquals(child2,child1) || (child2.prop.tagName==child1.prop.tagName && (child2.prop.tagName in acceptTags))){
-        //we can rest assured about child1 and child2
-        //add to the mapping
-        children2MatchedWith[i]=j;
-        children1MatchedWith[j]=i;
-        children1NumMatches[j]++;
-        break;
-      }
-      //if we haven't matched it yet, we have to keep computing
-      //similarity scores
-      var similarityScore = similarity(child2,child1);
-      if(similarityScore>maxSimilarityScore){
-        maxSimilarityScore = similarityScore;
-        maxSimilarityScoreIndex = j;
-      }
+    
+    console.log(children1, children2, children1[i], children2[i], i<numChildren1);
+    //first let's see if the corresponding child actually does work
+    if(i<numChildren1 && (nodeEquals(child2,children1[i]) || 
+      (child2.prop && children1[i].prop &&
+      child2.prop.tagName && children1[i].prop.tagName &&
+      child2.prop.tagName==children1[i].prop.tagName 
+      && (child2.prop.tagName in acceptTags)) ||
+      (similarity(child2,children1[i])>similarityThreshold))){
+		  
+	  console.log("matched i", child2, children1[i]);
+      
+      children2MatchedWith[i]=i;
+      children1MatchedWith[i]=i;
+      children1NumMatches[i]++;
     }
-    //if our maxSimilarityScore is sufficiently high, go ahead and
-    //add the pairing to our mapping
-    console.log("our max similarity score is ", maxSimilarityScore);
-    if (maxSimilarityScore>similarityThreshold){
-      children2MatchedWith[i]=maxSimilarityScoreIndex;
-      children1MatchedWith[maxSimilarityScoreIndex]=i;
-      children1NumMatches[maxSimilarityScoreIndex]++;
-    }
-    //otherwise, let's assume we haven't found a match for child2
-    //and it was added to obj2's page
-    else if (children2MatchedWith[i]==-1){
-      console.log("Scenario 1 divergence, couldn't find a match for child2", child2, "in the original page");
-      console.log(obj1,obj2);
-      divergences.push({"type":"A node is present that was  not present in the original page.","record":obj1,"replay":obj2, "relevantChildren":[child2]});
+    //otherwise let's do our matching based just on similarity
+    else{
+	  console.log("didn't match i", child2, children1[i]);
+      var maxSimilarityScore=0;
+      var maxSimilarityScoreIndex=0;
+      for (var j=0;j<numChildren1;j++){
+        if (children1ToIgnore[j]){
+          continue;
+        }
+        var child1 = children1[j];
+        if(nodeEquals(child2,child1) || 
+          (child2.prop.tagName==child1.prop.tagName 
+          && (child2.prop.tagName in acceptTags))){
+          //we can rest assured about child1 and child2
+          //add to the mapping
+          children2MatchedWith[i]=j;
+          children1MatchedWith[j]=i;
+          children1NumMatches[j]++;
+          break;
+        }
+        //if we haven't matched it yet, we have to keep computing
+        //similarity scores
+        var similarityScore = similarity(child2,child1);
+        if(similarityScore>maxSimilarityScore){
+          maxSimilarityScore = similarityScore;
+          maxSimilarityScoreIndex = j;
+        }
+      }
+      //if our maxSimilarityScore is sufficiently high, go ahead and
+      //add the pairing to our mapping
+      console.log("our max similarity score is ", maxSimilarityScore);
+      if (maxSimilarityScore>similarityThreshold){
+        children2MatchedWith[i]=maxSimilarityScoreIndex;
+        children1MatchedWith[maxSimilarityScoreIndex]=i;
+        children1NumMatches[maxSimilarityScoreIndex]++;
+      }
+      //otherwise, let's assume we haven't found a match for child2
+      //and it was added to obj2's page
+      else if (children2MatchedWith[i]==-1){
+        console.log("Scenario 1 divergence, couldn't find a match for child2", child2, "in the original page");
+        console.log(obj1,obj2);
+        divergences.push(
+          {"type":"A node is present that was  not present in the original page.",
+          "record":obj1,
+          "replay":obj2,
+          "relevantChildren":[child2]});
+      }
     }
   }
   
@@ -436,7 +489,9 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
 		  //potential sibling class
 		  var numSiblingsInObj1Page = 1; //starts at 1 because item i
 		  for (var j=0;j<numChildren1;j++){
-			  if(children1NumMatches[i]==0 && (nodeEquals(children1[i],children1[j]) || similarity(children1[1],children1[j])>similarityThreshold)){
+			  if(children1NumMatches[j]==0 && 
+          (nodeEquals(children1[i],children1[j]) || 
+          similarity(children1[i],children1[j])>similarityThreshold)){
 				  //we have a match!
 				  numSiblingsInObj1Page++;
 				  //let's not catch this later when we report nodes
@@ -449,7 +504,13 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
         //this is a case of having multiple similar siblings
         console.log("Scenario 2 divergence, different numbers of children like", children1NumMatches[i]);
         console.log(obj1,obj2);
-        divergences.push({"type":"The original page had "+numSiblingsInObj1Page+"instances of a particular kind of node, but this page has "+children1NumMatches[i]+" different instances.","record":obj1,"replay":obj2, "relevantChildren":[children1[i]]});
+        divergences.push(
+          {"type":"The original page had "+numSiblingsInObj1Page+
+          " instances of a particular kind of node, but this page has "
+          +children1NumMatches[i]+" different instances.",
+          "record":obj1,
+          "replay":obj2,
+          "relevantChildren":[children1[i]]});
 		  }
 		  else{
         console.log("This is where we should go for one-to-one mappings");
@@ -469,7 +530,11 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
       console.log("Scenario 3 divergence, couldn't find a match for child1", children1[i], "in the new page");
       console.log(children1NumMatches);
       console.log(obj1,obj2);
-      divergences.push({"type":"A node is missing that was present in the original page.","record":obj1,"replay":obj2, "relevantChildren":[children1[i]]});
+      divergences.push(
+        {"type":"A node is missing that was present in the original page.",
+        "record":obj1,
+        "replay":obj2,
+        "relevantChildren":[children1[i]]});
 	  }
   }
   return divergences;
@@ -524,30 +589,41 @@ function similarityString(obj1){
 }
 
 function similarity(obj1,obj2){
-	//how about just traversing the trees and seeing if they have the same structure, just not the same content?
+	//how about just traversing the trees and seeing if they have the same
+  //structure, just not the same content?
 	//maybe just put down tags.  that'd be nice I think
   //we'll check to depth 4
   var ret = tagMatchesAndTotalTags(obj1,obj2,1);
   console.log("similarity of ", similarityString(obj1), " and ", similarityString(obj2), "is", ret.tagMatches/ret.totalTags);
   var score = ret.tagMatches/ret.totalTags;
-  if (obj1 && obj2 && obj1.prop && obj2.prop && obj1.prop.innerText && obj2.prop.innerText && obj1.prop.innerText==obj2.prop.innerText){
+  if (obj1 && obj2 && 
+    obj1.prop && obj2.prop && 
+    obj1.prop.innerText && obj2.prop.innerText && 
+    obj1.prop.innerText==obj2.prop.innerText){
     score+=.3;
   }
   return score;
 };
 
 function tagMatchesAndTotalTags(obj1,obj2, depth){
-  var totalTags=1;
+  var totalTags=2;
   var tagMatches=0;
   
   //if don't have two objects, we have a mismatch and we'll return
   if(!(obj1 && obj2))
     return {"totalTags": totalTags, "tagMatches": tagMatches};
   //if the current tagNames match, increment the number of matches
-  if (obj1.prop && obj2.prop && obj1.prop.tagName && obj2.prop.tagName && obj1.prop.tagName==obj2.prop.tagName)
+  if (obj1.prop && obj2.prop && 
+    obj1.prop.tagName && obj2.prop.tagName && 
+    obj1.prop.tagName == obj2.prop.tagName)
+    tagMatches++;
+  //if the current classes match, increment the number of matches
+  if (obj1.prop && obj2.prop && 
+    obj1.prop.className && obj2.prop.className && 
+    obj1.prop.className == obj2.prop.className)
     tagMatches++;
   //if there are no children or if we're at depth limit, don't continue
-  if (!(obj1.children && obj2.children) || depth<=0)
+  if (!(obj1.children && obj2.children) || depth <= 0)
     return {"totalTags": totalTags, "tagMatches": tagMatches};
   
   var children1 = obj1.children;
