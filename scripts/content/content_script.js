@@ -60,6 +60,7 @@ function xPathToNodes(xpath) {
 // Page load
 
 function getEventType(type) {
+  console.log("type ", type);
   for (var eventType in params.events) {
     var eventTypes = params.events[eventType];
     for (var e in eventTypes) {
@@ -190,18 +191,28 @@ function simulate(element, eventData) {
       annotation.replay(element, eventData);
     }
   }
+  
+  console.log("----------");
 
   var eventType = getEventType(eventName);
   var defaultProperties = getEventProps(eventName);
   
+  console.log("eventType ", eventType);
+  console.log("!eventType ", !eventType);
+  console.log("eventName ", eventName);
+  console.log("eventData ", eventData);
+  
   if (!eventType)
     throw new SyntaxError(eventData.type + ' event not supported');
+    
+  console.log("made it through the error throwing line");
 
   var options = jQuery.extend({}, defaultProperties, eventData);
 
   var oEvent = document.createEvent(eventType);
   if (eventType == 'Events') {
     oEvent.initEvent(eventName, options.bubbles, options.cancelable);
+
   } else if (eventType == 'MouseEvents') {
     oEvent.initMouseEvent(eventName, options.bubbles, options.cancelable,
         document.defaultView, options.detail, options.screenX,
@@ -209,6 +220,7 @@ function simulate(element, eventData) {
         options.ctrlKey, options.altKey, options.shiftKey, options.metaKey,
         options.button, element);
   } else if (eventType == 'KeyEvents') {
+    console.log("in keyevents");
     oEvent.initKeyEvent(eventName, options.bubbles, options.cancelable,
         document.defaultView, options.ctrlKey, options.altKey,
         options.shiftKey, options.metaKey, options.keyCode,
