@@ -110,94 +110,169 @@ var ScriptServer = (function ScriptServerClosure() {
   }
 
   ScriptServer.prototype = {
+    saveReplay: function _saveReplay(events, origScriptId) {
+      var server = this.server;
+      var postMsg = {};
+      postMsg["script_id"] = origScriptId
+      postMsg["user"] = {username: "shaon"};
+      postMsg["events"] = [];
+      console.log("replay:", postMsg);
+
+      var req = $.ajax({
+        error: function(jqXHR, textStatus, errorThrown) {
+          console.log(jqXHR, textStatus, errorThrown);
+        },
+        success: function(data, textStatus, jqXHR) {
+          console.log(data, jqXHR, textStatus);
+
+          var replayId = data.id;
+          for (var i = 0, ii = events.length; i < ii; ++i) {
+            // need to create new scope to variables don't get clobbered
+            (function() {
+              var postMsg = {};
+              var evtMsg = {};
+
+              var e = events[i];
+              var msgValue = e.msg.value;
+              evtMsg["dom_post_event_state"] = msgValue.snapshotAfter;
+              evtMsg["dom_pre_event_state"] = msgValue.snapshotBefore;
+              evtMsg["event_type"] = msgValue.type;
+              evtMsg["execution_order"] = i;
+
+              var parameters = [];
+              prop: for (var prop in e) {
+                if (prop == "msg") {
+                  continue prop;
+                }
+                var propMsg = {};
+                var val = e[prop];
+                propMsg["name"] = "_" + prop;
+                propMsg["value"] = JSON.stringify(val);
+                propMsg["data_type"] = typeof val; 
+                parameters.push(propMsg);
+              }
+              
+              msgprop: for (var prop in msgValue) {
+                if (prop == "snapshotBefore" || prop == "snapshotAfter") {
+                  continue msgprop;
+                }
+                var propMsg = {};
+                var val = msgValue[prop];
+                propMsg["name"] = prop;
+                propMsg["value"] = JSON.stringify(val);
+                propMsg["data_type"] = typeof val; 
+                parameters.push(propMsg);
+              }
+
+              evtMsg["parameters"] = parameters;
+
+              postMsg["replay_id"] = replayId;
+              postMsg["events"] = [evtMsg];
+
+              console.log("event:", postMsg);
+              $.ajax({
+                error: function(jqXHR, textStatus, errorThrown) {
+                  console.log(data, jqXHR, textStatus);
+                },
+                success: function(data, textStatus, jqXHR) {
+                  console.log(data, jqXHR, textStatus);
+                },
+                async: false,
+                contentType: "application/json",
+                data: JSON.stringify(postMsg),
+                dataType: "json",
+                processData: false,
+                type: "POST",
+                url: server + "replay_event/",
+              });
+            })();
+          }
+        },
+        contentType: "application/json",
+        data: JSON.stringify(postMsg),
+        dataType: "json",
+        processData: false,
+        type: "POST",
+        url: server + "replay/",
+      });
+      console.log(req);
+    },
     saveScript: function _saveScript(name, events) {
       var server = this.server;
       var postMsg = {};
       postMsg["name"] = name;
-      postMsg["user"] = "/api/v1/user/1/";
+      postMsg["user"] = {username: "shaon"};
       postMsg["events"] = [];
       console.log("script:", postMsg);
 
       var req = $.ajax({
+        error: function(jqXHR, textStatus, errorThrown) {
+          console.log(jqXHR, textStatus, errorThrown);
+        },
         success: function(data, textStatus, jqXHR) {
-          var scriptUrl = jqXHR.getResponseHeader("Location");
-          console.log(data, jqXHR, textStatus, scriptUrl);
+          console.log(data, jqXHR, textStatus);
 
+          var scriptId = data.id;
           for (var i = 0, ii = events.length; i < ii; ++i) {
-          // need to create new scope to variables don't get clobbered
-          (function() {
-            var postMsg = {};
-            var e = events[i];
-            var msgValue = e.msg.value;
-            postMsg["dom_post_event_state"] = msgValue.snapshotAfter;
-            postMsg["dom_pre_event_state"] = msgValue.snapshotBefore;
-            postMsg["event_type"] = e.type;
-            postMsg["execution_order"] = i;
+            // need to create new scope to variables don't get clobbered
+            (function() {
+              var postMsg = {};
+              var evtMsg = {};
 
-            var parameters = [];
-            prop: for (var prop in e) {
-              if (prop == "msg") {
-                continue prop;
+              var e = events[i];
+              var msgValue = e.msg.value;
+              evtMsg["dom_post_event_state"] = msgValue.snapshotAfter;
+              evtMsg["dom_pre_event_state"] = msgValue.snapshotBefore;
+              evtMsg["event_type"] = evtMsg.type;
+              evtMsg["execution_order"] = i;
+
+              var parameters = [];
+              prop: for (var prop in e) {
+                if (prop == "msg") {
+                  continue prop;
+                }
+                var propMsg = {};
+                var val = e[prop];
+                propMsg["name"] = "_" + prop;
+                propMsg["value"] = JSON.stringify(val);
+                propMsg["data_type"] = typeof val; 
+                parameters.push(propMsg);
               }
-              var propMsg = {};
-              var val = e[prop];
-              propMsg["name"] = "_" + prop;
-              propMsg["value"] = JSON.stringify(val);
-              propMsg["data_type"] = typeof val; 
-              parameters.push(propMsg);
-            }
-            
-            msgprop: for (var prop in msgValue) {
-              if (prop == "snapshotBefore" || prop == "snapshotAfter") {
-                continue msgprop;
+              
+              msgprop: for (var prop in msgValue) {
+                if (prop == "snapshotBefore" || prop == "snapshotAfter") {
+                  continue msgprop;
+                }
+                var propMsg = {};
+                var val = msgValue[prop];
+                propMsg["name"] = prop;
+                propMsg["value"] = JSON.stringify(val);
+                propMsg["data_type"] = typeof val; 
+                parameters.push(propMsg);
               }
-              var propMsg = {};
-              var val = msgValue[prop];
-              propMsg["name"] = prop;
-              propMsg["value"] = JSON.stringify(val);
-              propMsg["data_type"] = typeof val; 
-              parameters.push(propMsg);
-            }
 
-            postMsg["parameters"] = parameters;
-//            postMsg["parameters"] = [];
-            postMsg["script"] = scriptUrl.substr(scriptUrl.indexOf("/api"));
-            console.log("event:", postMsg);
-            $.ajax({
-              success: function(data, textStatus, jqXHR) {
-                var eventUrl = jqXHR.getResponseHeader("Location");
-                console.log(data, jqXHR, textStatus, eventUrl);
+              evtMsg["parameters"] = parameters;
 
-/*
-                for (var j = 0, jj = parameters.length; j < jj; ++j) {
-                  var postMsg = parameters[j];
-                  postMsg["event"] = eventUrl.substr(eventUrl.indexOf("/api"));
-                  console.log("param:", postMsg);
- 
-                  $.ajax({
-                    complete: function(s, x) {
-                      console.log(s, x);
-                    },
-                    contentType: "application/json",
-                    data: JSON.stringify(postMsg),
-                    dataType: "json",
-                    processData: false,
-                    type: "POST",
-                    url: server + "parameter/",
-                    async: false
-                  });
-                } 
-*/
-              },
-              async: false,
-              contentType: "application/json",
-              data: JSON.stringify(postMsg),
-              dataType: "json",
-              processData: false,
-              type: "POST",
-              url: server + "event/",
-            });
-          })();
+              postMsg["script_id"] = scriptId;
+              postMsg["events"] = [evtMsg];
+
+              console.log("event:", postMsg);
+              $.ajax({
+                error: function(jqXHR, textStatus, errorThrown) {
+                  console.log(data, jqXHR, textStatus);
+                },
+                success: function(data, textStatus, jqXHR) {
+                  console.log(data, jqXHR, textStatus);
+                },
+                async: false,
+                contentType: "application/json",
+                data: JSON.stringify(postMsg),
+                dataType: "json",
+                processData: false,
+                type: "POST",
+                url: server + "event/",
+              });
+            })();
           }
         },
         contentType: "application/json",
@@ -214,7 +289,7 @@ var ScriptServer = (function ScriptServerClosure() {
       $.ajax({
         success: function(data, textStatus, jqXHR) {
           console.log(data, textStatus, jqXHR);
-          var scripts = data.objects;
+          var scripts = data;
           if (scripts.length != 0) {
             var script = scripts[0];
             for (var i = 0, ii = scripts.length; i < ii; ++i) {
@@ -244,10 +319,10 @@ var ScriptServer = (function ScriptServerClosure() {
               }
               events.push(event);
             }
-            controller.setEvents(events);
+            controller.setLoadedEvents(script.id, events);
           }
         },
-        url: server + "script/?name=" + name + "&format=json",
+        url: server + "script/" + name + "/?format=json",
         type: 'GET',
 //        contentType: "application/json",
         processData: false,
@@ -388,7 +463,6 @@ var Panel = (function PanelClosure() {
     addEvent: function _addEvent(eventRecord) {
       var eventInfo = eventRecord.msg.value;
       var id = eventRecord.id;
-      var num = eventRecord.num;
       var tab = eventRecord.tab;
       var topURL = eventRecord.topURL;
       var portName = eventRecord.port;
@@ -399,7 +473,7 @@ var Panel = (function PanelClosure() {
 
       var newDiv = "<div class='event wordwrap' id='" + id + "'>";
 
-      newDiv += "<b>[" + num + "]type:" + "</b>" + eventInfo.type + 
+      newDiv += "<b>[" + id + "]type:" + "</b>" + eventInfo.type + 
                 "<br/>";
       newDiv += "<b>tab:" + "</b>" + tab + "<br/>";
       newDiv += "<b>topURL:" + "</b>" + topURL + "<br/>";
@@ -434,14 +508,17 @@ var Record = (function RecordClosure() {
   function Record(ports) {
     this.ports = ports;
     this.events = [];
+    this.replayEvents = [];
     this.recordState = RecordState.STOPPED;
     this.simultaneousReplayer = null;
     this.lastTime = 0;
+    this.loadedScriptId = null;
   }
 
   var RecordState = {
     RECORDING: 0,
-    STOPPED: 1
+    STOPPED: 1,
+    REPLAYING: 2
   };
 
   Record.prototype = {
@@ -452,13 +529,21 @@ var Record = (function RecordClosure() {
       this.simultaneousReplayer = simultaneousReplayer;
     },
     isRecording: function _isRecording() {
-      return this.recordState == RecordState.RECORDING;
+      var recordState = this.recordState;
+      return recordState == RecordState.RECORDING || 
+             recordState == RecordState.REPLAYING;
     },
     startRecording: function _startRecording() {
       this.recordState = RecordState.RECORDING;
       this.panel.startRecording();
 
       // Tell the content scripts to begin recording
+      this.ports.sendToAll({type: "recording", value: this.isRecording()});
+    },
+    startReplayRecording: function _startReplayRecording() {
+      this.recordState = RecordState.REPLAYING;
+      this.replayEvents = [];
+
       this.ports.sendToAll({type: "recording", value: this.isRecording()});
     },
     stopRecording: function _stopRecording() {
@@ -469,71 +554,88 @@ var Record = (function RecordClosure() {
       this.ports.sendToAll({type: "recording", value: this.isRecording()});
     },
     addEvent: function _addEvent(eventRequest, portName) {
-      if (this.recordState == RecordState.RECORDING) {
-        var events = this.events;
-        var num = events.length;
-        var id = "event" + num 
-       
-        var ports = this.ports; 
-        var tab = ports.getTab(portName);
-        var portInfo = ports.getTabInfo(tab);
-        var topURL = portInfo.top.URL;
-        
-        // don't record this action if it's being generated by our simultaneous
-        // replay
-        var window = this.ports.getTabFromTabId(tab).windowId;
-        if (window==this.simultaneousReplayer.twinWindow) {return};
-        
-        var topFrame = false;
-        var iframeIndex = -1;
+      var ports = this.ports; 
+      var tab = ports.getTab(portName);
+      var portInfo = ports.getTabInfo(tab);
+      var topURL = portInfo.top.URL;
+      
+      // don't record this action if it's being generated by our simultaneous
+      // replay
+      var window = this.ports.getTabFromTabId(tab).windowId;
+      if (window==this.simultaneousReplayer.twinWindow) {return};
+      
+      var topFrame = false;
+      var iframeIndex = -1;
 
-        if (portInfo.top.portName == portName) {
-          topFrame == true;
-        } else {
-          var frames = portInfo.frames;
-          for (var i = 0, ii = frames.length; i < ii; ++i) {
-            var frame = frames[i];
-            if (frame.portName == portName) {
-              iframeIndex = i;
-              break;
-            }
+      if (portInfo.top.portName == portName) {
+        topFrame == true;
+      } else {
+        var frames = portInfo.frames;
+        for (var i = 0, ii = frames.length; i < ii; ++i) {
+          var frame = frames[i];
+          if (frame.portName == portName) {
+            iframeIndex = i;
+            break;
           }
         }
-        var topFrame = (portInfo.top.portName == portName);
+      }
+      var topFrame = (portInfo.top.portName == portName);
       
-        var time = eventRequest.value.timeStamp;
-        var lastTime = this.lastTime;
-        if (lastTime == 0) {
-          var waitTime = 0;
-        } else {
-          var waitTime = time - lastTime;
-        }
-        this.lastTime = time;
+      var time = eventRequest.value.timeStamp;
+      var lastTime = this.lastTime;
+      if (lastTime == 0) {
+        var waitTime = 0;
+      } else {
+        var waitTime = time - lastTime;
+      }
+      this.lastTime = time;
 
-        var eventRecord = {msg: eventRequest, port: portName, topURL: topURL,
-            topFrame: topFrame, iframeIndex: iframeIndex, tab: tab, num: num,
-            id: id, waitTime: waitTime};
+      var eventRecord = {msg: eventRequest, port: portName, topURL: topURL,
+          topFrame: topFrame, iframeIndex: iframeIndex, tab: tab,
+          waitTime: waitTime};
+      
+      if (this.recordState == RecordState.RECORDING) {
+        this.loadedScriptId = null;
+
+        var events = this.events;
+        eventRecord.id = "event" + events.length;
 
         this.events.push(eventRecord);
         this.panel.addEvent(eventRecord);
         if(params.simultaneous){
           this.simultaneousReplayer.simultaneousReplay(eventRecord);
         }
+      } else if (this.recordState == RecordState.REPLAYING) {
+        var replayEvents = this.replayEvents;
+        eventRecord.id = "event" + replayEvents.length;
+
+        replayEvents.push(eventRecord);
       }
     },
     clearEvents: function _clearEvents() {
-      this.events = []
+      this.loadedScriptId = null;
+      this.events = [];
       this.panel.clearEvents();
     },
     getEvents: function _getEvents() {
       return this.events.slice(0);
     },
+    getReplayEvents: function _getReplayEvents() {
+      return this.replayEvents.slice(0);
+    },
     setEvents: function _setEvents(events) {
+      this.loadedScriptId = null;
       this.events = events;
       this.panel.clearEvents();
       for (var i = 0, ii = events.length; i < ii; ++i) {
         this.panel.addEvent(events[i]);
       }
+    },
+    setLoadedScriptId: function _setLoadedScriptId(id) {
+      this.loadedScriptId = id;
+    },
+    getLoadedScriptId: function _getLoadedScriptId() {
+      return this.loadedScriptId;
     }
   };
   
@@ -541,11 +643,13 @@ var Record = (function RecordClosure() {
 })();
 
 var Replay = (function ReplayClosure() {
-  function Replay(events, panel, ports) {
+  function Replay(events, panel, ports, record, scriptServer) {
     this.panel = panel;
     this.events = events;
     this.ports = ports;
     this.timeoutHandle = null;
+    this.record = record;
+    this.scriptServer = scriptServer;
 
     // replay variables
     this.replayReset();
@@ -559,6 +663,8 @@ var Replay = (function ReplayClosure() {
 
   Replay.prototype = {
     replay: function _replay() {
+      this.record.startReplayRecording();
+
       var replay = this;
       this.timeoutHandle = setTimeout(function() {
         replay.replayGuts();
@@ -575,7 +681,7 @@ var Replay = (function ReplayClosure() {
       var index = this.index;
       var events = this.events;
 
-      if (index == 0)
+      if (index == 0 || index == events.length)
         return 0;
 
       if (timing == 0) {
@@ -590,6 +696,20 @@ var Replay = (function ReplayClosure() {
     },
     replayPause: function _replayPause() {
       clearTimeout(this.timeoutHandle);
+    },
+    replayFinish: function _replayFinish() {
+      var record = this.record;
+      var scriptServer = this.scriptServer;
+      setTimeout(function() {
+        var replayEvents = record.getReplayEvents();
+        var scriptId = record.getLoadedScriptId();
+        if (scriptId) {
+          scriptServer.saveReplay(replayEvents, scriptId);
+        }
+        console.log(replayEvents);
+      }, 1000);
+
+      this.replayReset();
     },
     replayFindPortInTab: function _replayFindPortInTab(tab, topFrame,
         snapshot, msg) {
@@ -676,7 +796,7 @@ var Replay = (function ReplayClosure() {
       var tabMapping = this.tabMapping;
 
       if (index >= events.length) {
-        this.replayReset();
+        this.replayFinish();
         return;
       }
 
@@ -690,7 +810,7 @@ var Replay = (function ReplayClosure() {
       var iframeIndex = e.iframeIndex;
       var snapshot = msg.value.snapshot;
 
-      $("#status").text("Replay " + e.num);
+      $("#status").text("Replay " + index);
       $("#" + id).get(0).scrollIntoView();
       //$("#container").scrollTop($("#" + e.id).prop("offsetTop"));
 
@@ -899,7 +1019,11 @@ var Controller = (function ControllerClosure() {
     replayScript: function() {
       console.log("replay");
       this.stop();
-      var replay = new Replay(this.record.getEvents(), this.panel, this.ports);
+
+      var record = this.record;
+      var events = record.getEvents();
+      var replay = new Replay(events, this.panel, this.ports, record,
+                              this.scriptServer);
       this.replay = replay;
       replay.replay();
     },
@@ -918,8 +1042,9 @@ var Controller = (function ControllerClosure() {
       console.log("getting script");
       var events = this.scriptServer.getScript(name, this);
     },
-    setEvents: function(events) {
+    setLoadedEvents: function(scriptId, events) {
       this.record.setEvents(events);
+      this.record.setLoadedScriptId(scriptId);
     }
   }
 
@@ -929,8 +1054,9 @@ var Controller = (function ControllerClosure() {
 // Instantiate components
 var ports = new PortManager();
 var record = new Record(ports);
-//var scriptServer = new ScriptServer("http://localhost:8000/api/v1/");
-var scriptServer = new ScriptServer("http://webscriptdb.herokuapp.com/api/v1/");
+//var scriptServer = new ScriptServer("http://localhost:8000/api/");
+//var scriptServer = new ScriptServer("http://webscriptdb.herokuapp.com/api/");
+var scriptServer = new ScriptServer(params.server);
 var controller = new Controller(record, scriptServer, ports);
 var panel = new Panel(controller, ports); 
 

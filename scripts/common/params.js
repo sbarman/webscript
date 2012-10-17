@@ -96,8 +96,10 @@ var params = null;
   
   params = {
     events: capturedEvents,
-    simultaneous: true,
+    simultaneous: false,
     timing: 0,
+//    server: "http://localhost:8000/api/",
+    server: "http://webscriptdb.herokuapp.com/api/",
     defaultProps: defaultOptions
   };
 
