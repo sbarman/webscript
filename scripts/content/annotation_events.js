@@ -17,15 +17,9 @@ var annotationEvents = {};
   function clickSelectReplay(element, eventMessage) {
     element.value = eventMessage.value;
   }
-
-  function keypressRecord(eventData, eventMessage) {
-    if ("value" in eventData.target)
-      eventMessage.value = eventData.target.value;
-  }
   
   function keypressReplay(element, eventMessage) {
-    if ("value" in eventMessage)
-      element.value = eventMessage.value;
+    element.value=element.value+String.fromCharCode(eventMessage.keyCode);
   }
   
   annotationEvents = {
@@ -33,7 +27,7 @@ var annotationEvents = {};
       guard: function(eventData, eventMessage) {
         return eventMessage.type == "keypress";
       },
-      record: keypressRecord,
+      record: null,
       replay: keypressReplay
     },
     "clickOption": {
