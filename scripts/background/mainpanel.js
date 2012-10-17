@@ -652,7 +652,7 @@ var Replay = (function ReplayClosure() {
     this.scriptServer = scriptServer;
 
     // replay variables
-    this.replayReset();
+    this.reset();
   }
 
   var ReplayState = {
@@ -675,6 +675,16 @@ var Replay = (function ReplayClosure() {
       this.portMapping = {};
       this.tabMapping = {};
       this.replayState = ReplayState.REPLAYING;
+    },
+    setNextEvent: function _setNextEvent(time) {
+      if (typeof time == "undefined") {
+        time = this.getNextTime();
+      }
+
+      var replay = this;
+      this.timeoutHandle = setTimeout(function() {
+        replay.guts();
+      }, time);
     },
     getNextTime: function _getNextTime() {
       var timing = params.timing;
@@ -825,11 +835,7 @@ var Replay = (function ReplayClosure() {
         }
 
         this.index++;
-       
-        var replay = this;
-        this.timeoutHandle = setTimeout(function() {
-          replay.guts();
-        }, this.getNextTime());
+        this.setNextEvent();
 
       // we have already seen this tab, find equivalent port for tab
       // for now we will just choose the last port added from this tab
@@ -841,17 +847,9 @@ var Replay = (function ReplayClosure() {
           newPort.postMessage(msg);
         
           this.index++;
-
-          var replay = this;
-          this.timeoutHandle = setTimeout(function() {
-            replay.guts();
-          }, this.getNextTime());
-        } else {
-          var replay = this;
-          this.timeoutHandle = setTimeout(function() {
-            replay.guts();
-          }, this.getNextTime());
         }
+        this.setNextEvent();
+
       // need to open new tab
       } else {
         var replay = this;
@@ -860,9 +858,7 @@ var Replay = (function ReplayClosure() {
             var newTabId = newTab.id;
             replay.tabMapping[tab] = newTabId;
             replay.ports.tabIdToTab[newTabId] = newTab;
-            replay.timeoutHandle = setTimeout(function() {
-              replay.guts();
-            }, 1000);
+            replay.setNextEvent(1000);
           }
         );
       }
