@@ -300,7 +300,7 @@ var ScriptServer = (function ScriptServerClosure() {
             }
             var events = [];
             var serverEvents = script.events.sort(function(a,b) {
-              return a.execution_order > b.execution_order;
+              return a.execution_order - b.execution_order;
             });
 
             for (var i = 0, ii = serverEvents.length; i < ii; ++i) {
