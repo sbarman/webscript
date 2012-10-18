@@ -191,16 +191,9 @@ function simulate(element, eventData) {
       annotation.replay(element, eventData);
     }
   }
-  
-  console.log("----------");
 
   var eventType = getEventType(eventName);
   var defaultProperties = getEventProps(eventName);
-  
-  console.log("eventType ", eventType);
-  console.log("!eventType ", !eventType);
-  console.log("eventName ", eventName);
-  console.log("eventData ", eventData);
   
   if (!eventType)
     throw new SyntaxError(eventData.type + ' event not supported');
@@ -233,7 +226,6 @@ function simulate(element, eventData) {
     console.log("Unknown type of event");
   }
   element.dispatchEvent(oEvent);
-  console.log("ELEMENT", element);
   
   //let's update a div letting us know what event we just got
   sendAlert("Received Event: "+eventData.type);
@@ -275,18 +267,23 @@ function checkDomDivergence(recordDom, replayDom){
   console.log(d);
   if (d.length>0){
     sendAlert("Found "+d.length+" divergences.");
+    generateAnnotationEvents();
   }
 };
+
+function generateAnnotationEvents(){
+  return;
+}
 
 function filterOutInitialDivergences(divergences, initialDivergences){
   var finalDivergences = [];
   for (var i in divergences){
     var divergence = divergences[i];
     var divMatched = false;
-    console.log("divergence ", divergence);
+    //console.log("divergence ", divergence);
     for (var j in initialDivergences){
       var initDivergence = initialDivergences[j];
-      console.log("initDivergence", initDivergence);
+      //console.log("initDivergence", initDivergence);
       if (divergenceEquals(divergence, initDivergence)){
         divMatched = true;
       }
@@ -456,10 +453,6 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
   console.log("recursive visit mismatched children", obj1, obj2);
   console.log(similarityString(obj1));
   console.log(similarityString(obj2));
-  if (obj1 && obj2 && obj1.prop && obj2.prop && obj1.prop.innerText && obj2.prop.innerText){
-    console.log(obj1.prop.innerText);
-    console.log(obj2.prop.innerText);
-  }
   
   for(var i=0;i<numChildren1;i++){
     children1NumMatches.push(0);
@@ -643,37 +636,6 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
   return divergences;
 };
 
-function similarityBackup(obj1,obj2){
-  if (obj1 && obj2 && obj1.children && obj2.children){
-    
-    var obj1String=obj1.prop.tagName;
-    var children1 = obj1.children;
-    var numChildren1=obj1.children.length;
-    
-    var obj2String=obj2.prop.tagName;
-    var children2 = obj2.children;
-    var numChildren2=obj2.children.length;
-    
-    for (var i=0;i<numChildren1;i++){
-      if (children1[i].prop) obj1String+=children1[i].prop.tagName;
-    }
-    
-    for (var i=0;i<numChildren2;i++){
-      if (children2[i].prop) obj2String+=children2[i].prop.tagName;
-    }
-    
-    if (obj1String==obj2String){
-      console.log("SIMILAR", obj1String, obj2String);
-      return 1;
-    }
-    else{
-      console.log("NOT SIMILAR", obj1String, obj2String);
-      return 0;
-    }
-  }
-  return 0;
-}
-
 function similarityString(obj1){
   if (obj1 && obj1.children){
     
@@ -814,58 +776,6 @@ function sameId(node1,node2){
   return false;
 };
 
-function nodeEqualsAlternative(node1,node2){
-  var relevantProperties = ["accessKey",
-                            "baseURI", 
-                            "childElementCount",
-                            "className",
-                            "clientHeight",
-                            "clientLeft",
-                            "clientTop",
-                            "clientWidth",
-                            "content",
-                            "contentEditable",
-                            "dir",
-                            "draggable",
-                            "hidden",
-                            "httpEquiv",
-                            "id",
-                            "innerHTML",
-                            "innerText",
-                            "isContentEditable",
-                            "lang",
-                            "localName",
-                            "name",
-                            "namespaceURI",
-                            "nodeName",
-                            "nodeType",
-                            "offsetHeight",
-                            "offsetLeft",
-                            "offsetTop",
-                            "offsetWidth",
-                            "outerHTML",
-                            "outerText",
-                            "scheme",
-                            "scrollHeight",
-                            "scrollLeft",
-                            "scrollTop",
-                            "scrollWidth",
-                            "spellcheck",
-                            "tabIndex",
-                            "tagName",
-                            "textContent",
-                            "title",
-                            "translate",
-                            "webkitRegionOverset",
-                            "webkitdropzone"];
-  var lsLength = relevantProperties.length;
-  for (var i=0;i<lsLength;i++){
-    if (node1[relevantProperties[i]]!=node2[relevantProperties[i]]){
-      return false;
-    }
-  }
-  return true;
-};
 
 // We need to add all the events now before and other event listners are 
 // added to the page. We will remove the unwanted handlers once params is
