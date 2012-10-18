@@ -95,7 +95,7 @@ function processEvent(eventData) {
     eventMessage["dispatchType"] = dispatchType;
     eventMessage["nodeName"] = nodeName;
 
-    eventMessage["snapshotBefore"] = curSnapshot;
+    //eventMessage["snapshotBefore"] = curSnapshot;
     curSnapshot = snapshot();
     eventMessage["snapshotAfter"] = curSnapshot;
 
@@ -280,20 +280,50 @@ function checkDomDivergence(recordDom, replayDom){
 
 function filterOutInitialDivergences(divergences, initialDivergences){
   var finalDivergences = [];
-  for (var divergence in divergences){
-    for (var initDivergence in initialDivergences){
-      if (!divergenceEquals(divergence, initDivergence)){
-        finalDivergences.push(divergence);
+  for (var i in divergences){
+    var divergence = divergences[i];
+    var divMatched = false;
+    console.log("divergence ", divergence);
+    for (var j in initialDivergences){
+      var initDivergence = initialDivergences[j];
+      console.log("initDivergence", initDivergence);
+      if (divergenceEquals(divergence, initDivergence)){
+        divMatched = true;
       }
+    }
+    if (!divMatched){
+      finalDivergences.push(divergence);
     }
   }
   return finalDivergences;
 };
 
 function divergenceEquals(div1,div2){
-  var ret = div1.replay == div2.replay && div1.record == div2.record &&
-    div1.type == div2.type;
+  
+  /*
+  if (!(div1.type == div2.type)){
+    console.log("type didn't match", div1.type, div2.type);
+    return false;
+  }
+  */
+  
+  for(var i=0;i<div1.relevantChildren;i++){
+    if (!(i<div2.relevantChildren.length && div1.relevantChildren[i] == div2.relevantChildren[i])){
+      return false;
+    }
+  }
+  
+  return true;
+  
+  /*
+  console.log(nodeEquals(div1.replay,div2.replay), div1.replay, div2.replay);
+  console.log(nodeEquals(div1.record,div2.record), div1.record, div2.record);
+  console.log(div1.type==div2.type, div1.type, div2.type);
+  var ret = nodeEquals(div1.replay,div2.replay) && 
+            nodeEquals(div1.record,div2.record) &&
+            div1.type == div2.type;
   return ret;
+  */
 }
 
 function findBody(dom){
@@ -317,7 +347,7 @@ function findBody(dom){
 
 function recursiveVisit(obj1,obj2){
   
-  //console.log("recursiveVisit", obj1, obj2);
+  console.log("recursiveVisit", obj1, obj2);
   
   //deal with tags that don't matter to the user experience
   if (obj1 && obj1.prop && obj1.prop.tagName && obj1.prop.tagName in ignoreTagNames){
@@ -423,9 +453,13 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
   var children1ToIgnore = [];
   var children2ToIgnore = [];
   
-  //console.log("recursive visit mismatched children", obj1, obj2);
-  //console.log(similarityString(obj1));
-  //console.log(similarityString(obj2));
+  console.log("recursive visit mismatched children", obj1, obj2);
+  console.log(similarityString(obj1));
+  console.log(similarityString(obj2));
+  if (obj1 && obj2 && obj1.prop && obj2.prop && obj1.prop.innerText && obj2.prop.innerText){
+    console.log(obj1.prop.innerText);
+    console.log(obj2.prop.innerText);
+  }
   
   for(var i=0;i<numChildren1;i++){
     children1NumMatches.push(0);
@@ -456,29 +490,31 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
     if (children2ToIgnore[i]){
       continue;
     }
-    //console.log(children1, children2, children1[i], children2[i], i<numChildren1);
     //first let's see if the corresponding child actually does work
     if(i < numChildren1 &&
       !children1ToIgnore[i] &&
       (
-      nodeEquals(child2,children1[i] || 
+      sameId(child2,children2[i]) ||
       sameTagAndTagSufficient(child2,children1[i]) ||
+      nodeEquals(child2,children1[i]) || 
       similarity(child2,children1[i])>similarityThreshold)
-      )){
+      ){
       children2MatchedWith[i]=i;
       children1MatchedWith[i]=i;
       children1NumMatches[i]++;
     }
     //otherwise let's do our matching based just on similarity
     else{
-      /*
+      
       console.log("didn't match i", child2, children1[i]);
+      console.log(similarityString(child2));
+      console.log(similarityString(children1[i]));
       console.log("nodeEquals", nodeEquals(child2,children1[i]));
       if (child2 && children1[i] && child2.prop && children1[i].prop && child2.prop.tagName && children1[i].prop.tagName){
         console.log("tagName ", child2.prop.tagName==children1[i].prop.tagName, (child2.prop.tagName in acceptTags));
       }
-      console.log("similarity", similarity(child2,children1[i]));
-      */
+      console.log("similarity", similarity(child2,children1[i]), similarity(child2,children1[i])>similarityThreshold);
+      
 	  
       var maxSimilarityScore=0;
       var maxSimilarityScoreIndex=0;
@@ -487,7 +523,7 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
           continue;
         }
         var child1 = children1[j];
-        if(nodeEquals(child2,child1) || sameTagAndTagSufficient(child2,child1)){
+        if(nodeEquals(child2,child1) || sameTagAndTagSufficient(child2,child1) || sameId(child2,child1)){
           //we can rest assured about child1 and child2
           //add to the mapping
           //console.log("Matched with nodeEquals and sameTagAndTagSufficient");
@@ -754,10 +790,12 @@ function nodeEquals(node1,node2){
         return true;
       }
       //if the id is the same, let's assume they're equal
+      /*
       if (node1.prop.id && node2.prop.id
         && node1.prop.id!="" && node1.prop.id==node2.prop.id){
         return true;
       }
+      */
     }
     else{
       //hypothesize that there is no effect on user if no innerText
@@ -766,6 +804,14 @@ function nodeEquals(node1,node2){
     return _.isEqual(node1.prop, node2.prop);
   }
   return node1==node2;
+};
+
+function sameId(node1,node2){
+  if (node1 && node2 && node1.prop && node2.prop &&
+      node1.prop.id && node2.prop.id && node1.prop.id==node2.prop.id){
+        return true;
+  }
+  return false;
 };
 
 function nodeEqualsAlternative(node1,node2){
