@@ -11,9 +11,10 @@ var id = "setme";
 var port;
 var curSnapshot;
 var similarityThreshold = .9;
-var ignoreTagNames = {"SCRIPT":true, "STYLE":true};
 var acceptTags = {"HTML":true, "BODY":true, "HEAD":true};
 var initialDivergences = false;
+var verbose = false;
+var scenarioVerbose = true;
 
 // Utility functions
 
@@ -55,12 +56,20 @@ function xPathToNodes(xpath) {
   return results;
 };
 
+function xpathFromAbstractNode(node){
+  if (node && node.prop && node.prop.id && node.prop.id!=""){
+    return "//"+node.prop.nodeName+"[@id='"+node.prop.id+"']";
+  }
+  if (node && node.prop){
+    return "//"+node.prop.nodeName;
+  }
+};
+
 // Functions to handle events
 // Mouse click, Select text, Input form, Back / forward button, Copy / Paste
 // Page load
 
 function getEventType(type) {
-  console.log("type ", type);
   for (var eventType in params.events) {
     var eventTypes = params.events[eventType];
     for (var e in eventTypes) {
@@ -95,7 +104,7 @@ function processEvent(eventData) {
     eventMessage["dispatchType"] = dispatchType;
     eventMessage["nodeName"] = nodeName;
 
-    //eventMessage["snapshotBefore"] = curSnapshot;
+    eventMessage["snapshotBefore"] = curSnapshot;
     curSnapshot = snapshot();
     eventMessage["snapshotAfter"] = curSnapshot;
 
@@ -117,7 +126,7 @@ function processEvent(eventData) {
       }
     }
 
-    console.log("extension sending:", eventMessage);
+    //console.log("extension sending:", eventMessage);
     port.postMessage({type: "event", value: eventMessage});
   }
   return true;
@@ -131,7 +140,7 @@ function handleMessage(request) {
   } else if (request.type == "params") {
     updateParams(request.value);
   } else if (request.type == "event") {
-    console.log("extension event", request)
+    console.log("extension event", request, request.value.type)
     var e = request.value;
     var nodes = xPathToNodes(e.target);
     //if we don't successfully find nodes, let's alert
@@ -197,8 +206,6 @@ function simulate(element, eventData) {
   
   if (!eventType)
     throw new SyntaxError(eventData.type + ' event not supported');
-    
-  console.log("made it through the error throwing line");
 
   var options = jQuery.extend({}, defaultProperties, eventData);
 
@@ -231,11 +238,97 @@ function simulate(element, eventData) {
   sendAlert("Received Event: "+eventData.type);
   
   //let's try seeing divergence
-  var recordDom = eventData.snapshotAfter;
-  var replayDom = snapshotDom(document);
-  //console.log(recordDom);
-  //console.log(replayDom);
-  checkDomDivergence(recordDom,replayDom);
+  visualizeDivergence(eventData);
+
+}
+
+function visualizeDivergence(eventData){
+  
+  var recordDomBefore = eventData.snapshotBefore;
+  var recordDomAfter = eventData.snapshotAfter;
+  var replayDomBefore = curSnapshot;
+  curSnapshot = snapshot();
+  var replayDomAfter = curSnapshot;
+  
+  
+  
+  console.log("-------------------");
+  var recordDeltas = checkDomDivergence(recordDomBefore,recordDomAfter);
+  console.log("RECORD DELTAS");
+  console.log(recordDeltas);
+  
+  for (var i=0;i<recordDeltas.length;i++){
+    var replayDelta = recordDeltas[i];
+    console.log("TYPE");
+    console.log(replayDelta.type);
+    analyzeDelta(replayDelta);
+    
+    console.log("RECORD TEXT");
+    if (replayDelta.record.prop && replayDelta.record.prop.innerText){
+      console.log(replayDelta.record.prop.innerText);
+    }
+    console.log("REPLAY TEXT");
+    if (replayDelta.replay.prop && replayDelta.replay.prop.innerText){
+      console.log(replayDelta.replay.prop.innerText);
+    }
+    
+    console.log("RELEVANT TEXT");
+    if (replayDelta.relevantChildren && replayDelta.relevantChildren[0] && replayDelta.relevantChildren[0].prop && replayDelta.relevantChildren[0].prop.innerText){
+      console.log(replayDelta.relevantChildren[0].prop.innerText);
+    }
+    /*
+    for (var j=0;j<replayDelta.relevantChildren.length;j++){
+      var replayDeltaChild = replayDelta.relevantChildrenXPaths[j];
+      console.log(replayDelta.relevantChildren[j]);
+      var elements = xPathToNodes(replayDeltaChild);
+      for (var k=0;k<elements.length;k++){
+        console.log(elements[k]);
+      }
+    }
+    */
+  }
+  
+  var replayDeltas = checkDomDivergence(replayDomBefore,replayDomAfter);
+  console.log("-------------------");
+  console.log("REPLAY DELTAS");
+  console.log(replayDeltas);
+  
+  for (var i=0;i<replayDeltas.length;i++){
+    var replayDelta = replayDeltas[i];
+    console.log("TYPE");
+    console.log(replayDelta.type);
+    analyzeDelta(replayDelta);
+    
+    console.log("REPLAY TEXT");
+    if (replayDelta.record.prop && replayDelta.record.prop.innerText){
+      console.log(replayDelta.record.prop.innerText);
+    }
+    console.log("RECORD TEXT");
+    if (replayDelta.replay.prop && replayDelta.replay.prop.innerText){
+      console.log(replayDelta.replay.prop.innerText);
+    }
+    
+    console.log("RELEVANT TEXT");
+    if (replayDelta.relevantChildren && replayDelta.relevantChildren[0] && replayDelta.relevantChildren[0].prop && replayDelta.relevantChildren[0].prop.innerText){
+      console.log(replayDelta.relevantChildren[0].prop.innerText);
+    }
+    /*
+    for (var j=0;j<replayDelta.relevantChildren.length;j++){
+      var replayDeltaChild = replayDelta.relevantChildrenXPaths[j];
+      console.log(replayDelta.relevantChildren[j]);
+      var elements = xPathToNodes(replayDeltaChild);
+      for (var k=0;k<elements.length;k++){
+        console.log(elements[k]);
+      }
+    }
+    */
+  }
+  
+  console.log("-------------------");
+}
+
+function analyzeDelta(delta){
+  return;
 }
 
 function sendAlert(msg){
@@ -257,18 +350,9 @@ function checkDomDivergence(recordDom, replayDom){
   var body1 = findBody(recordDom);
   var body2 = findBody(replayDom);
   var divergences = recursiveVisit(body1, body2);
-  console.log("DIVERGENCES");
-  console.log(divergences);
-  if (!initialDivergences){
-    initialDivergences = divergences;
-  }
-  var d = filterOutInitialDivergences(divergences, initialDivergences);
-  console.log("FILTERED DIVERGENCES");
-  console.log(d);
-  if (d.length>0){
-    sendAlert("Found "+d.length+" divergences.");
-    generateAnnotationEvents();
-  }
+  //console.log("DIVERGENCES");
+  //console.log(divergences);
+  return divergences;
 };
 
 function generateAnnotationEvents(){
@@ -344,35 +428,16 @@ function findBody(dom){
 
 function recursiveVisit(obj1,obj2){
   
-  console.log("recursiveVisit", obj1, obj2);
-  
-  //deal with tags that don't matter to the user experience
-  if (obj1 && obj1.prop && obj1.prop.tagName && obj1.prop.tagName in ignoreTagNames){
-    if (obj2 && obj2.prop && obj2.prop.tagName && obj1.prop.tagName==obj2.prop.tagName){
-      return([]);
-    }
-    else {
-      return[
-        {"type":"A node is present that was not present in the original page.",
-        "record":obj1,
-        "replay":obj2,
-        "relevantChildren":obj2}];
-    }
-  }
-  if (obj2 && obj2.prop && obj2.prop.tagName && obj2.tagName in ignoreTagNames){
-    if (obj1 && obj1.prop && obj1.prop.tagName && obj1.prop.tagName==obj2.prop.tagName){
-      return([]);
-    }
-    else {
-      return[
-        {"type":"A node is missing that was present in the original page.",
-        "record":obj1,
-        "replay":obj2,
-        "relevantChildren":obj1}];
-    }
+  if (verbose){
+    console.log("recursiveVisit", obj1, obj2);
+    console.log(similarityString(obj1));
+    console.log(similarityString(obj2));
   }
   
-  if (obj1.children && obj2.children){
+  if (obj1 && obj2 && obj1.children && obj2.children){
+    if (verbose){
+      console.log("children");
+    }
     var divergences = [];
     var children1 = obj1.children;
     var children2 = obj2.children;
@@ -383,6 +448,7 @@ function recursiveVisit(obj1,obj2){
     //these objects have messy children that need matching
     if (numChildren1!=numChildren2){
       divergences = divergences.concat(recursiveVisitMismatchedChildren(obj1,obj2));
+      return divergences;
     }
     
     //proceed on the assumption that we can just index into these
@@ -392,44 +458,127 @@ function recursiveVisit(obj1,obj2){
       if (!(nodeEquals(children1[i],children2[i]))){
         var newDivergences = recursiveVisitMismatchedChildren(obj1,obj2);
         divergences = divergences.concat(newDivergences);
-        break;
+        return divergences;
       }
     }
     
-    //if all children matched, we'll hit this point and just return
-    //an empty list.  else things will have been added to divergences
-    //console.log("About to return from recursiveVisit and divergences are: ", divergences);
+    //if we're here, we didn't have to do mismatched children at this step
+    //recurse normally
+    for (var i=0; i<numChildren1; i++){
+      var newDivergences = recursiveVisit(children1[i],children2[i]);
+      divergences = divergences.concat(newDivergences);
+    }
+    
     return divergences;
   }
   else{
+    if (verbose) {
+      console.log("don't have children of both objects");
+    }
     //we hit this if only one of obj1 and obj2 has children
+    //or if only one of obj1 and obj2
     //this is bad stuff.  we matched all the parents, but things went
     //bad here, so this should definitely be a divergence
     //seems like probably a dom node was added to or removed from
     //obj1 or obj2
-    if(obj1.children){
+    if(!obj1){
+      if(!(obj2 && obj2.prop && obj2.prop.innerText)){
+        return[];
+      }
+      if (verbose || scenarioVerbose){
+        console.log("Scenario 6 divergence, For some reason, we called recursiveVisit without an obj1");
+        console.log(obj1,obj2);
+      }
+      return[
+        {"type":"A node is present that was not present in the original page.",
+        "record":obj1,
+        "replay":obj2,
+        "relevantChildren":[],
+        "relevantChildrenXPaths":[xpathFromAbstractNode(obj2)]}];
+    }
+    else if(!obj2){
+      if(!(obj1 && obj1.prop && obj1.prop.innerText)){
+        return[];
+      }
+      if (verbose || scenarioVerbose){
+        console.log("Scenario 7 divergence, for some reason we called recursiveVisit without an obj2");
+        console.log(obj1,obj2);
+      }
+      return[
+        {"type":"A node is missing that was present in the original page.",
+        "record":obj1,
+        "replay":obj2,
+        "relevantChildren":[],
+        "relevantChildrenXPaths":[xpathFromAbstractNode(obj2)]}];
+    }
+    else if(obj1.children){
+      
+      var text = ""
+      for (var i = 0;i<obj1.children.length;i++){
+        var child = obj1.children[i];
+        if (child.prop && child.prop.innerText){
+          text+=child.prop.innerText;
+        }
+      }
+      if (text==""){
+        return[];
+      }
+      
+      if (verbose || scenarioVerbose){
+        console.log("Scenario 8 divergence, obj2 lacks children");
+        console.log(obj1,obj2);
+      }
       return[
         {"type":"A node or nodes is missing that was present in the original page.",
         "record":obj1,
         "replay":obj2,
-        "relevantChildren":obj1.children}];
+        "relevantChildren":obj1.children,
+        "relevantChildrenXPaths":[xpathFromAbstractNode(obj2)]}];
     }
     else if(obj2.children){
+      
+      var text = ""
+      for (var i = 0;i<obj2.children.length;i++){
+        var child = obj2.children[i];
+        if (child.prop && child.prop.innerText){
+          text+=child.prop.innerText;
+        }
+      }
+      if (text==""){
+        return[];
+      }
+      
+      if (verbose || scenarioVerbose){
+        console.log("Scenario 9 divergence, obj1 lacks children");
+        console.log(obj1,obj2);
+      }
       return[
         {"type":"A node or nodes is present that was not present in the original page.",
         "record":obj1,
         "replay":obj2,
-        "relevantChildren":obj2.children}];
+        "relevantChildren":obj2.children,
+        "relevantChildrenXPaths":[xpathFromAbstractNode(obj2)]}];
     }
     //we also hit this if neither node has children.
     //then we've hit leaves, and the leaves must diverge, or we
     //wouldn't have called this method on them
     else{
       //neither has children
+      if (nodeEquals(obj1,obj2)){
+        //Yay!  We descended all the way, and the nodes are the same
+        return [];
+      }
+      if (verbose || scenarioVerbose){
+        console.log("Scenario 10 divergence, descended all the way, and the nodes aren't the same");
+        console.log(obj1,obj2);
+      }
+      //sad, we descended all the way and the nodes aren't the same
       return[
         {"type":"We expect these nodes to be the same, but they're not.",
         "record":obj1,
-        "replay":obj2}];
+        "replay":obj2,
+        "relevantChildren":obj2,
+        "relevantChildrenXPaths":[xpathFromAbstractNode(obj2)]}];
     }
   }
 };
@@ -447,31 +596,19 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
   var children1NumMatches = [];
   var children1MatchedWith = [];
   var children2MatchedWith = [];
-  var children1ToIgnore = [];
-  var children2ToIgnore = [];
   
-  console.log("recursive visit mismatched children", obj1, obj2);
-  console.log(similarityString(obj1));
-  console.log(similarityString(obj2));
+  if (verbose){
+    console.log("recursive visit mismatched children", obj1, obj2);
+    console.log(similarityString(obj1));
+    console.log(similarityString(obj2));
+  }
   
   for(var i=0;i<numChildren1;i++){
     children1NumMatches.push(0);
     children1MatchedWith.push(-1);
-    if (children1[i].prop && children1[i].prop.tagName){
-      children1ToIgnore.push(children1[i].prop.tagName in ignoreTagNames);
-    }
-    else {
-      children1ToIgnore.push(false);
-    }
   }
   for(var i=0;i<numChildren2;i++){
     children2MatchedWith.push(-1);
-    if (children2[i].prop && children2[i].prop.tagName){
-      children2ToIgnore.push(children2[i].prop.tagName in ignoreTagNames);
-    }
-    else{
-      children2ToIgnore.push(false);
-    }
   }
   
   //let's iterate through obj2's children and try to find a
@@ -480,12 +617,8 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
   
   for(var i=0;i<numChildren2;i++){
     var child2 = children2[i];
-    if (children2ToIgnore[i]){
-      continue;
-    }
     //first let's see if the corresponding child actually does work
     if(i < numChildren1 &&
-      !children1ToIgnore[i] &&
       (
       sameId(child2,children2[i]) ||
       sameTagAndTagSufficient(child2,children1[i]) ||
@@ -499,22 +632,20 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
     //otherwise let's do our matching based just on similarity
     else{
       
-      console.log("didn't match i", child2, children1[i]);
-      console.log(similarityString(child2));
-      console.log(similarityString(children1[i]));
-      console.log("nodeEquals", nodeEquals(child2,children1[i]));
-      if (child2 && children1[i] && child2.prop && children1[i].prop && child2.prop.tagName && children1[i].prop.tagName){
-        console.log("tagName ", child2.prop.tagName==children1[i].prop.tagName, (child2.prop.tagName in acceptTags));
+      if (verbose){
+        console.log("didn't match i", child2, children1[i]);
+        console.log(similarityString(child2));
+        console.log(similarityString(children1[i]));
+        console.log("nodeEquals", nodeEquals(child2,children1[i]));
+        if (child2 && children1[i] && child2.prop && children1[i].prop && child2.prop.tagName && children1[i].prop.tagName){
+          console.log("tagName ", child2.prop.tagName==children1[i].prop.tagName, (child2.prop.tagName in acceptTags));
+        }
+        console.log("similarity", similarity(child2,children1[i]), similarity(child2,children1[i])>similarityThreshold);
       }
-      console.log("similarity", similarity(child2,children1[i]), similarity(child2,children1[i])>similarityThreshold);
-      
 	  
       var maxSimilarityScore=0;
       var maxSimilarityScoreIndex=0;
       for (var j=0;j<numChildren1;j++){
-        if (children1ToIgnore[j]){
-          continue;
-        }
         var child1 = children1[j];
         if(nodeEquals(child2,child1) || sameTagAndTagSufficient(child2,child1) || sameId(child2,child1)){
           //we can rest assured about child1 and child2
@@ -545,23 +676,29 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
       //otherwise, let's assume we haven't found a match for child2
       //and it was added to obj2's page
       else if (children2MatchedWith[i]==-1){
-        console.log("Scenario 1 divergence, couldn't find a match for child2", child2, "in the original page");
-        console.log(obj1,obj2);
+        if (!(child2 && child2.prop && child2.prop.innerText)){
+          return [];
+        }
+        if (verbose || scenarioVerbose){
+          console.log("Scenario 1 divergence, couldn't find a match for child2", child2, "in the original page");
+          console.log(obj1,obj2);
+        }
         divergences.push(
           {"type":"A node is present that was  not present in the original page.",
           "record":obj1,
           "replay":obj2,
-          "relevantChildren":[child2]});
+          "relevantChildren":[child2],
+          "relevantChildrenXPaths":[xpathFromAbstractNode(child2)]});
       }
     }
   }
   
-  /*
-  console.log("iterated through all children, assigned anything with sufficiently high similarity score");
-  console.log("children1NumMatches", children1NumMatches);
-  console.log("children1MatchedWith", children1MatchedWith);
-  console.log("children2MatchedWith", children2MatchedWith);
-  */
+  if (verbose){
+    console.log("iterated through all children, assigned anything with sufficiently high similarity score");
+    console.log("children1NumMatches", children1NumMatches);
+    console.log("children1MatchedWith", children1MatchedWith);
+    console.log("children2MatchedWith", children2MatchedWith);
+  }
   
   //now we need to see which of obj1's children didn't have any obj2
   //children mapped to them
@@ -584,8 +721,7 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
 		  //potential sibling class
 		  var numSiblingsInObj1Page = 1; //starts at 1 because item i
 		  for (var j=0;j<numChildren1;j++){
-			  if(!children1ToIgnore[j] &&
-          children1NumMatches[j]==0 && 
+			  if(children1NumMatches[j]==0 && 
           (nodeEquals(children1[i],children1[j]) || 
           similarity(children1[i],children1[j])>similarityThreshold)){
 				  //we have a match!
@@ -598,19 +734,26 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
 		  //let's distinguish between 1-1 mappings and sibling classes here
 		  if (numSiblingsInObj1Page>1 || children1NumMatches[i]>1){
         //this is a case of having multiple similar siblings
-        console.log("Scenario 2 divergence, different numbers of children like", children1NumMatches[i]);
-        console.log(obj1,obj2);
+        if (verbose || scenarioVerbose){
+          console.log("Scenario 2 divergence, different numbers of children like", children1[i], "at position i ", i);
+          console.log(obj1,obj2);
+          console.log(similarityStringClasses(obj1));
+          console.log(similarityStringClasses(obj2));
+        }
         divergences.push(
           {"type":"The original page had "+numSiblingsInObj1Page+
           " instances of a particular kind of node, but this page has "
           +children1NumMatches[i]+" different instances.",
           "record":obj1,
           "replay":obj2,
-          "relevantChildren":[children1[i]]});
+          "relevantChildren":[children1[i]],
+          "relevantChildrenXPaths":[xpathFromAbstractNode(obj2)]});
 		  }
 		  else{
         //1-1 mapping, so let's keep descending to find out what's going on
-        //console.log("going to recurse with i", i);
+        if (verbose){
+          console.log("going to recurse with i", i);
+        }
 			  divergences = divergences.concat(recursiveVisit(children1[i],children2[children1MatchedWith[i]]));
 		  }
 	  }
@@ -622,15 +765,20 @@ function recursiveVisitMismatchedChildren(obj1,obj2){
   //was actually removed
   
   for(var i=0;i<numChildren1;i++){
-	  if(children1NumMatches[i]==0 && !children1ToIgnore[i]){
-      console.log("Scenario 3 divergence, couldn't find a match for child1", children1[i], "in the new page");
-      //console.log(children1NumMatches);
-      console.log(obj1,obj2);
+	  if(children1NumMatches[i]==0){
+      if (verbose || scenarioVerbose){
+        console.log("Scenario 3 divergence, couldn't find a match for child1", children1[i], "in the new page");
+        console.log(obj1,obj2);
+      }
+      if(!(children1[i].prop && children1[i].prop.innerText)){
+        return [];
+      }
       divergences.push(
         {"type":"A node is missing that was present in the original page.",
         "record":obj1,
         "replay":obj2,
-        "relevantChildren":[children1[i]]});
+        "relevantChildren":[children1[i]],
+        "relevantChildrenXPaths":[xpathFromAbstractNode(obj2)]});
 	  }
   }
   return divergences;
@@ -645,6 +793,23 @@ function similarityString(obj1){
     
     for (var i=0;i<numChildren1;i++){
       if (children1[i].prop) obj1String+=children1[i].prop.tagName;
+    }
+    return obj1String;
+  }
+  else{
+    return "";
+  } 
+}
+
+function similarityStringClasses(obj1){
+  if (obj1 && obj1.children){
+    
+    var obj1String=obj1.prop.tagName+obj1.prop.className;
+    var children1 = obj1.children;
+    var numChildren1=obj1.children.length;
+    
+    for (var i=0;i<numChildren1;i++){
+      if (children1[i].prop) obj1String+=(children1[i].prop.tagName+children1[i].prop.className);
     }
     return obj1String;
   }
