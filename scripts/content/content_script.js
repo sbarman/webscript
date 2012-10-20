@@ -78,11 +78,10 @@ function getEventProps(type) {
 // create an event record given the data from the event handler
 function processEvent(eventData) {
   if (recording) {
-    console.log(eventData);
     var type = eventData.type;
     var dispatchType = getEventType(type);
     var properties = getEventProps(type);
-    console.log("[" + id + "]extension event:", eventData);
+    console.log("[" + id + "] process event:", type, dispatchType, eventData);
 
     var target = eventData.target;
     var nodeName = target.nodeName.toLowerCase();
@@ -115,7 +114,7 @@ function processEvent(eventData) {
       }
     }
 
-    console.log("extension sending:", eventMessage);
+    console.log("[" + id + "] event message:", eventMessage);
     port.postMessage({type: "event", value: eventMessage});
   }
   return true;
@@ -123,13 +122,12 @@ function processEvent(eventData) {
 
 // event handler for messages coming from the background page
 function handleMessage(request) {
-  console.log("[" + id + "]extension receiving:", request);
+  console.log("[" + id + "] handle message:", request, request.type);
   if (request.type == "recording") {
     recording = request.value;
   } else if (request.type == "params") {
     updateParams(request.value);
   } else if (request.type == "event") {
-    console.log("extension event", request)
     var e = request.value;
     var nodes = xPathToNodes(e.target);
     for (var i = 0, ii = nodes.length; i < ii; ++i) {
@@ -153,11 +151,12 @@ function updateParams(newParams) {
     var oldListOfEvents = oldEvents[eventType];
     for (var e in listOfEvents) {
       if (listOfEvents[e] && !oldListOfEvents[e]) {
-        console.log("[" + id + "]extension listening for " + e);
+        console.log("[" + id + "] extension listening for " + e);
         document.addEventListener(e, processEvent, true);
       } else if (!listOfEvents[e] && oldListOfEvents[e]) {
-        console.log("[" + id + "]extension stopped listening for " + e);
+        console.log("[" + id + "] extension stopped listening for " + e);
         document.removeEventListener(e, processEvent, true);
+        document.removeEventListener(e, checkBubble, false);
       }
     }
   }
@@ -194,27 +193,46 @@ function simulate(element, eventData) {
 
   var options = jQuery.extend({}, defaultProperties, eventData);
 
+  var setEventProp = function(e, prop, value) {
+    Object.defineProperty(e, prop, {value: value});
+    if (e.prop != value) {
+      Object.defineProperty(e, prop, {get: function() {value}});
+      Object.defineProperty(e, prop, {value: value});
+    }
+  }
+
   var oEvent = document.createEvent(eventType);
-  if (eventType == 'Events') {
+  if (eventType == 'Event') {
     oEvent.initEvent(eventName, options.bubbles, options.cancelable);
-  } else if (eventType == 'MouseEvents') {
+  } else if (eventType == 'MouseEvent') {
     oEvent.initMouseEvent(eventName, options.bubbles, options.cancelable,
         document.defaultView, options.detail, options.screenX,
         options.screenY, options.clientX, options.clientY,
         options.ctrlKey, options.altKey, options.shiftKey, options.metaKey,
         options.button, element);
-  } else if (eventType == 'KeyEvents') {
-    oEvent.initKeyEvent(eventName, options.bubbles, options.cancelable,
+  } else if (eventType == 'KeyboardEvent') {
+    oEvent.initKeyboardEvent(eventName, options.bubbles, options.cancelable,
         document.defaultView, options.ctrlKey, options.altKey,
         options.shiftKey, options.metaKey, options.keyCode,
         options.charCode);
-  } else if (eventType == 'TextEvents') {
+
+    setEventProp(oEvent, "charCode", options.charCode);
+    setEventProp(oEvent, "keyCode", options.keyCode);
+    /*
+    for (var p in options) {
+      if (p != "nodeName" && p != "dispatchType" && p != "URL" && 
+          p != "timeStamp")
+        setEventProp(oEvent, p, options[p]);
+    }
+    */
+  } else if (eventType == 'TextEvent') {
     oEvent.initTextEvent(eventName, options.bubbles, options.cancelable,
         document.defaultView, options.data, options.inputMethod,
         options.locale);
   } else {
     console.log("Unknown type of event");
   }
+  console.log("[" + id + "] dispatchEvent", eventName, options, oEvent);
   element.dispatchEvent(oEvent);
   
   //let's update a div letting us know what event we just got
@@ -230,13 +248,13 @@ function simulate(element, eventData) {
     font-size:10px');
   replayStatusDiv.innerHTML = "Received Event: "+eventData.type;
   document.body.appendChild(replayStatusDiv);	
-  console.log("appended child", replayStatusDiv.innerHTML);
+  console.log("[" + id + "] appended child", replayStatusDiv.innerHTML);
   
   //let's try seeing divergence
   var recordDom = eventData.snapshotAfter;
   var replayDom = snapshotDom(document);
-  console.log(recordDom);
-  console.log(replayDom);
+  console.log("[" + id + "] record DOM", recordDom);
+  console.log("[" + id + "] replay DOM", replayDom);
   checkDomDivergence(recordDom,replayDom);
 }
 

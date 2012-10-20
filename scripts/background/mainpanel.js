@@ -223,7 +223,7 @@ var ScriptServer = (function ScriptServerClosure() {
               var msgValue = e.msg.value;
               evtMsg["dom_post_event_state"] = msgValue.snapshotAfter;
               evtMsg["dom_pre_event_state"] = msgValue.snapshotBefore;
-              evtMsg["event_type"] = evtMsg.type;
+              evtMsg["event_type"] = msgValue.type;
               evtMsg["execution_order"] = i;
 
               var parameters = [];

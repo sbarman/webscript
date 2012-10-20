@@ -8,7 +8,7 @@ var params = null;
 (function() {
   // List of all events and whether or not we should capture them
   var capturedEvents = {
-    'Events': {
+    'Event': {
       //'abort': true,
       'blur': true,
       'change': true,  // change event occurs before focus is lost (blur)
@@ -26,7 +26,7 @@ var params = null;
       'submit': true,
       'unload': false,
     },
-    'MouseEvents': {
+    'MouseEvent': {
       'click': true,
       'dblclick': true,
       'mousedown': true,
@@ -38,24 +38,24 @@ var params = null;
   //    'dragenter': false,
   //    'dragleave': false,
     },
-    'KeyEvents': {
+    'KeyboardEvent': {
       'keydown': true,
       'keyup': true,
       'keypress': true,
     },
-    'TextEvents': {
-      'textInput': false,  // similar to input event, doesn trigger with cp/pst
+    'TextEvent': {
+      'textInput': true,  // similar to input event, doesn trigger with cp/pst
     }
   };
   
   var defaultOptions = {
-    'Events': {
+    'Event': {
       'type': true,
       'bubbles': true,
       'cancelable': true,
       'timeStamp': 0
     },
-    'MouseEvents': {
+    'MouseEvent': {
       'type': true,
       'bubbles': true,
       'cancelable': true,
@@ -71,7 +71,7 @@ var params = null;
       'button': 0,
       'timeStamp': 0
     },
-    'KeyEvents': {
+    'KeyboardEvent': {
       'type': true,
       'bubbles': true,
       'cancelable': true,
@@ -83,7 +83,7 @@ var params = null;
       'charCode': 0,
       'timeStamp': 0
     },
-    'TextEvents': {
+    'TextEvent': {
       'type': true,
       'bubbles': true,
       'cancelable': true,
