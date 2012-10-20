@@ -5,7 +5,8 @@
 
 var snapshotDom = null;
 var compareDom = null;
-var replayDivs = ["replayStatus"];
+var ignoreClasses = ["replaystatus"];
+var ignoreTags = ["script", "style"];
  
 (function() {
 
@@ -25,7 +26,7 @@ var replayDivs = ["replayStatus"];
           var value = oChild.nodeValue.trim();
           if (value)
             children.push(value); /* nodeType is "Text" (3) */ 
-        } else if (oChild.nodeType === 1 && !oChild.prefix && !(_.reduce(replayDivs, function(acc,div){return acc && oChild.classList.contains(div);},true))) {
+        } else if (oChild.nodeType === 1 && !oChild.prefix && !ignoreTag(oChild) && !ignoreClass(oChild)) {
           var child = createObjTree(oChild); /* nodeType is "Element" (1) */
           children.push(child);
         }
@@ -37,8 +38,10 @@ var replayDivs = ["replayStatus"];
     for (var prop in oNode) {
       try {
         var val = oNode[prop];
-        if (typeof val == 'string' || typeof val == 'number' || 
-            typeof val == 'boolean') {
+        var firstChar = prop[0];
+        if (firstChar == firstChar.toLowerCase() && 
+            (typeof val == 'string' || typeof val == 'number' || 
+            typeof val == 'boolean')) {
           vReturnVal.prop[prop] = val;
         }
       } catch(e) {
@@ -47,6 +50,33 @@ var replayDivs = ["replayStatus"];
     }
     }
     return vReturnVal;
+  }
+  
+  function descendToBody(oNode){
+    if (oNode.nodeName.toLowerCase()=="body"){
+      return createObjTree(oNode);
+    }
+
+    if (oNode.hasChildNodes()) {
+      for (var oChild, nItem = 0; nItem < oNode.childNodes.length; nItem++) {
+        oChild = oNode.childNodes.item(nItem);
+        var ret = descendToBody(oChild);
+        if (ret){
+          return ret;
+        }
+      }
+    }
+    
+    return null;
+  }
+  
+  function ignoreTag(oNode){
+    return _.contains(ignoreTags,oNode.nodeName.toLowerCase());
+  }
+  
+  function ignoreClass(oNode){
+    var lowerCaseClassList = _.map(oNode.classList,function(div){return div.toLowerCase();});
+    return _.reduce(ignoreClasses, function(acc,div){return acc || _.contains(lowerCaseClassList,div);},false);
   }
 
   function getDifferences(tree1, tree2) {
@@ -62,7 +92,7 @@ var replayDivs = ["replayStatus"];
 
   }
   
-  snapshotDom = createObjTree;
+  snapshotDom = descendToBody;
   compareDom = getDifferences;
 
 })();
