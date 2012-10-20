@@ -238,99 +238,147 @@ function simulate(element, eventData) {
   sendAlert("Received Event: "+eventData.type);
   
   //let's try seeing divergence
-  visualizeDivergence(eventData);
+  visualizeDivergence(element, eventData);
 
 }
 
-function visualizeDivergence(eventData){
+function visualizeDivergence(element, eventData){
   
   var recordDomBefore = eventData.snapshotBefore;
   var recordDomAfter = eventData.snapshotAfter;
   var replayDomBefore = curSnapshot;
   curSnapshot = snapshot();
   var replayDomAfter = curSnapshot;
-  
-  
-  
-  console.log("-------------------");
+
   var recordDeltas = checkDomDivergence(recordDomBefore,recordDomAfter);
   console.log("RECORD DELTAS");
   console.log(recordDeltas);
-  
   for (var i=0;i<recordDeltas.length;i++){
     var replayDelta = recordDeltas[i];
-    console.log("TYPE");
     console.log(replayDelta.type);
-    analyzeDelta(replayDelta);
-    
-    console.log("RECORD TEXT");
-    if (replayDelta.record.prop && replayDelta.record.prop.innerText){
-      console.log(replayDelta.record.prop.innerText);
-    }
-    console.log("REPLAY TEXT");
-    if (replayDelta.replay.prop && replayDelta.replay.prop.innerText){
-      console.log(replayDelta.replay.prop.innerText);
-    }
-    
-    console.log("RELEVANT TEXT");
-    if (replayDelta.relevantChildren && replayDelta.relevantChildren[0] && replayDelta.relevantChildren[0].prop && replayDelta.relevantChildren[0].prop.innerText){
-      console.log(replayDelta.relevantChildren[0].prop.innerText);
-    }
-    /*
-    for (var j=0;j<replayDelta.relevantChildren.length;j++){
-      var replayDeltaChild = replayDelta.relevantChildrenXPaths[j];
-      console.log(replayDelta.relevantChildren[j]);
-      var elements = xPathToNodes(replayDeltaChild);
-      for (var k=0;k<elements.length;k++){
-        console.log(elements[k]);
-      }
-    }
-    */
   }
   
   var replayDeltas = checkDomDivergence(replayDomBefore,replayDomAfter);
-  console.log("-------------------");
   console.log("REPLAY DELTAS");
   console.log(replayDeltas);
-  
   for (var i=0;i<replayDeltas.length;i++){
     var replayDelta = replayDeltas[i];
-    console.log("TYPE");
     console.log(replayDelta.type);
-    analyzeDelta(replayDelta);
-    
-    console.log("REPLAY TEXT");
-    if (replayDelta.record.prop && replayDelta.record.prop.innerText){
-      console.log(replayDelta.record.prop.innerText);
-    }
-    console.log("RECORD TEXT");
-    if (replayDelta.replay.prop && replayDelta.replay.prop.innerText){
-      console.log(replayDelta.replay.prop.innerText);
-    }
-    
-    console.log("RELEVANT TEXT");
-    if (replayDelta.relevantChildren && replayDelta.relevantChildren[0] && replayDelta.relevantChildren[0].prop && replayDelta.relevantChildren[0].prop.innerText){
-      console.log(replayDelta.relevantChildren[0].prop.innerText);
-    }
-    /*
-    for (var j=0;j<replayDelta.relevantChildren.length;j++){
-      var replayDeltaChild = replayDelta.relevantChildrenXPaths[j];
-      console.log(replayDelta.relevantChildren[j]);
-      var elements = xPathToNodes(replayDeltaChild);
-      for (var k=0;k<elements.length;k++){
-        console.log(elements[k]);
-      }
-    }
-    */
   }
   
-  console.log("-------------------");
+  //effects of events that were found in record browser but not replay browser
+  var recordDeltasNotMatched = filterOutInitialDivergences(recordDeltas, replayDeltas);
+  //effects of events that were found in replay browser but not record browser
+  var replayDeltasNotMatched = filterOutInitialDivergences(replayDeltas, recordDeltas);
+  
+  for (var i=0;i<recordDeltasNotMatched.length;i++){
+    var delta = recordDeltasNotMatched[i];
+    if(delta.type == "We expect these nodes to be the same, but they're not."){
+      //buggy
+      //generateMismatchedValueCompensationEvent(element,delta,true);
+      console.log("here we'd generate annotation events");
+    }
+  }
+  
+  for (var i=0;i<replayDeltasNotMatched.length;i++){
+    var delta = replayDeltasNotMatched[i];
+    if(delta.type == "We expect these nodes to be the same, but they're not."){
+      //buggy
+      //generateMismatchedValueCompensationEvent(element,eventData,delta,false);
+      console.log("here we'd generate annotation events");
+    }
+  }
 }
 
-function analyzeDelta(delta){
-  return;
-}
+//generate annotation events for the case where we just have different
+//values for properties of matched nodes
+function generateMismatchedValueCompensationEvent(element, eventData, delta, thisDeltaShouldHappen){
+  if (thisDeltaShouldHappen){
+    var propsToChange = divergingProps(delta.record,delta.replay);
+    var replayStatements = [];
+    for (var i=0;i<propsToChange.length;i++){
+      var prop = propsToChange[i];
+      var valueAtRecordBefore = delta.record.prop[prop];
+      var valueAtRecordAfter = delta.replay.prop[prop];
+      
+      //if we can find a property of the message, use that
+      var messageProp = messagePropMatchingValue(eventData,valueAtRecordAfter);
+      if (messageProp){
+        replayStatements.push({'target':prop,'messageProp':messageProp});
+        continue;
+      }
+      //if we can find a property of the original element, use that
+      var elementProp = elementPropMatchingValue(delta.record,valueAtRecordAfter);
+      if (elementProp){
+        replayStatements.push({'target':prop,'elementProp':elementProp});
+        continue;
+      }
+      //if we can find a concatenatio of one of those guys, use that
+      var concatList = concatMatchingValue(eventData,delta.record,valueAtRecordAfter);
+      if (concatList){
+        replayStatements.push({'target':prop,'concatList':messageProp});
+        continue;
+      }
+      //else, use the value of valueAtRecordAfter
+      replayStatements.push({'target':prop,'constant':valueAtRecordAfter});
+    }
+    
+    //now we know what statement we want to do at replay to correct each
+    //diverging prop
+    addCompensationEvent(eventData.type, eventData.nodeName, replayStatements);
+  }
+};
 
+function addCompensationEvent(typeOfEvent,typeOfNode,replayStatements){
+  var name = typeOfEvent+"_"+typeOfNode;
+  var guard = function(eventData, eventMessage) {
+                return eventMessage.nodeName == typeOfNode &&
+                        eventMessage.type == typeOfEvent;
+              };
+  var replay = function keypressReplay(element, eventMessage) {
+                  //iterate through the statements we want to execute
+                  for(var i = 0;i<replayStatements.length;i++){
+                    var replayStatment = replayStatments[i];
+                    var rhs;
+                    //the statement gets the value from the eventMessage
+                    if (replayStatment.messageProp){
+                      rhs = eventMessage[replayStatement.messageProp];
+                    }
+                    //the statement gets the value from the element
+                    else if(replayStatement.elementProp){
+                      rhs = element[replayStatement.elementProp];
+                    }
+                    //the statement uses a concatenation
+                    else if(replayStatement.concatList){
+                      var first = replayStatement.concatList[0];
+                      var second = replayStatement.concastList[1];
+                      var firstVal, secondVal;
+                      if (first.message){
+                        firstVal = eventMessage[first.prop];
+                      }
+                      else{
+                        firstVal = element[first.prop];
+                      }
+                      if (second.message){
+                        secondVal = eventMessage[second.prop];
+                      }
+                      else{
+                        secondVal = element[second.prop];
+                      }
+                      rhs = firstVal+secondVal;
+                    }
+                    //the statement uses a constant
+                    else{
+                      rhs = replayStatement.constant;
+                    }
+                    //let's set our target property equal to the rhs
+                    element[replayStatement.target] = rhs;
+                  }
+                };
+  annotationEvents[name] = {"guard":guard,"record":null,"replay":replay};
+};
+
+//function for sending an alert that the user will see
 function sendAlert(msg){
   var replayStatusDiv = document.createElement("div");
   replayStatusDiv.setAttribute('class','replayStatus');
@@ -350,14 +398,8 @@ function checkDomDivergence(recordDom, replayDom){
   var body1 = findBody(recordDom);
   var body2 = findBody(replayDom);
   var divergences = recursiveVisit(body1, body2);
-  //console.log("DIVERGENCES");
-  //console.log(divergences);
   return divergences;
 };
-
-function generateAnnotationEvents(){
-  return;
-}
 
 function filterOutInitialDivergences(divergences, initialDivergences){
   var finalDivergences = [];
@@ -368,8 +410,9 @@ function filterOutInitialDivergences(divergences, initialDivergences){
     for (var j in initialDivergences){
       var initDivergence = initialDivergences[j];
       //console.log("initDivergence", initDivergence);
-      if (divergenceEquals(divergence, initDivergence)){
+      if (divergenceSameAcrossBrowsers(divergence, initDivergence)){
         divMatched = true;
+        continue;
       }
     }
     if (!divMatched){
@@ -377,6 +420,53 @@ function filterOutInitialDivergences(divergences, initialDivergences){
     }
   }
   return finalDivergences;
+};
+
+//returns true if we match the divergence div1 and the divergence div2
+function divergenceSameAcrossBrowsers(div1,div2){
+  var divergingProps = [];
+  var div1Before = div1.record;
+  var div1After = div1.replay;
+  var div2Before = div2.recrod;
+  var div2After = div2.replay;
+  
+  //which properties are different after the event (in browser 1)?
+  var div1DivergingProps = divergingProps(div1Before,div1After).sort();
+  //which properties are different after the event (in browser 2)?
+  var div2DivergingProps = divergingProps(div2Before,div2After).sort();
+  
+  //if different numbers of properties are different, these
+  //divergences definitely don't match
+  if(div1DivergingProps.length != div2DivergingProps.length){
+    return false;
+  }
+  
+  //iterate through the sorted lists of props
+  //freak out if we get mismatched props (props with different names)
+  //or if the value of that changed prop is not the same in both
+  //browsers
+  for (var i = 0;i<div1DivergingProps.length;i++){
+    if(div1DivergingProps[i]!=div2DivergingProps[i] ||
+        div1After[div1DivergingProps[i]]!=div2After[div2DiverginProps[i]]){
+      return false;
+    }
+  }
+  
+  return true;
+};
+
+//returns a list of the properties for which two objects have different
+//values
+function divergingProps(obj1,obj2){
+  var obj1props = obj1.prop;
+  var obj2props = obj2.prop;
+  var divergingProps = []
+  for (var prop in obj1props){
+    if (obj1props[prop] != obj2props[prop]){
+      divergingProps.push(prop);
+    }
+  }
+  return divergingProps;
 };
 
 function divergenceEquals(div1,div2){
@@ -407,6 +497,7 @@ function divergenceEquals(div1,div2){
   */
 }
 
+//descend to BODY node in the document
 function findBody(dom){
   if (dom){
     if (dom.prop && dom.prop.tagName && 
