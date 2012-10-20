@@ -89,11 +89,10 @@ function getEventProps(type) {
 // create an event record given the data from the event handler
 function processEvent(eventData) {
   if (recording) {
-    console.log(eventData);
     var type = eventData.type;
     var dispatchType = getEventType(type);
     var properties = getEventProps(type);
-    console.log("[" + id + "]extension event:", eventData);
+    console.log("[" + id + "] process event:", type, dispatchType, eventData);
 
     var target = eventData.target;
     var nodeName = target.nodeName.toLowerCase();
@@ -126,7 +125,9 @@ function processEvent(eventData) {
       }
     }
 
-    //console.log("extension sending:", eventMessage);
+
+    console.log("extension sending:", eventMessage);
+    console.log("[" + id + "] event message:", eventMessage);
     port.postMessage({type: "event", value: eventMessage});
   }
   return true;
@@ -134,7 +135,7 @@ function processEvent(eventData) {
 
 // event handler for messages coming from the background page
 function handleMessage(request) {
-  console.log("[" + id + "]extension receiving:", request);
+  console.log("[" + id + "] handle message:", request, request.type);
   if (request.type == "recording") {
     recording = request.value;
   } else if (request.type == "params") {
@@ -168,11 +169,12 @@ function updateParams(newParams) {
     var oldListOfEvents = oldEvents[eventType];
     for (var e in listOfEvents) {
       if (listOfEvents[e] && !oldListOfEvents[e]) {
-        console.log("[" + id + "]extension listening for " + e);
+        console.log("[" + id + "] extension listening for " + e);
         document.addEventListener(e, processEvent, true);
       } else if (!listOfEvents[e] && oldListOfEvents[e]) {
-        console.log("[" + id + "]extension stopped listening for " + e);
+        console.log("[" + id + "] extension stopped listening for " + e);
         document.removeEventListener(e, processEvent, true);
+        document.removeEventListener(e, checkBubble, false);
       }
     }
   }
@@ -209,29 +211,46 @@ function simulate(element, eventData) {
 
   var options = jQuery.extend({}, defaultProperties, eventData);
 
-  var oEvent = document.createEvent(eventType);
-  if (eventType == 'Events') {
-    oEvent.initEvent(eventName, options.bubbles, options.cancelable);
+  var setEventProp = function(e, prop, value) {
+    Object.defineProperty(e, prop, {value: value});
+    if (e.prop != value) {
+      Object.defineProperty(e, prop, {get: function() {value}});
+      Object.defineProperty(e, prop, {value: value});
+    }
+  }
 
-  } else if (eventType == 'MouseEvents') {
+  var oEvent = document.createEvent(eventType);
+  if (eventType == 'Event') {
+    oEvent.initEvent(eventName, options.bubbles, options.cancelable);
+  } else if (eventType == 'MouseEvent') {
     oEvent.initMouseEvent(eventName, options.bubbles, options.cancelable,
         document.defaultView, options.detail, options.screenX,
         options.screenY, options.clientX, options.clientY,
         options.ctrlKey, options.altKey, options.shiftKey, options.metaKey,
         options.button, element);
-  } else if (eventType == 'KeyEvents') {
-    console.log("in keyevents");
-    oEvent.initKeyEvent(eventName, options.bubbles, options.cancelable,
+  } else if (eventType == 'KeyboardEvent') {
+    oEvent.initKeyboardEvent(eventName, options.bubbles, options.cancelable,
         document.defaultView, options.ctrlKey, options.altKey,
         options.shiftKey, options.metaKey, options.keyCode,
         options.charCode);
-  } else if (eventType == 'TextEvents') {
+
+    setEventProp(oEvent, "charCode", options.charCode);
+    setEventProp(oEvent, "keyCode", options.keyCode);
+    /*
+    for (var p in options) {
+      if (p != "nodeName" && p != "dispatchType" && p != "URL" && 
+          p != "timeStamp")
+        setEventProp(oEvent, p, options[p]);
+    }
+    */
+  } else if (eventType == 'TextEvent') {
     oEvent.initTextEvent(eventName, options.bubbles, options.cancelable,
         document.defaultView, options.data, options.inputMethod,
         options.locale);
   } else {
     console.log("Unknown type of event");
   }
+  console.log("[" + id + "] dispatchEvent", eventName, options, oEvent);
   element.dispatchEvent(oEvent);
   
   //let's update a div letting us know what event we just got
@@ -392,6 +411,14 @@ function sendAlert(msg){
     font-size:10px');
   replayStatusDiv.innerHTML = msg;
   document.body.appendChild(replayStatusDiv);	
+  console.log("[" + id + "] appended child", replayStatusDiv.innerHTML);
+  
+  //let's try seeing divergence
+  var recordDom = eventData.snapshotAfter;
+  var replayDom = snapshotDom(document);
+  console.log("[" + id + "] record DOM", recordDom);
+  console.log("[" + id + "] replay DOM", replayDom);
+  checkDomDivergence(recordDom,replayDom);
 }
 
 function checkDomDivergence(recordDom, replayDom){
@@ -445,9 +472,9 @@ function divergenceSameAcrossBrowsers(div1,div2){
   //freak out if we get mismatched props (props with different names)
   //or if the value of that changed prop is not the same in both
   //browsers
-  for (var i = 0;i<div1DivergingProps.length;i++){
-    if(div1DivergingProps[i]!=div2DivergingProps[i] ||
-        div1After[div1DivergingProps[i]]!=div2After[div2DiverginProps[i]]){
+  for (var i = 0; i < div1DivergingProps.length; i++){
+    if(div1DivergingProps[i] != div2DivergingProps[i] ||
+        div1After[div1DivergingProps[i]] != div2After[div2DiverginProps[i]]){
       return false;
     }
   }

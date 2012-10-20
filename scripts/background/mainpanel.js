@@ -223,7 +223,7 @@ var ScriptServer = (function ScriptServerClosure() {
               var msgValue = e.msg.value;
               evtMsg["dom_post_event_state"] = msgValue.snapshotAfter;
               evtMsg["dom_pre_event_state"] = msgValue.snapshotBefore;
-              evtMsg["event_type"] = evtMsg.type;
+              evtMsg["event_type"] = msgValue.type;
               evtMsg["execution_order"] = i;
 
               var parameters = [];
@@ -300,7 +300,7 @@ var ScriptServer = (function ScriptServerClosure() {
             }
             var events = [];
             var serverEvents = script.events.sort(function(a,b) {
-              return a.execution_order > b.execution_order;
+              return a.execution_order - b.execution_order;
             });
 
             for (var i = 0, ii = serverEvents.length; i < ii; ++i) {
@@ -652,7 +652,7 @@ var Replay = (function ReplayClosure() {
     this.scriptServer = scriptServer;
 
     // replay variables
-    this.replayReset();
+    this.reset();
   }
 
   var ReplayState = {
@@ -667,14 +667,24 @@ var Replay = (function ReplayClosure() {
 
       var replay = this;
       this.timeoutHandle = setTimeout(function() {
-        replay.replayGuts();
+        replay.guts();
       }, this.getNextTime());
     },
-    replayReset: function _replayReset() {
+    reset: function _reset() {
       this.index = 0;
       this.portMapping = {};
       this.tabMapping = {};
       this.replayState = ReplayState.REPLAYING;
+    },
+    setNextEvent: function _setNextEvent(time) {
+      if (typeof time == "undefined") {
+        time = this.getNextTime();
+      }
+
+      var replay = this;
+      this.timeoutHandle = setTimeout(function() {
+        replay.guts();
+      }, time);
     },
     getNextTime: function _getNextTime() {
       var timing = params.timing;
@@ -694,10 +704,10 @@ var Replay = (function ReplayClosure() {
         return timing;
       }
     },
-    replayPause: function _replayPause() {
+    pause: function _pause() {
       clearTimeout(this.timeoutHandle);
     },
-    replayFinish: function _replayFinish() {
+    finish: function _finish() {
       var record = this.record;
       var scriptServer = this.scriptServer;
       setTimeout(function() {
@@ -709,9 +719,9 @@ var Replay = (function ReplayClosure() {
         console.log(replayEvents);
       }, 1000);
 
-      this.replayReset();
+      this.reset();
     },
-    replayFindPortInTab: function _replayFindPortInTab(tab, topFrame,
+    findPortInTab: function _findPortInTab(tab, topFrame,
         snapshot, msg) {
 
       var ports = this.ports;
@@ -789,14 +799,14 @@ var Replay = (function ReplayClosure() {
       }
       return newPort;
     },
-    replayGuts: function _replayGuts() {
+    guts: function _guts() {
       var events = this.events;
       var index = this.index;
       var portMapping = this.portMapping;
       var tabMapping = this.tabMapping;
 
       if (index >= events.length) {
-        this.replayFinish();
+        this.finish();
         return;
       }
 
@@ -825,33 +835,21 @@ var Replay = (function ReplayClosure() {
         }
 
         this.index++;
-       
-        var replay = this;
-        this.timeoutHandle = setTimeout(function() {
-          replay.replayGuts();
-        }, this.getNextTime());
+        this.setNextEvent();
 
       // we have already seen this tab, find equivalent port for tab
       // for now we will just choose the last port added from this tab
       } else if (tab in tabMapping) {
-        var newPort = this.replayFindPortInTab(tab, topFrame, snapshot, msg);
+        var newPort = this.findPortInTab(tab, topFrame, snapshot, msg);
 
         if (newPort) {
           portMapping[port] = newPort;
           newPort.postMessage(msg);
         
           this.index++;
-
-          var replay = this;
-          this.timeoutHandle = setTimeout(function() {
-            replay.replayGuts();
-          }, this.getNextTime());
-        } else {
-          var replay = this;
-          this.timeoutHandle = setTimeout(function() {
-            replay.replayGuts();
-          }, this.getNextTime());
         }
+        this.setNextEvent();
+
       // need to open new tab
       } else {
         var replay = this;
@@ -860,9 +858,7 @@ var Replay = (function ReplayClosure() {
             var newTabId = newTab.id;
             replay.tabMapping[tab] = newTabId;
             replay.ports.tabIdToTab[newTabId] = newTab;
-            replay.timeoutHandle = setTimeout(function() {
-              replay.replayGuts();
-            }, 1000);
+            replay.setNextEvent(1000);
           }
         );
       }
@@ -912,7 +908,7 @@ var SimultaneousReplay = (function SimultaneousReplayClosure() {
     }
     //no twin port yet, but we have a twin tab
     else if(desiredTab){
-      var newPort = this.replayFindPortInTab(desiredTab, e.topFrame,
+      var newPort = this.findPortInTab(desiredTab, e.topFrame,
                                              e.snapshot, e.msg);
       if (newPort) {
         this.portToTwinPortMapping[port]=newPort;
@@ -1028,10 +1024,10 @@ var Controller = (function ControllerClosure() {
       replay.replay();
     },
     pause: function() {
-      this.replay.replayPause();
+      this.replay.pause();
     },
     replayReset: function() {
-      this.replay.replayReset();
+      this.replay.reset();
     },
     saveScript: function(name) {
       console.log("saving script");

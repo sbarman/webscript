@@ -19,7 +19,9 @@ var annotationEvents = {};
   }
   
   function keypressReplay(element, eventMessage) {
-    element.value=element.value+String.fromCharCode(eventMessage.keyCode);
+    if (element.value){
+      element.value=element.value+String.fromCharCode(eventMessage.charCode);
+    }
   }
   
   annotationEvents = {
