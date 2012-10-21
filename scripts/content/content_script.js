@@ -174,7 +174,6 @@ function updateParams(newParams) {
       } else if (!listOfEvents[e] && oldListOfEvents[e]) {
         console.log("[" + id + "] extension stopped listening for " + e);
         document.removeEventListener(e, processEvent, true);
-        document.removeEventListener(e, checkBubble, false);
       }
     }
   }
