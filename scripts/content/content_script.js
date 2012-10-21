@@ -103,9 +103,9 @@ function processEvent(eventData) {
     eventMessage["dispatchType"] = dispatchType;
     eventMessage["nodeName"] = nodeName;
 
-    eventMessage["snapshotBefore"] = curSnapshot;
     curSnapshot = snapshot();
-    eventMessage["snapshotAfter"] = curSnapshot;
+    eventMessage["snapshotBefore"] = curSnapshot;
+    eventMessage["snapshotAfter"] = {};
 
     for (var prop in properties) {
       if (prop in eventData) {
