@@ -12,6 +12,7 @@ var PortManager = (function PortManagerClosure() {
     this.tabIdToCurrentPortInfo = {};
     this.portToSnapshot = {};
     this.tabIdToTab = {};
+    this.ack = null;
   }
   
   PortManager.prototype = {
@@ -98,6 +99,15 @@ var PortManager = (function PortManagerClosure() {
           }
         }
       });
+    },
+    getAck: function() {
+      return this.ack;
+    },
+    setAck: function(val) {
+      this.ack = val;
+    },
+    clearAck: function() {
+      this.ack = null;
     }
   };
 
@@ -650,6 +660,7 @@ var Replay = (function ReplayClosure() {
     this.timeoutHandle = null;
     this.record = record;
     this.scriptServer = scriptServer;
+    this.ackVar = null;
 
     // replay variables
     this.reset();
@@ -657,8 +668,7 @@ var Replay = (function ReplayClosure() {
 
   var ReplayState = {
     REPLAYING: 0,
-    TABID: 1,
-    STOPPED: 2
+    ACK: 1
   }
 
   Replay.prototype = {
@@ -826,16 +836,11 @@ var Replay = (function ReplayClosure() {
 
       console.log("background replay:", id, msg, port, tab);
 
+      // lets find the corresponding port
+      var replayPort = null;
       // we have already seen this port, reuse existing mapping
       if (port in portMapping) {
-        try {
-          portMapping[port].postMessage(msg);
-        } catch(err) {
-          console.log(err.message);
-        }
-
-        this.index++;
-        this.setNextEvent();
+        replayPort = portMapping[port];
 
       // we have already seen this tab, find equivalent port for tab
       // for now we will just choose the last port added from this tab
@@ -844,11 +849,11 @@ var Replay = (function ReplayClosure() {
 
         if (newPort) {
           portMapping[port] = newPort;
-          newPort.postMessage(msg);
-        
-          this.index++;
+          replayPort = newPort;
+        } else {
+          this.setNextEvent();
+          return;
         }
-        this.setNextEvent();
 
       // need to open new tab
       } else {
@@ -861,6 +866,36 @@ var Replay = (function ReplayClosure() {
             replay.setNextEvent(1000);
           }
         );
+        return;
+      }
+
+      var type = msg.value.type;
+      var replayPortObj = portMapping[replayPort];
+      if (type == "wait") {
+        if (this.replayState == ReplayState.ACK) {
+          var ackReturn = this.ports.getAck(this.ackVar);
+          if (ackReturn != null && ackReturn == true) {
+            this.index++;
+          }
+        } else if (this.replayState == ReplayState.REPLAYING) {
+          replayPortObj.postMessage(msg);
+          this.ports.clearAck();
+          this.replayState = ReplayState.ACK;
+        } else {
+          throw "unknown replay state";
+        }
+        this.setNextEvent(); 
+
+      } else {
+        // send message 
+        try {
+          replayPortObj.postMessage(msg);
+        } catch(err) {
+          console.log("Error:", err.message);
+        }
+
+        this.index++;
+        this.setNextEvent();
       }
     },
     
@@ -1083,6 +1118,8 @@ var handleMessage = function(port, request) {
     port.postMessage({type: "params", value: params});
   } else if (request.type == "snapshot") {
     ports.addSnapshot(port.name, request.value);
+  } else if (request.type == "ack") {
+    ports.setAck(request.value);
   }
 };
 

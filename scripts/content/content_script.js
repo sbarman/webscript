@@ -143,13 +143,17 @@ function handleMessage(request) {
   } else if (request.type == "event") {
     console.log("extension event", request, request.value.type)
     var e = request.value;
-    var nodes = xPathToNodes(e.target);
-    //if we don't successfully find nodes, let's alert
-    if(nodes.length==0){
-      sendAlert("Couldn't find the DOM node we needed.");
-    }
-    for (var i = 0, ii = nodes.length; i < ii; ++i) {
-      simulate(nodes[i], e);
+    if (e.type == "wait") {
+      checkWait(e);
+    } else {
+      var nodes = xPathToNodes(e.target);
+      //if we don't successfully find nodes, let's alert
+      if(nodes.length==0){
+        sendAlert("Couldn't find the DOM node we needed.");
+      }
+      for (var i = 0, ii = nodes.length; i < ii; ++i) {
+        simulate(nodes[i], e);
+      }
     }
   } else if (request.type == "snapshot") {
     port.postMessage({type: "snapshot", value: snapshotDom(document)});
@@ -259,6 +263,12 @@ function simulate(element, eventData) {
   //let's try seeing divergence
   visualizeDivergence(element, eventData);
 
+}
+
+function checkWait(eventData) {
+  var conditionFunc = eval(eventData.condition);
+  var result = conditionFunc(document);
+  port.postMessage({type: "ack", value: result});
 }
 
 function visualizeDivergence(element, eventData){
