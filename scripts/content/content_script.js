@@ -265,8 +265,8 @@ function simulate(element, eventData) {
 }
 
 function checkWait(eventData) {
-  var conditionFunc = eval(eventData.condition);
-  var result = conditionFunc(document);
+  console.log("checking:", eventData);
+  var result = eval(eventData.condition);
   port.postMessage({type: "ack", value: result});
 }
 

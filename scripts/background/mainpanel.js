@@ -297,6 +297,9 @@ var ScriptServer = (function ScriptServerClosure() {
     getScript: function _getScript(name, controller) {
       var server = this.server;
       $.ajax({
+        error: function(jqXHR, textStatus, errorThrown) {
+          console.log(data, jqXHR, textStatus);
+        },
         success: function(data, textStatus, jqXHR) {
           console.log(data, textStatus, jqXHR);
           var scripts = data;
@@ -870,26 +873,27 @@ var Replay = (function ReplayClosure() {
       }
 
       var type = msg.value.type;
-      var replayPortObj = portMapping[replayPort];
       if (type == "wait") {
         if (this.replayState == ReplayState.ACK) {
           var ackReturn = this.ports.getAck(this.ackVar);
           if (ackReturn != null && ackReturn == true) {
             this.index++;
+          } else {
+            replayPort.postMessage(msg);
           }
         } else if (this.replayState == ReplayState.REPLAYING) {
-          replayPortObj.postMessage(msg);
           this.ports.clearAck();
           this.replayState = ReplayState.ACK;
+          replayPort.postMessage(msg);
         } else {
           throw "unknown replay state";
         }
-        this.setNextEvent(); 
+        this.setNextEvent(1000); 
 
       } else {
         // send message 
         try {
-          replayPortObj.postMessage(msg);
+          replayPort.postMessage(msg);
         } catch(err) {
           console.log("Error:", err.message);
         }
