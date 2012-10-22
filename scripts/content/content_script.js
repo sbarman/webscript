@@ -357,41 +357,44 @@ function addCompensationEvent(typeOfEvent,typeOfNode,replayStatements){
   var replay = function keypressReplay(element, eventMessage) {
                   //iterate through the statements we want to execute
                   for(var i = 0;i<replayStatements.length;i++){
-                    var replayStatment = replayStatments[i];
-                    var rhs;
-                    //the statement gets the value from the eventMessage
-                    if (replayStatment.messageProp){
-                      rhs = eventMessage[replayStatement.messageProp];
-                    }
-                    //the statement gets the value from the element
-                    else if(replayStatement.elementProp){
-                      rhs = element[replayStatement.elementProp];
-                    }
-                    //the statement uses a concatenation
-                    else if(replayStatement.concatList){
-                      var first = replayStatement.concatList[0];
-                      var second = replayStatement.concastList[1];
-                      var firstVal, secondVal;
-                      if (first.message){
-                        firstVal = eventMessage[first.prop];
+                    //first make sure the target attribute actually exists
+                    if (element[replayStatement.target]){
+                      var replayStatment = replayStatments[i];
+                      var rhs;
+                      //the statement gets the value from the eventMessage
+                      if (replayStatment.messageProp){
+                        rhs = eventMessage[replayStatement.messageProp];
                       }
+                      //the statement gets the value from the element
+                      else if(replayStatement.elementProp){
+                        rhs = element[replayStatement.elementProp];
+                      }
+                      //the statement uses a concatenation
+                      else if(replayStatement.concatList){
+                        var first = replayStatement.concatList[0];
+                        var second = replayStatement.concastList[1];
+                        var firstVal, secondVal;
+                        if (first.message){
+                          firstVal = eventMessage[first.prop];
+                        }
+                        else{
+                          firstVal = element[first.prop];
+                        }
+                        if (second.message){
+                          secondVal = eventMessage[second.prop];
+                        }
+                        else{
+                          secondVal = element[second.prop];
+                        }
+                        rhs = firstVal+secondVal;
+                      }
+                      //the statement uses a constant
                       else{
-                        firstVal = element[first.prop];
+                        rhs = replayStatement.constant;
                       }
-                      if (second.message){
-                        secondVal = eventMessage[second.prop];
-                      }
-                      else{
-                        secondVal = element[second.prop];
-                      }
-                      rhs = firstVal+secondVal;
+                      //let's set our target property equal to the rhs
+                      element[replayStatement.target] = rhs;
                     }
-                    //the statement uses a constant
-                    else{
-                      rhs = replayStatement.constant;
-                    }
-                    //let's set our target property equal to the rhs
-                    element[replayStatement.target] = rhs;
                   }
                 };
   annotationEvents[name] = {"guard":guard,"record":null,"replay":replay};
