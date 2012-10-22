@@ -1,0 +1,24 @@
+<html>
+  <head>
+  </head>
+  <body>
+    <div id="test">I am a div</div>
+    <div id="test1">Click me!</div>
+    <script type="text/javascript">
+      // Test whether wait is working - use script ex8
+      test.addEventListener("click", function(e) {
+        test.textContent += " add";
+      }, false);
+
+      test1.addEventListener("click", function(e) {
+        var newDiv = document.createElement("div");
+        newDiv.setAttribute("id", "test2");
+
+        var test = document.getElementById("test");
+        test.appendChild(newDiv);
+        console.log("added node");
+        console.log(document.dispatchEvent);
+      }, false);
+    </script>
+  </body>
+</html>
