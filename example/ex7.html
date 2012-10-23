@@ -1,0 +1,32 @@
+<html>
+  <head>
+  </head>
+  <body>
+    <div id="cont"><div id="test">I am a div</div></div>
+    <div id="test1">I am also div</div>
+    <script type="text/javascript">
+      // Test whether document.dispatchEvent can be modified
+      // Result: it can modify dispatchEvent
+      var d = document.getElementById("test");
+      d.addEventListener("click", function(e) {
+        console.log("before:", e);
+        //e.preventDefault();
+        //e.stopImmediatePropagation();
+        //e.stopPropagation();
+        console.log("after:", e);
+      }, false);
+
+      var c = document.getElementById("cont");
+      c.addEventListener("click", function(e) {
+        console.log("c before:", e);
+        //e.preventDefault();
+        //e.stopImmediatePropagation();
+        e.stopPropagation();
+        console.log("c after:", e);
+      }, false);
+
+      document.dispatchEvent = 5;
+      console.log(document.dispatchEvent);
+    </script>
+  </body>
+</html>
