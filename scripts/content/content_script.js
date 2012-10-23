@@ -511,13 +511,6 @@ function sendAlert(msg){
   replayStatusDiv.innerHTML = msg;
   document.body.appendChild(replayStatusDiv);	
   console.log("[" + id + "] appended child", replayStatusDiv.innerHTML);
-  
-  //let's try seeing divergence
-  var recordDom = eventData.snapshotAfter;
-  var replayDom = snapshotDom(document);
-  console.log("[" + id + "] record DOM", recordDom);
-  console.log("[" + id + "] replay DOM", replayDom);
-  checkDomDivergence(recordDom,replayDom);
 }
 
 function checkDomDivergence(recordDom, replayDom){

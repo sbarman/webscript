@@ -19,6 +19,7 @@ var annotationEvents = {};
   }
   
   function keypressReplay(element, eventMessage) {
+	console.log("should be replaying keypress");
     if (element.value){
       element.value=element.value+String.fromCharCode(eventMessage.charCode);
     }
