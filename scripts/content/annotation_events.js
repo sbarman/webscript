@@ -30,7 +30,7 @@ var annotationEvents = {};
         return eventMessage.type == "keypress";
       },
       record: null,
-      replay: keypressReplay
+      replay: null
     },
     "clickOption": {
       guard: function(eventData, eventMessage) {

@@ -367,17 +367,39 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
     
     //now we know what statement we want to do at replay to correct each
     //diverging prop
+    console.log("-----------");
+    console.log("name");
+    console.log(replayFunctions);
+    console.log(recordFunctions);
+    console.log("annotation events before ", annotationEvents);
     addCompensationEvent(eventData.type, eventData.nodeName, replayFunctions, recordFunctions);
+    console.log("annotation events after ", annotationEvents);
   }
 };
 
+function createMessagePropMap(eventMessage){
+  var messagePropMap = {};
+  for (var prop in eventMessage){
+    messagePropMap[prop]=eventMessage[prop];
+  }
+  if (eventMessage["keyCode"]){
+    messagePropMap["_charCode_keyCode"]=String.fromCharCode(eventMessage["keyCode"]);
+  }
+  if (eventMessage["charCode"]){
+    messagePropMap["_charCode_charCode"]=String.fromCharCode(eventMessage["charCode"]);
+  }
+  return messagePropMap;
+}
+
 function messagePropMatchingValue(eventMessage,valueAtRecordAfter){
   console.log(eventMessage);
-  for (var prop in eventMessage){
-    if (eventMessage[prop] == valueAtRecordAfter) {
+  var messagePropMap = createMessagePropMap(eventMessage);
+  for (var prop in messagePropMap){
+    if (messagePropMap[prop] == valueAtRecordAfter) {
       return prop;
     }
   }
+  return null;
 };
 
 function elementPropMatchingValue(element,valueAtRecordAfter){
@@ -388,29 +410,31 @@ function elementPropMatchingValue(element,valueAtRecordAfter){
       return prop;
     }
   }
+  return null;
 };
 
 function concatMatchingValue(eventMessage,element,valueAtRecordAfter){
-  for (var prop1 in eventMessage){
-    for (var prop2 in eventMessage){
-      if (eventMessage[prop1]+eventMessage[prop2] == valueAtRecordAfter){
+  var messagePropMap = createMessagePropMap(eventMessage);
+  for (var prop1 in messagePropMap){
+    for (var prop2 in messagePropMap){
+      if (messagePropMap[prop1]+messagePropMap[prop2] == valueAtRecordAfter){
         return [{"element":false,"messageProp":prop1},{"element":false,"messageProp":prop2}];
       }
     }
     for (var prop2 in element){
-      if (eventMessage[prop1]+element[prop2] == valueAtRecordAfter){
+      if (messagePropMap[prop1]+element[prop2] == valueAtRecordAfter){
         return [{"element":false,"messageProp":prop1},{"element":true,"elementProp":prop2}];
       }
     }
   }
   for (var prop1 in element){
-    for (var prop2 in eventMessage){
-      if (eventMessage[prop1]+eventMessage[prop2] == valueAtRecordAfter){
+    for (var prop2 in messagePropMap){
+      if (element[prop1]+messagePropMap[prop2] == valueAtRecordAfter){
         return [{"element":true,"elementProp":prop1},{"element":false,"messageProp":prop2}];
       }
     }
     for (var prop2 in element){
-      if (eventMessage[prop1]+element[prop2] == valueAtRecordAfter){
+      if (element[prop1]+element[prop2] == valueAtRecordAfter){
         return [{"element":true,"elementProp":prop1},{"element":true,"elementProp":prop2}];
       }
     }
@@ -419,9 +443,46 @@ function concatMatchingValue(eventMessage,element,valueAtRecordAfter){
 };
 
 function makeMessagePropFunction(targetProp, messageProp){
-  var messagePropFunction = function(element, eventMessage){
-    if ((typeof element[targetProp]) !== "undefined"){
-      element[targetProp] = eventMessage[messageProp];
+  var messagePropFunction;
+  if (messageProp=="_charCode_keyCode"){
+    messagePropFunction = function(element, eventMessage){
+      if ((typeof element[targetProp]) !== "undefined"){
+        element[targetProp] = String.fromCharCode(eventMessage["keyCode"]);
+      }
+    }
+  }
+  else if (messageProp=="_charCode_charCode"){
+    messagePropFunction = function(element, eventMessage){
+      if ((typeof element[targetProp]) !== "undefined"){
+        element[targetProp] = String.fromCharCode(eventMessage["charCode"]);
+      }
+    }
+  }
+  else{
+    messagePropFunction = function(element, eventMessage){
+      if ((typeof element[targetProp]) !== "undefined"){
+        element[targetProp] = eventMessage[messageProp];
+      }
+    }
+  }
+  return messagePropFunction;
+};
+
+function makeMessagePropRHS(messageProp){
+  var messagePropFunction;
+  if (messageProp=="_charCode_keyCode"){
+    messagePropFunction = function(element, eventMessage){
+      return String.fromCharCode(eventMessage["keyCode"]);
+    }
+  }
+  else if (messageProp=="_charCode_charCode"){
+    messagePropFunction = function(element, eventMessage){
+      return String.fromCharCode(eventMessage["charCode"]);
+    }
+  }
+  else{
+    messagePropFunction = function(element, eventMessage){
+      return eventMessage[messageProp];
     }
   }
   return messagePropFunction;
@@ -447,25 +508,29 @@ function makeConcatFunction(targetProp, concatList){
       }
     }
     else{
+      var messagePropFunc = makeMessagePropRHS(eventMessage[concatList[1].messageProp]);
       concatFunction = function(element, eventMessage){
         if ((typeof element[targetProp]) !== "undefined"){
-          element[targetProp] = element[concatList[0].elementProp] + eventMessage[concatList[1].messageProp];
+          element[targetProp] = element[concatList[0].elementProp] + messagePropFunc(element,eventMessage);
         }
       }
     }
   }
   else{
     if (concatList[1].element == true){
+      var messagePropFunc = makeMessagePropRHS(eventMessage[concatList[0].messageProp]);
       concatFunction = function(element, eventMessage){
         if ((typeof element[targetProp]) !== "undefined"){
-          element[targetProp] = eventMessage[concatList[0].messageProp] + element[concatList[1].elementProp];
+          element[targetProp] = messagePropFunc(element,eventMessage) + element[concatList[1].elementProp];
         }
       }
     }
     else{
       concatFunction = function(element, eventMessage){
+      var messagePropFunc0 = makeMessagePropRHS(eventMessage[concatList[0].messageProp]);
+      var messagePropFunc1 = makeMessagePropRHS(eventMessage[concatList[1].messageProp]);
         if ((typeof element[targetProp]) !== "undefined"){
-          element[targetProp] = eventMessage[concatList[0].messageProp] + eventMessage[concatList[1].messageProp];
+          element[targetProp] = messagePropFunc0(element,eventMessage) + messagePropFunc1(element,eventMessage);
         }
       }
     }
@@ -492,6 +557,9 @@ function makeMirrorRecordFunction(targetProp){
 };
 
 function addCompensationEvent(typeOfEvent,typeOfNode,replayFunctions,recordFunctions){
+  if(recordFunctions.length==0 && replayFunctions.length==0){
+    return;
+  }
   var name = typeOfEvent+"_"+typeOfNode;
   
   var guard = function(eventData, eventMessage) {
