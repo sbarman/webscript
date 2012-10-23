@@ -103,9 +103,9 @@ function processEvent(eventData) {
     eventMessage["dispatchType"] = dispatchType;
     eventMessage["nodeName"] = nodeName;
 
-    curSnapshot = snapshot();
     eventMessage["snapshotBefore"] = curSnapshot;
-    eventMessage["snapshotAfter"] = {};
+    curSnapshot = snapshot();
+    eventMessage["snapshotAfter"] = curSnapshot;
 
     for (var prop in properties) {
       if (prop in eventData) {
@@ -298,6 +298,8 @@ function visualizeDivergence(element, eventData){
   var recordDeltasNotMatched = filterOutInitialDivergences(recordDeltas, replayDeltas);
   //effects of events that were found in replay browser but not record browser
   var replayDeltasNotMatched = filterOutInitialDivergences(replayDeltas, recordDeltas);
+  console.log("recordDeltasNotMatched ", recordDeltasNotMatched);
+  console.log("replayDeltasNotMatched ", replayDeltasNotMatched);
   
   for (var i=0;i<recordDeltasNotMatched.length;i++){
     var delta = recordDeltasNotMatched[i];
@@ -404,7 +406,7 @@ function concatMatchingValue(eventMessage,element,valueAtRecordAfter){
 
 function makeMessagePropFunction(targetProp, messageProp){
   var messagePropFunction = function(element, eventMessage){
-    if (element[targetProp]){
+    if ((typeof element[targetProp]) !== "undefined"){
       element[targetProp] = eventMessage[messageProp];
     }
   }
@@ -413,7 +415,7 @@ function makeMessagePropFunction(targetProp, messageProp){
 
 function makeElementPropFunction(targetProp, elementProp){
   var elementPropFunction = function(element, eventMessage){
-    if (element[targetProp]){
+    if ((typeof element[targetProp]) !== "undefined"){
       element[targetProp] = element[elementProp];
     }
   }
@@ -425,14 +427,14 @@ function makeConcatFunction(targetProp, concatList){
   if (concatList[0].element == true){
     if (concatList[1].element == true){
       concatFunction = function(element, eventMessage){
-        if (element[targetProp]){
+        if ((typeof element[targetProp]) !== "undefined"){
           element[targetProp] = element[concatList[0].elementProp] + element[concatList[1].elementProp];
         }
       }
     }
     else{
       concatFunction = function(element, eventMessage){
-        if (element[targetProp]){
+        if ((typeof element[targetProp]) !== "undefined"){
           element[targetProp] = element[concatList[0].elementProp] + eventMessage[concatList[1].messageProp];
         }
       }
@@ -441,14 +443,14 @@ function makeConcatFunction(targetProp, concatList){
   else{
     if (concatList[1].element == true){
       concatFunction = function(element, eventMessage){
-        if (element[targetProp]){
+        if ((typeof element[targetProp]) !== "undefined"){
           element[targetProp] = eventMessage[concatList[0].messageProp] + element[concatList[1].elementProp];
         }
       }
     }
     else{
       concatFunction = function(element, eventMessage){
-        if (element[targetProp]){
+        if ((typeof element[targetProp]) !== "undefined"){
           element[targetProp] = eventMessage[concatList[0].messageProp] + eventMessage[concatList[1].messageProp];
         }
       }
@@ -459,7 +461,7 @@ function makeConcatFunction(targetProp, concatList){
 
 function makeMirrorFunction(targetProp){
   var mirrorFunction = function(element, eventMessage){
-    if (element[targetProp]){
+    if ((typeof element[targetProp]) !== "undefined"){
       element[targetProp] = eventMessage[targetProp+"_value"];
     }
   }
@@ -468,7 +470,7 @@ function makeMirrorFunction(targetProp){
 
 function makeMirrorRecordFunction(targetProp){
   var mirrorRecordFunction = function(element, eventMessage){
-    if (element[targetProp]){
+    if ((typeof element[targetProp]) !== "undefined"){
       eventMessage[targetProp+"_value"] = element[targetProp];
     }
   }
