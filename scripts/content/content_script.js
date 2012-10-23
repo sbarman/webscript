@@ -304,16 +304,16 @@ function visualizeDivergence(element, eventData){
   for (var i=0;i<recordDeltasNotMatched.length;i++){
     var delta = recordDeltasNotMatched[i];
     if(delta.type == "We expect these nodes to be the same, but they're not."){
-      generateMismatchedValueCompensationEvent(element,delta,true);
-      console.log("here we'd generate annotation events");
+      console.log("here we'd generate annotation events, delta should happen");
+      generateMismatchedValueCompensationEvent(element,eventData,delta,true);
     }
   }
   
   for (var i=0;i<replayDeltasNotMatched.length;i++){
     var delta = replayDeltasNotMatched[i];
     if(delta.type == "We expect these nodes to be the same, but they're not."){
+      console.log("here we'd generate annotation events, delta shouldn't happen");
       generateMismatchedValueCompensationEvent(element,eventData,delta,false);
-      console.log("here we'd generate annotation events");
     }
   }
 }
@@ -322,7 +322,11 @@ function visualizeDivergence(element, eventData){
 //values for properties of matched nodes
 function generateMismatchedValueCompensationEvent(element, eventData, delta, thisDeltaShouldHappen){
   if (thisDeltaShouldHappen){
+    console.log("about to find props");
     var propsToChange = divergingProps(delta.record,delta.replay);
+    propsToChange = _.without(propsToChange,"innerHTML", "outerHTML", "innerText", "outerText");
+    console.log("propsToChange ", propsToChange);
+    
     var replayFunctions = [];
     var recordFunctions = [];
     for (var i=0;i<propsToChange.length;i++){
@@ -333,34 +337,43 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
       //if we can find a property of the message, use that
       var messageProp = messagePropMatchingValue(eventData,valueAtRecordAfter);
       if (messageProp){
-        replayStatements.push(makeMessagePropFunction(prop,messageProp));
+        console.log("NEW ANNOTATION: going to use messageProp, with ", messageProp);
+        replayFunctions.push(makeMessagePropFunction(prop,messageProp));
+        element[prop] = valueAtRecordAfter;
         continue;
       }
       //if we can find a property of the original element, use that
       var elementProp = elementPropMatchingValue(delta.record,valueAtRecordAfter);
       if (elementProp){
+        console.log("NEW ANNOTATION: going to use elementProp, with ", elementProp);
         replayFunctions.push(makeElementPropFunction(prop,elementProp));
+        element[prop] = valueAtRecordAfter;
         continue;
       }
       //if we can find a concatenatio of one of those guys, use that
       var concatList = concatMatchingValue(eventData,delta.record,valueAtRecordAfter);
       if (concatList){
+        console.log("NEW ANNOTATION: going to use concat, with ", concatList);
         replayFunctions.push(makeConcatFunction(prop,concatList));
+        element[prop] = valueAtRecordAfter;
         continue;
       }
       //else, use the value of valueAtRecordAfter
+      console.log("NEW ANNOTATION: going to use the value of the record prop");
       replayFunctions.push(makeMirrorFunction(prop));
       recordFunctions.push(makeMirrorRecordFunction(prop));
+      element[prop] = valueAtRecordAfter;
     }
     
     //now we know what statement we want to do at replay to correct each
     //diverging prop
-    addCompensationEvent(eventData.type, eventData.nodeName, replayStatements, recordStatements);
+    addCompensationEvent(eventData.type, eventData.nodeName, replayFunctions, recordFunctions);
   }
 };
 
 function messagePropMatchingValue(eventMessage,valueAtRecordAfter){
-  for (prop in eventMessage){
+  console.log(eventMessage);
+  for (var prop in eventMessage){
     if (eventMessage[prop] == valueAtRecordAfter) {
       return prop;
     }
@@ -369,7 +382,8 @@ function messagePropMatchingValue(eventMessage,valueAtRecordAfter){
 
 function elementPropMatchingValue(element,valueAtRecordAfter){
   var elementProps = element.prop;
-  for (prop in elementProps){
+  console.log(elementProps);
+  for (var prop in elementProps){
     if (elementProps[prop] == valueAtRecordAfter){
       return prop;
     }
@@ -555,10 +569,9 @@ function filterOutInitialDivergences(divergences, initialDivergences){
 
 //returns true if we match the divergence div1 and the divergence div2
 function divergenceSameAcrossBrowsers(div1,div2){
-  var divergingProps = [];
   var div1Before = div1.record;
   var div1After = div1.replay;
-  var div2Before = div2.recrod;
+  var div2Before = div2.record;
   var div2After = div2.replay;
   
   //which properties are different after the event (in browser 1)?
@@ -578,7 +591,7 @@ function divergenceSameAcrossBrowsers(div1,div2){
   //browsers
   for (var i = 0; i < div1DivergingProps.length; i++){
     if(div1DivergingProps[i] != div2DivergingProps[i] ||
-        div1After[div1DivergingProps[i]] != div2After[div2DiverginProps[i]]){
+        div1After[div1DivergingProps[i]] != div2After[div2DivergingProps[i]]){
       return false;
     }
   }
@@ -589,6 +602,10 @@ function divergenceSameAcrossBrowsers(div1,div2){
 //returns a list of the properties for which two objects have different
 //values
 function divergingProps(obj1,obj2){
+  if (!(obj1 && obj2 && obj1.prop && obj2.prop)){
+    console.log("DIVERGING PROP WEIRDNESS ", obj1, obj2);
+    return []; 
+  }
   var obj1props = obj1.prop;
   var obj2props = obj2.prop;
   var divergingProps = []
@@ -666,11 +683,31 @@ function recursiveVisit(obj1,obj2){
     var numChildren1 = children1.length;
     var numChildren2 = children2.length;
     
-    //if a different number of children, definitely want to assume
+    if (!nodeEquals(obj1,obj2)){
+      if (verbose || scenarioVerbose){
+        console.log("Scenario 11 divergence, we tried to match a couple of nodes that aren't nodeEqual.");
+        console.log(obj1,obj2);
+      }
+      return[
+        {"type":"We expect these nodes to be the same, but they're not.",
+        "record":obj1,
+        "replay":obj2,
+        "relevantChildren":[],
+        "relevantChildrenXPaths":[xpathFromAbstractNode(obj2)]}];
+    }
+    
+    //if a different number of children, definitely want to assumerecursiveVisit
     //these objects have messy children that need matching
     if (numChildren1!=numChildren2){
+      if (verbose){
+        console.log("numchildren is different");
+      }
       divergences = divergences.concat(recursiveVisitMismatchedChildren(obj1,obj2));
       return divergences;
+    }
+    
+    if (verbose){
+      console.log("about to try going through the children");
     }
     
     //proceed on the assumption that we can just index into these
@@ -682,6 +719,10 @@ function recursiveVisit(obj1,obj2){
         divergences = divergences.concat(newDivergences);
         return divergences;
       }
+    }
+    
+    if (verbose){
+      console.log("we found that the matched children were nodeEqual.  we're going to recurse normally");
     }
     
     //if we're here, we didn't have to do mismatched children at this step
@@ -1133,23 +1174,25 @@ function addListenersForRecording() {
 
 function nodeEquals(node1,node2){
   if (node1 && node2 && node1.prop && node2.prop){
+    /*
     if (node1.prop.innerText && node2.prop.innerText){
       //if the inner text is the same, let's assume they're equal
       if(node1.prop.innerText==node2.prop.innerText){
         return true;
       }
       //if the id is the same, let's assume they're equal
-      /*
-      if (node1.prop.id && node2.prop.id
-        && node1.prop.id!="" && node1.prop.id==node2.prop.id){
-        return true;
-      }
-      */
+      
+      //if (node1.prop.id && node2.prop.id
+       // && node1.prop.id!="" && node1.prop.id==node2.prop.id){
+       // return true;
+      //}
+      
     }
-    else{
+    else if(node1.prop.nodeName.toLowerCase() != "input"){
       //hypothesize that there is no effect on user if no innerText
       return true;
     }
+    */
     return _.isEqual(node1.prop, node2.prop);
   }
   return node1==node2;
