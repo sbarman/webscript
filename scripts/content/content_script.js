@@ -103,9 +103,9 @@ function processEvent(eventData) {
     eventMessage["dispatchType"] = dispatchType;
     eventMessage["nodeName"] = nodeName;
 
-    curSnapshot = snapshot();
     eventMessage["snapshotBefore"] = curSnapshot;
-    eventMessage["snapshotAfter"] = {};
+    curSnapshot = snapshot();
+    eventMessage["snapshotAfter"] = curSnapshot;
 
     for (var prop in properties) {
       if (prop in eventData) {
@@ -298,22 +298,22 @@ function visualizeDivergence(element, eventData){
   var recordDeltasNotMatched = filterOutInitialDivergences(recordDeltas, replayDeltas);
   //effects of events that were found in replay browser but not record browser
   var replayDeltasNotMatched = filterOutInitialDivergences(replayDeltas, recordDeltas);
+  console.log("recordDeltasNotMatched ", recordDeltasNotMatched);
+  console.log("replayDeltasNotMatched ", replayDeltasNotMatched);
   
   for (var i=0;i<recordDeltasNotMatched.length;i++){
     var delta = recordDeltasNotMatched[i];
     if(delta.type == "We expect these nodes to be the same, but they're not."){
-      //buggy
-      //generateMismatchedValueCompensationEvent(element,delta,true);
-      console.log("here we'd generate annotation events");
+      console.log("here we'd generate annotation events, delta should happen");
+      generateMismatchedValueCompensationEvent(element,eventData,delta,true);
     }
   }
   
   for (var i=0;i<replayDeltasNotMatched.length;i++){
     var delta = replayDeltasNotMatched[i];
     if(delta.type == "We expect these nodes to be the same, but they're not."){
-      //buggy
-      //generateMismatchedValueCompensationEvent(element,eventData,delta,false);
-      console.log("here we'd generate annotation events");
+      console.log("here we'd generate annotation events, delta shouldn't happen");
+      generateMismatchedValueCompensationEvent(element,eventData,delta,false);
     }
   }
 }
@@ -322,8 +322,13 @@ function visualizeDivergence(element, eventData){
 //values for properties of matched nodes
 function generateMismatchedValueCompensationEvent(element, eventData, delta, thisDeltaShouldHappen){
   if (thisDeltaShouldHappen){
+    console.log("about to find props");
     var propsToChange = divergingProps(delta.record,delta.replay);
-    var replayStatements = [];
+    propsToChange = _.without(propsToChange,"innerHTML", "outerHTML", "innerText", "outerText");
+    console.log("propsToChange ", propsToChange);
+    
+    var replayFunctions = [];
+    var recordFunctions = [];
     for (var i=0;i<propsToChange.length;i++){
       var prop = propsToChange[i];
       var valueAtRecordBefore = delta.record.prop[prop];
@@ -332,78 +337,257 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
       //if we can find a property of the message, use that
       var messageProp = messagePropMatchingValue(eventData,valueAtRecordAfter);
       if (messageProp){
-        replayStatements.push({'target':prop,'messageProp':messageProp});
+        console.log("NEW ANNOTATION: going to use messageProp, with ", messageProp);
+        replayFunctions.push(makeMessagePropFunction(prop,messageProp));
+        element[prop] = valueAtRecordAfter;
         continue;
       }
       //if we can find a property of the original element, use that
       var elementProp = elementPropMatchingValue(delta.record,valueAtRecordAfter);
       if (elementProp){
-        replayStatements.push({'target':prop,'elementProp':elementProp});
+        console.log("NEW ANNOTATION: going to use elementProp, with ", elementProp);
+        replayFunctions.push(makeElementPropFunction(prop,elementProp));
+        element[prop] = valueAtRecordAfter;
         continue;
       }
       //if we can find a concatenatio of one of those guys, use that
       var concatList = concatMatchingValue(eventData,delta.record,valueAtRecordAfter);
       if (concatList){
-        replayStatements.push({'target':prop,'concatList':messageProp});
+        console.log("NEW ANNOTATION: going to use concat, with ", concatList);
+        replayFunctions.push(makeConcatFunction(prop,concatList));
+        element[prop] = valueAtRecordAfter;
         continue;
       }
       //else, use the value of valueAtRecordAfter
-      replayStatements.push({'target':prop,'constant':valueAtRecordAfter});
+      console.log("NEW ANNOTATION: going to use the value of the record prop");
+      replayFunctions.push(makeMirrorFunction(prop));
+      recordFunctions.push(makeMirrorRecordFunction(prop));
+      element[prop] = valueAtRecordAfter;
     }
     
     //now we know what statement we want to do at replay to correct each
     //diverging prop
-    addCompensationEvent(eventData.type, eventData.nodeName, replayStatements);
+    console.log("-----------");
+    console.log("name");
+    console.log(replayFunctions);
+    console.log(recordFunctions);
+    console.log("annotation events before ", annotationEvents);
+    addCompensationEvent(eventData.type, eventData.nodeName, replayFunctions, recordFunctions);
+    console.log("annotation events after ", annotationEvents);
   }
 };
 
-function addCompensationEvent(typeOfEvent,typeOfNode,replayStatements){
+function createMessagePropMap(eventMessage){
+  var messagePropMap = {};
+  for (var prop in eventMessage){
+    messagePropMap[prop]=eventMessage[prop];
+  }
+  if (eventMessage["keyCode"]){
+    messagePropMap["_charCode_keyCode"]=String.fromCharCode(eventMessage["keyCode"]);
+  }
+  if (eventMessage["charCode"]){
+    messagePropMap["_charCode_charCode"]=String.fromCharCode(eventMessage["charCode"]);
+  }
+  return messagePropMap;
+}
+
+function messagePropMatchingValue(eventMessage,valueAtRecordAfter){
+  console.log(eventMessage);
+  var messagePropMap = createMessagePropMap(eventMessage);
+  for (var prop in messagePropMap){
+    if (messagePropMap[prop] == valueAtRecordAfter) {
+      return prop;
+    }
+  }
+  return null;
+};
+
+function elementPropMatchingValue(element,valueAtRecordAfter){
+  var elementProps = element.prop;
+  console.log(elementProps);
+  for (var prop in elementProps){
+    if (elementProps[prop] == valueAtRecordAfter){
+      return prop;
+    }
+  }
+  return null;
+};
+
+function concatMatchingValue(eventMessage,element,valueAtRecordAfter){
+  var messagePropMap = createMessagePropMap(eventMessage);
+  for (var prop1 in messagePropMap){
+    for (var prop2 in messagePropMap){
+      if (messagePropMap[prop1]+messagePropMap[prop2] == valueAtRecordAfter){
+        return [{"element":false,"messageProp":prop1},{"element":false,"messageProp":prop2}];
+      }
+    }
+    for (var prop2 in element){
+      if (messagePropMap[prop1]+element[prop2] == valueAtRecordAfter){
+        return [{"element":false,"messageProp":prop1},{"element":true,"elementProp":prop2}];
+      }
+    }
+  }
+  for (var prop1 in element){
+    for (var prop2 in messagePropMap){
+      if (element[prop1]+messagePropMap[prop2] == valueAtRecordAfter){
+        return [{"element":true,"elementProp":prop1},{"element":false,"messageProp":prop2}];
+      }
+    }
+    for (var prop2 in element){
+      if (element[prop1]+element[prop2] == valueAtRecordAfter){
+        return [{"element":true,"elementProp":prop1},{"element":true,"elementProp":prop2}];
+      }
+    }
+  }
+  return null;
+};
+
+function makeMessagePropFunction(targetProp, messageProp){
+  var messagePropFunction;
+  if (messageProp=="_charCode_keyCode"){
+    messagePropFunction = function(element, eventMessage){
+      if ((typeof element[targetProp]) !== "undefined"){
+        element[targetProp] = String.fromCharCode(eventMessage["keyCode"]);
+      }
+    }
+  }
+  else if (messageProp=="_charCode_charCode"){
+    messagePropFunction = function(element, eventMessage){
+      if ((typeof element[targetProp]) !== "undefined"){
+        element[targetProp] = String.fromCharCode(eventMessage["charCode"]);
+      }
+    }
+  }
+  else{
+    messagePropFunction = function(element, eventMessage){
+      if ((typeof element[targetProp]) !== "undefined"){
+        element[targetProp] = eventMessage[messageProp];
+      }
+    }
+  }
+  return messagePropFunction;
+};
+
+function makeMessagePropRHS(messageProp){
+  var messagePropFunction;
+  if (messageProp=="_charCode_keyCode"){
+    messagePropFunction = function(element, eventMessage){
+      return String.fromCharCode(eventMessage["keyCode"]);
+    }
+  }
+  else if (messageProp=="_charCode_charCode"){
+    messagePropFunction = function(element, eventMessage){
+      return String.fromCharCode(eventMessage["charCode"]);
+    }
+  }
+  else{
+    messagePropFunction = function(element, eventMessage){
+      return eventMessage[messageProp];
+    }
+  }
+  return messagePropFunction;
+};
+
+function makeElementPropFunction(targetProp, elementProp){
+  var elementPropFunction = function(element, eventMessage){
+    if ((typeof element[targetProp]) !== "undefined"){
+      element[targetProp] = element[elementProp];
+    }
+  }
+  return elementPropFunction;
+};
+
+function makeConcatFunction(targetProp, concatList){
+  var concatFunction;
+  if (concatList[0].element == true){
+    if (concatList[1].element == true){
+      concatFunction = function(element, eventMessage){
+        if ((typeof element[targetProp]) !== "undefined"){
+          element[targetProp] = element[concatList[0].elementProp] + element[concatList[1].elementProp];
+        }
+      }
+    }
+    else{
+      var messagePropFunc = makeMessagePropRHS(eventMessage[concatList[1].messageProp]);
+      concatFunction = function(element, eventMessage){
+        if ((typeof element[targetProp]) !== "undefined"){
+          element[targetProp] = element[concatList[0].elementProp] + messagePropFunc(element,eventMessage);
+        }
+      }
+    }
+  }
+  else{
+    if (concatList[1].element == true){
+      var messagePropFunc = makeMessagePropRHS(eventMessage[concatList[0].messageProp]);
+      concatFunction = function(element, eventMessage){
+        if ((typeof element[targetProp]) !== "undefined"){
+          element[targetProp] = messagePropFunc(element,eventMessage) + element[concatList[1].elementProp];
+        }
+      }
+    }
+    else{
+      concatFunction = function(element, eventMessage){
+      var messagePropFunc0 = makeMessagePropRHS(eventMessage[concatList[0].messageProp]);
+      var messagePropFunc1 = makeMessagePropRHS(eventMessage[concatList[1].messageProp]);
+        if ((typeof element[targetProp]) !== "undefined"){
+          element[targetProp] = messagePropFunc0(element,eventMessage) + messagePropFunc1(element,eventMessage);
+        }
+      }
+    }
+  }
+  return concatFunction;
+}
+
+function makeMirrorFunction(targetProp){
+  var mirrorFunction = function(element, eventMessage){
+    if ((typeof element[targetProp]) !== "undefined"){
+      element[targetProp] = eventMessage[targetProp+"_value"];
+    }
+  }
+  return mirrorFunction;
+};
+
+function makeMirrorRecordFunction(targetProp){
+  var mirrorRecordFunction = function(element, eventMessage){
+    if ((typeof element[targetProp]) !== "undefined"){
+      eventMessage[targetProp+"_value"] = element[targetProp];
+    }
+  }
+  return mirrorRecordFunction;
+};
+
+function addCompensationEvent(typeOfEvent,typeOfNode,replayFunctions,recordFunctions){
+  if(recordFunctions.length==0 && replayFunctions.length==0){
+    return;
+  }
   var name = typeOfEvent+"_"+typeOfNode;
+  
   var guard = function(eventData, eventMessage) {
                 return eventMessage.nodeName == typeOfNode &&
                         eventMessage.type == typeOfEvent;
               };
-  var replay = function keypressReplay(element, eventMessage) {
+              
+  var replay = function(element, eventMessage) {
                   //iterate through the statements we want to execute
-                  for(var i = 0;i<replayStatements.length;i++){
-                    var replayStatment = replayStatments[i];
-                    var rhs;
-                    //the statement gets the value from the eventMessage
-                    if (replayStatment.messageProp){
-                      rhs = eventMessage[replayStatement.messageProp];
-                    }
-                    //the statement gets the value from the element
-                    else if(replayStatement.elementProp){
-                      rhs = element[replayStatement.elementProp];
-                    }
-                    //the statement uses a concatenation
-                    else if(replayStatement.concatList){
-                      var first = replayStatement.concatList[0];
-                      var second = replayStatement.concastList[1];
-                      var firstVal, secondVal;
-                      if (first.message){
-                        firstVal = eventMessage[first.prop];
-                      }
-                      else{
-                        firstVal = element[first.prop];
-                      }
-                      if (second.message){
-                        secondVal = eventMessage[second.prop];
-                      }
-                      else{
-                        secondVal = element[second.prop];
-                      }
-                      rhs = firstVal+secondVal;
-                    }
-                    //the statement uses a constant
-                    else{
-                      rhs = replayStatement.constant;
-                    }
-                    //let's set our target property equal to the rhs
-                    element[replayStatement.target] = rhs;
+                  for(var i=0;i<replayFunctions.length;i++){
+                    replayFunctions[i](element, eventMessage);
                   }
                 };
-  annotationEvents[name] = {"guard":guard,"record":null,"replay":replay};
+                
+  var record;
+  //if we don't have anything to do at record, go ahead and avoid
+  //making a function for it
+  if (recordFunctions.length == 0){
+    record = null
+  }
+  else{
+    var record = function(element, eventMessage){
+                    for (var i=0; i<recordFunctions.length;i++){
+                      recordFunctions[i](element,eventMessage);
+                    }
+                  }
+  }
+  annotationEvents[name] = {"guard":guard,"record":record,"replay":replay};
 };
 
 //function for sending an alert that the user will see
@@ -421,13 +605,6 @@ function sendAlert(msg){
   replayStatusDiv.innerHTML = msg;
   document.body.appendChild(replayStatusDiv);	
   console.log("[" + id + "] appended child", replayStatusDiv.innerHTML);
-  
-  //let's try seeing divergence
-  var recordDom = eventData.snapshotAfter;
-  var replayDom = snapshotDom(document);
-  console.log("[" + id + "] record DOM", recordDom);
-  console.log("[" + id + "] replay DOM", replayDom);
-  checkDomDivergence(recordDom,replayDom);
 }
 
 function checkDomDivergence(recordDom, replayDom){
@@ -460,10 +637,9 @@ function filterOutInitialDivergences(divergences, initialDivergences){
 
 //returns true if we match the divergence div1 and the divergence div2
 function divergenceSameAcrossBrowsers(div1,div2){
-  var divergingProps = [];
   var div1Before = div1.record;
   var div1After = div1.replay;
-  var div2Before = div2.recrod;
+  var div2Before = div2.record;
   var div2After = div2.replay;
   
   //which properties are different after the event (in browser 1)?
@@ -483,7 +659,7 @@ function divergenceSameAcrossBrowsers(div1,div2){
   //browsers
   for (var i = 0; i < div1DivergingProps.length; i++){
     if(div1DivergingProps[i] != div2DivergingProps[i] ||
-        div1After[div1DivergingProps[i]] != div2After[div2DiverginProps[i]]){
+        div1After[div1DivergingProps[i]] != div2After[div2DivergingProps[i]]){
       return false;
     }
   }
@@ -494,6 +670,10 @@ function divergenceSameAcrossBrowsers(div1,div2){
 //returns a list of the properties for which two objects have different
 //values
 function divergingProps(obj1,obj2){
+  if (!(obj1 && obj2 && obj1.prop && obj2.prop)){
+    console.log("DIVERGING PROP WEIRDNESS ", obj1, obj2);
+    return []; 
+  }
   var obj1props = obj1.prop;
   var obj2props = obj2.prop;
   var divergingProps = []
@@ -571,11 +751,31 @@ function recursiveVisit(obj1,obj2){
     var numChildren1 = children1.length;
     var numChildren2 = children2.length;
     
-    //if a different number of children, definitely want to assume
+    if (!nodeEquals(obj1,obj2)){
+      if (verbose || scenarioVerbose){
+        console.log("Scenario 11 divergence, we tried to match a couple of nodes that aren't nodeEqual.");
+        console.log(obj1,obj2);
+      }
+      return[
+        {"type":"We expect these nodes to be the same, but they're not.",
+        "record":obj1,
+        "replay":obj2,
+        "relevantChildren":[],
+        "relevantChildrenXPaths":[xpathFromAbstractNode(obj2)]}];
+    }
+    
+    //if a different number of children, definitely want to assumerecursiveVisit
     //these objects have messy children that need matching
     if (numChildren1!=numChildren2){
+      if (verbose){
+        console.log("numchildren is different");
+      }
       divergences = divergences.concat(recursiveVisitMismatchedChildren(obj1,obj2));
       return divergences;
+    }
+    
+    if (verbose){
+      console.log("about to try going through the children");
     }
     
     //proceed on the assumption that we can just index into these
@@ -587,6 +787,10 @@ function recursiveVisit(obj1,obj2){
         divergences = divergences.concat(newDivergences);
         return divergences;
       }
+    }
+    
+    if (verbose){
+      console.log("we found that the matched children were nodeEqual.  we're going to recurse normally");
     }
     
     //if we're here, we didn't have to do mismatched children at this step
@@ -1038,23 +1242,25 @@ function addListenersForRecording() {
 
 function nodeEquals(node1,node2){
   if (node1 && node2 && node1.prop && node2.prop){
+    /*
     if (node1.prop.innerText && node2.prop.innerText){
       //if the inner text is the same, let's assume they're equal
       if(node1.prop.innerText==node2.prop.innerText){
         return true;
       }
       //if the id is the same, let's assume they're equal
-      /*
-      if (node1.prop.id && node2.prop.id
-        && node1.prop.id!="" && node1.prop.id==node2.prop.id){
-        return true;
-      }
-      */
+      
+      //if (node1.prop.id && node2.prop.id
+       // && node1.prop.id!="" && node1.prop.id==node2.prop.id){
+       // return true;
+      //}
+      
     }
-    else{
+    else if(node1.prop.nodeName.toLowerCase() != "input"){
       //hypothesize that there is no effect on user if no innerText
       return true;
     }
+    */
     return _.isEqual(node1.prop, node2.prop);
   }
   return node1==node2;

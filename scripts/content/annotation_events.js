@@ -19,7 +19,7 @@ var annotationEvents = {};
   }
   
   function keypressReplay(element, eventMessage) {
-    if (element.value){
+    if ((typeof element.value) !== "undefined"){
       element.value=element.value+String.fromCharCode(eventMessage.charCode);
     }
   }
@@ -30,7 +30,7 @@ var annotationEvents = {};
         return eventMessage.type == "keypress";
       },
       record: null,
-      replay: keypressReplay
+      replay: null
     },
     "clickOption": {
       guard: function(eventData, eventMessage) {
