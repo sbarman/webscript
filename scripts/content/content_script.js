@@ -324,45 +324,67 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
   if (thisDeltaShouldHappen){
     console.log("about to find props");
     var propsToChange = divergingProps(delta.record,delta.replay);
-    propsToChange = _.without(propsToChange,"innerHTML", "outerHTML", "innerText", "outerText");
+    propsToChange = _.without(propsToChange,"innerHTML", "outerHTML", "innerText", "outerText","textContent","className");
     console.log("propsToChange ", propsToChange);
+    
+    var typeOfNode = eventData.nodeName;
+    var typeOfEvent = eventData.type;
+    var name = typeOfEvent+"_"+typeOfNode;
+    
+    //let's get the examples associated with this type of compensation event
+    var examples = [];
+    if (annotationEvents[name]){
+      examples = annotationEvents[name].examples;
+    }
+    
+    //let's add the current instance to our list of examples
+    var messagePropMap = createMessagePropMap(eventData);
+    examples.push({"elementPropsBefore":delta.record.prop,"elementPropsAfter":delta.replay.prop,"messagePropMap":messagePropMap});
+    
+    console.log("EXAMPLES", examples);
     
     var replayFunctions = [];
     var recordFunctions = [];
     for (var i=0;i<propsToChange.length;i++){
       var prop = propsToChange[i];
-      var valueAtRecordBefore = delta.record.prop[prop];
-      var valueAtRecordAfter = delta.replay.prop[prop];
       
+      //correct the diverging value so we don't diverge, since
+      //our annotation event won't be able to fire till next time
+      //(becuase it might involve a record action)
+      element[prop] = delta.replay.prop[prop];
+      
+      //if we can use a constant, use that
+      var constant = delta.replay.prop[prop];
+      if (_.reduce(examples,function(acc,ex){return (acc && ex.elementPropsAfter[prop]==constant);},true)){
+        console.log("NEW ANNOTATION: going to use constant, with ", constant);
+        replayFunctions.push(makeConstantFunction(prop,constant));
+        continue;
+      }
       //if we can find a property of the message, use that
-      var messageProp = messagePropMatchingValue(eventData,valueAtRecordAfter);
+      var messageProp = messagePropMatchingValue(examples,prop);
       if (messageProp){
         console.log("NEW ANNOTATION: going to use messageProp, with ", messageProp);
         replayFunctions.push(makeMessagePropFunction(prop,messageProp));
-        element[prop] = valueAtRecordAfter;
         continue;
       }
       //if we can find a property of the original element, use that
-      var elementProp = elementPropMatchingValue(delta.record,valueAtRecordAfter);
+      var elementProp = elementPropMatchingValue(examples,prop);
       if (elementProp){
         console.log("NEW ANNOTATION: going to use elementProp, with ", elementProp);
         replayFunctions.push(makeElementPropFunction(prop,elementProp));
-        element[prop] = valueAtRecordAfter;
         continue;
       }
       //if we can find a concatenatio of one of those guys, use that
-      var concatList = concatMatchingValue(eventData,delta.record,valueAtRecordAfter);
+      var concatList = concatMatchingValue(examples,prop);
       if (concatList){
         console.log("NEW ANNOTATION: going to use concat, with ", concatList);
         replayFunctions.push(makeConcatFunction(prop,concatList));
-        element[prop] = valueAtRecordAfter;
         continue;
       }
       //else, use the value of valueAtRecordAfter
       console.log("NEW ANNOTATION: going to use the value of the record prop");
       replayFunctions.push(makeMirrorFunction(prop));
       recordFunctions.push(makeMirrorRecordFunction(prop));
-      element[prop] = valueAtRecordAfter;
     }
     
     //now we know what statement we want to do at replay to correct each
@@ -372,7 +394,9 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
     console.log(replayFunctions);
     console.log(recordFunctions);
     console.log("annotation events before ", annotationEvents);
-    addCompensationEvent(eventData.type, eventData.nodeName, replayFunctions, recordFunctions);
+    
+
+    addCompensationEvent(name, typeOfNode, typeOfEvent, replayFunctions, recordFunctions,examples);
     console.log("annotation events after ", annotationEvents);
   }
 };
@@ -391,55 +415,71 @@ function createMessagePropMap(eventMessage){
   return messagePropMap;
 }
 
-function messagePropMatchingValue(eventMessage,valueAtRecordAfter){
-  console.log(eventMessage);
-  var messagePropMap = createMessagePropMap(eventMessage);
+function messagePropMatchingValue(examples,targetProp){
+  var messagePropMap = examples[0].messagePropMap;
   for (var prop in messagePropMap){
-    if (messagePropMap[prop] == valueAtRecordAfter) {
-      return prop;
+    //if for all examples this message prop is the same as the
+    //target value for that example, return this message prop
+    if (_.reduce(examples,function(acc,ex){return 
+      (acc && ex.messagePropMap[prop] == ex.elementPropsAfter[targetProp]);},true)) {
+        return prop;
     }
   }
   return null;
 };
 
-function elementPropMatchingValue(element,valueAtRecordAfter){
-  var elementProps = element.prop;
-  console.log(elementProps);
+function elementPropMatchingValue(examples,targetProp){
+  var elementProps = examples[0].elementPropsBefore;
   for (var prop in elementProps){
-    if (elementProps[prop] == valueAtRecordAfter){
+    if (_.reduce(examples,function(acc,ex){return 
+      (acc && ex.elementPropsBefore[prop] == ex.elementPropsAfter[targetProp]);},true)) {
       return prop;
     }
   }
   return null;
 };
 
-function concatMatchingValue(eventMessage,element,valueAtRecordAfter){
-  var messagePropMap = createMessagePropMap(eventMessage);
+function concatMatchingValue(examples,targetProp){
+  var messagePropMap = examples[0].messagePropMap;
+  var elementProps = examples[0].elementPropsBefore;
   for (var prop1 in messagePropMap){
     for (var prop2 in messagePropMap){
-      if (messagePropMap[prop1]+messagePropMap[prop2] == valueAtRecordAfter){
+      if (_.reduce(examples,function(acc,ex){return 
+        (acc && ex.messagePropMap[prop1]+ex.messagePropMap[prop2] == ex.elementPropsAfter[targetProp]);},true)) {
         return [{"element":false,"messageProp":prop1},{"element":false,"messageProp":prop2}];
       }
     }
-    for (var prop2 in element){
-      if (messagePropMap[prop1]+element[prop2] == valueAtRecordAfter){
+    for (var prop2 in elementProps){
+      if (_.reduce(examples,function(acc,ex){return 
+        (acc && ex.messagePropMap[prop1]+ex.elementPropsBefore[prop2] == ex.elementPropsAfter[targetProp]);},true)) {
         return [{"element":false,"messageProp":prop1},{"element":true,"elementProp":prop2}];
       }
     }
   }
-  for (var prop1 in element){
+  for (var prop1 in elementProps){
     for (var prop2 in messagePropMap){
-      if (element[prop1]+messagePropMap[prop2] == valueAtRecordAfter){
+      if (_.reduce(examples,function(acc,ex){return 
+        (acc && ex.elementPropsBefore[prop1]+ex.messagePropMap[prop2] == ex.elementPropsAfter[targetProp]);},true)) {
         return [{"element":true,"elementProp":prop1},{"element":false,"messageProp":prop2}];
       }
     }
-    for (var prop2 in element){
-      if (element[prop1]+element[prop2] == valueAtRecordAfter){
+    for (var prop2 in elementProps){
+      if (_.reduce(examples,function(acc,ex){return 
+        (acc && ex.elementPropsBefore[prop1]+ex.elementPropsBefore[prop2] == ex.elementPropsAfter[targetProp]);},true)) {
         return [{"element":true,"elementProp":prop1},{"element":true,"elementProp":prop2}];
       }
     }
   }
   return null;
+};
+
+function makeConstantFunction(targetProp, constant){
+  var elementPropFunction = function(element, eventMessage){
+    if ((typeof element[targetProp]) !== "undefined"){
+      element[targetProp] = constant;
+    }
+  }
+  return elementPropFunction;
 };
 
 function makeMessagePropFunction(targetProp, messageProp){
@@ -556,11 +596,10 @@ function makeMirrorRecordFunction(targetProp){
   return mirrorRecordFunction;
 };
 
-function addCompensationEvent(typeOfEvent,typeOfNode,replayFunctions,recordFunctions){
+function addCompensationEvent(name,typeOfNode,typeOfEvent,replayFunctions,recordFunctions,examples){
   if(recordFunctions.length==0 && replayFunctions.length==0){
     return;
   }
-  var name = typeOfEvent+"_"+typeOfNode;
   
   var guard = function(eventData, eventMessage) {
                 return eventMessage.nodeName == typeOfNode &&
@@ -587,7 +626,8 @@ function addCompensationEvent(typeOfEvent,typeOfNode,replayFunctions,recordFunct
                     }
                   }
   }
-  annotationEvents[name] = {"guard":guard,"record":record,"replay":replay};
+
+  annotationEvents[name] = {"guard":guard,"record":record,"replay":replay,"examples":examples};
 };
 
 //function for sending an alert that the user will see
