@@ -324,16 +324,24 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
   if (thisDeltaShouldHappen){
     console.log("about to find props");
     var propsToChange = divergingProps(delta.record,delta.replay);
-    propsToChange = _.without(propsToChange,"innerHTML", "outerHTML", "innerText", "outerText");
+    propsToChange = _.without(propsToChange,"innerHTML", "outerHTML", "innerText", "outerText","textContent","className");
     console.log("propsToChange ", propsToChange);
     
-    var messagePropMap = createMessagePropMap(eventData);
+    var typeOfNode = eventData.nodeName;
+    var typeOfEvent = eventData.type;
+    var name = typeOfEvent+"_"+typeOfNode;
     
+    //let's get the examples associated with this type of compensation event
     var examples = [];
     if (annotationEvents[name]){
       examples = annotationEvents[name].examples;
     }
+    
+    //let's add the current instance to our list of examples
+    var messagePropMap = createMessagePropMap(eventData);
     examples.push({"elementPropsBefore":delta.record.prop,"elementPropsAfter":delta.replay.prop,"messagePropMap":messagePropMap});
+    
+    console.log("EXAMPLES", examples);
     
     var replayFunctions = [];
     var recordFunctions = [];
@@ -343,8 +351,15 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
       //correct the diverging value so we don't diverge, since
       //our annotation event won't be able to fire till next time
       //(becuase it might involve a record action)
-      element[prop]=delta.replay.prop[prop];
+      element[prop] = delta.replay.prop[prop];
       
+      //if we can use a constant, use that
+      var constant = delta.replay.prop[prop];
+      if (_.reduce(examples,function(acc,ex){return (acc && ex.elementPropsAfter[prop]==constant);},true)){
+        console.log("NEW ANNOTATION: going to use constant, with ", constant);
+        replayFunctions.push(makeConstantFunction(prop,constant));
+        continue;
+      }
       //if we can find a property of the message, use that
       var messageProp = messagePropMatchingValue(examples,prop);
       if (messageProp){
@@ -380,9 +395,6 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
     console.log(recordFunctions);
     console.log("annotation events before ", annotationEvents);
     
-    var name = eventData.type+"_"+eventData.nodeName;
-    var typeOfNode = eventData.nodeName;
-    var typeOfEvent = eventData.type;
 
     addCompensationEvent(name, typeOfNode, typeOfEvent, replayFunctions, recordFunctions,examples);
     console.log("annotation events after ", annotationEvents);
@@ -459,6 +471,15 @@ function concatMatchingValue(examples,targetProp){
     }
   }
   return null;
+};
+
+function makeConstantFunction(targetProp, constant){
+  var elementPropFunction = function(element, eventMessage){
+    if ((typeof element[targetProp]) !== "undefined"){
+      element[targetProp] = constant;
+    }
+  }
+  return elementPropFunction;
 };
 
 function makeMessagePropFunction(targetProp, messageProp){
