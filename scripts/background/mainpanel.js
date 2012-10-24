@@ -380,8 +380,8 @@ var Panel = (function PanelClosure() {
         controller.pause();
       });
 
-      $("#replayReset").click(function(eventObject) {
-        controller.replayReset();
+      $("#restart").click(function(eventObject) {
+        controller.restart();
       });
       
       $("#paramsDiv").hide(1000);
@@ -719,6 +719,12 @@ var Replay = (function ReplayClosure() {
     },
     pause: function _pause() {
       clearTimeout(this.timeoutHandle);
+      this.timeoutHandle = null;
+    },
+    restart: function _restart() {
+      if (this.timeoutHandle == null) {
+        this.setNextEvent(0);
+      }
     },
     finish: function _finish() {
       var record = this.record;
@@ -1065,8 +1071,8 @@ var Controller = (function ControllerClosure() {
     pause: function() {
       this.replay.pause();
     },
-    replayReset: function() {
-      this.replay.reset();
+    restart: function() {
+      this.replay.restart();
     },
     saveScript: function(name) {
       console.log("saving script");
