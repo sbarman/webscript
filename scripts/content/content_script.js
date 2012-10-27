@@ -15,6 +15,8 @@ var acceptTags = {"HTML":true, "BODY":true, "HEAD":true};
 var initialDivergences = false;
 var verbose = false;
 var scenarioVerbose = true;
+var prevEvent;
+var seenEvent = false;
 
 // Utility functions
 
@@ -103,9 +105,8 @@ function processEvent(eventData) {
     eventMessage["dispatchType"] = dispatchType;
     eventMessage["nodeName"] = nodeName;
 
-    eventMessage["snapshotBefore"] = curSnapshot;
     curSnapshot = snapshot();
-    eventMessage["snapshotAfter"] = curSnapshot;
+    eventMessage["snapshotBefore"] = curSnapshot;
 
     for (var prop in properties) {
       if (prop in eventData) {
@@ -254,14 +255,29 @@ function simulate(element, eventData) {
     console.log("Unknown type of event");
   }
   console.log("[" + id + "] dispatchEvent", eventName, options, oEvent);
+  
+  if (!seenEvent){
+    seenEvent = true;
+  }
+  else {
+    var recordDomBefore = prevEvent.eventData.snapshotBefore;
+    var recordDomAfter = eventData.snapshotBefore;
+    var replayDomBefore = curSnapshot;
+    curSnapshot = snapshot();
+    var replayDomAfter = curSnapshot;
+        
+    //let's try seeing divergence for the last event, now that we have a
+    //new more recent snapshot of the record DOM
+    visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomBefore,replayDomAfter);
+  }
+  //this does the actual event simulation
   element.dispatchEvent(oEvent);
   
   //let's update a div letting us know what event we just got
   sendAlert("Received Event: "+eventData.type);
   
-  //let's try seeing divergence
-  visualizeDivergence(element, eventData);
-
+  //now we need to store the current element and eventData into nextDivergence
+  prevEvent = {"element":element,"eventData":eventData};
 }
 
 function checkWait(eventData) {
@@ -270,13 +286,9 @@ function checkWait(eventData) {
   port.postMessage({type: "ack", value: result});
 }
 
-function visualizeDivergence(element, eventData){
-  
-  var recordDomBefore = eventData.snapshotBefore;
-  var recordDomAfter = eventData.snapshotAfter;
-  var replayDomBefore = curSnapshot;
-  curSnapshot = snapshot();
-  var replayDomAfter = curSnapshot;
+function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomBefore,replayDomAfter){
+  var element = prevEvent.element;
+  var eventData = prevEvent.eventData;
 
   var recordDeltas = checkDomDivergence(recordDomBefore,recordDomAfter);
   console.log("RECORD DELTAS");
@@ -325,11 +337,13 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
     console.log("about to find props");
     var propsToChange = divergingProps(delta.record,delta.replay);
     propsToChange = _.without(propsToChange,"innerHTML", "outerHTML", "innerText", "outerText","textContent","className");
-    console.log("propsToChange ", propsToChange);
     
     var typeOfNode = eventData.nodeName;
     var typeOfEvent = eventData.type;
     var name = typeOfEvent+"_"+typeOfNode;
+    
+    console.log(name,": propsToChange ", propsToChange);
+    console.log(eventData);
     
     //let's get the examples associated with this type of compensation event
     var examples = [];
@@ -339,6 +353,7 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
     
     //let's add the current instance to our list of examples
     var messagePropMap = createMessagePropMap(eventData);
+    console.log(messagePropMap);
     examples.push({"elementPropsBefore":delta.record.prop,"elementPropsAfter":delta.replay.prop,"messagePropMap":messagePropMap});
     
     console.log("EXAMPLES", examples);
@@ -348,10 +363,12 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
     for (var i=0;i<propsToChange.length;i++){
       var prop = propsToChange[i];
       
+      console.log("record prop before ", delta.record.prop[prop], "record prop after ", delta.replay.prop[prop]);
+      
       //correct the diverging value so we don't diverge, since
       //our annotation event won't be able to fire till next time
       //(becuase it might involve a record action)
-      element[prop] = delta.replay.prop[prop];
+      //element[prop] = delta.replay.prop[prop];
       
       //if we can use a constant, use that
       var constant = delta.replay.prop[prop];
@@ -382,6 +399,7 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
         continue;
       }
       //else, use the value of valueAtRecordAfter
+      eventData[prop+"_value"]=delta.record.prop[prop];
       console.log("NEW ANNOTATION: going to use the value of the record prop");
       replayFunctions.push(makeMirrorFunction(prop));
       recordFunctions.push(makeMirrorRecordFunction(prop));
@@ -396,7 +414,8 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
     console.log("annotation events before ", annotationEvents);
     
 
-    addCompensationEvent(name, typeOfNode, typeOfEvent, replayFunctions, recordFunctions,examples);
+    var compensationEvent = addCompensationEvent(name, typeOfNode, typeOfEvent, replayFunctions, recordFunctions,examples);
+    if (compensationEvent){compensationEvent.replay(element,eventData);}
     console.log("annotation events after ", annotationEvents);
   }
 };
@@ -444,28 +463,39 @@ function concatMatchingValue(examples,targetProp){
   var elementProps = examples[0].elementPropsBefore;
   for (var prop1 in messagePropMap){
     for (var prop2 in messagePropMap){
-      if (_.reduce(examples,function(acc,ex){return 
-        (acc && ex.messagePropMap[prop1]+ex.messagePropMap[prop2] == ex.elementPropsAfter[targetProp]);},true)) {
+      if (_.reduce(examples,function(acc,ex){return (acc && ex.messagePropMap[prop1]+ex.messagePropMap[prop2] == ex.elementPropsAfter[targetProp]);},true)) {
         return [{"element":false,"messageProp":prop1},{"element":false,"messageProp":prop2}];
       }
     }
     for (var prop2 in elementProps){
-      if (_.reduce(examples,function(acc,ex){return 
-        (acc && ex.messagePropMap[prop1]+ex.elementPropsBefore[prop2] == ex.elementPropsAfter[targetProp]);},true)) {
+      if (_.reduce(examples,function(acc,ex){return (acc && ex.messagePropMap[prop1]+ex.elementPropsBefore[prop2] == ex.elementPropsAfter[targetProp]);},true)) {
         return [{"element":false,"messageProp":prop1},{"element":true,"elementProp":prop2}];
       }
     }
   }
   for (var prop1 in elementProps){
     for (var prop2 in messagePropMap){
-      if (_.reduce(examples,function(acc,ex){return 
-        (acc && ex.elementPropsBefore[prop1]+ex.messagePropMap[prop2] == ex.elementPropsAfter[targetProp]);},true)) {
+      /*
+      if(prop1=="value"){
+        for (var i = 0; i<examples.length;i++){
+          console.log("-------------");
+          console.log(prop1,prop2,examples[i].elementPropsBefore[prop1]+examples[i].messagePropMap[prop2],(examples[i].elementPropsBefore[prop1]+examples[i].messagePropMap[prop2]== examples[i].elementPropsAfter[targetProp]));
+          //console.log("val before", examples[i].elementPropsBefore[targetProp], "val after", examples[i].elementPropsAfter[targetProp]);
+          //console.log(prop1, examples[i].elementPropsBefore[prop1], prop2, examples[i].messagePropMap[prop2], examples[i].elementPropsBefore[prop1]+examples[i].messagePropMap[prop2]);
+        }
+        console.log("reduce", (_.reduce(examples,function(acc,ex){
+          var ret = (acc && (ex.elementPropsBefore[prop1]+ex.messagePropMap[prop2] == ex.elementPropsAfter[targetProp]));
+          console.log(ret);
+          return ret;},true)));
+      }
+      * */
+      if (_.reduce(examples,function(acc,ex){return (acc && ex.elementPropsBefore[prop1]+ex.messagePropMap[prop2] == ex.elementPropsAfter[targetProp]);},true)) {
+          console.log("WILL RETURN THIS RESULT");
         return [{"element":true,"elementProp":prop1},{"element":false,"messageProp":prop2}];
       }
     }
     for (var prop2 in elementProps){
-      if (_.reduce(examples,function(acc,ex){return 
-        (acc && ex.elementPropsBefore[prop1]+ex.elementPropsBefore[prop2] == ex.elementPropsAfter[targetProp]);},true)) {
+      if (_.reduce(examples,function(acc,ex){return (acc && ex.elementPropsBefore[prop1]+ex.elementPropsBefore[prop2] == ex.elementPropsAfter[targetProp]);},true)) {
         return [{"element":true,"elementProp":prop1},{"element":true,"elementProp":prop2}];
       }
     }
@@ -511,17 +541,17 @@ function makeMessagePropFunction(targetProp, messageProp){
 function makeMessagePropRHS(messageProp){
   var messagePropFunction;
   if (messageProp=="_charCode_keyCode"){
-    messagePropFunction = function(element, eventMessage){
+    messagePropFunction = function(eventMessage){
       return String.fromCharCode(eventMessage["keyCode"]);
     }
   }
   else if (messageProp=="_charCode_charCode"){
-    messagePropFunction = function(element, eventMessage){
+    messagePropFunction = function(eventMessage){
       return String.fromCharCode(eventMessage["charCode"]);
     }
   }
   else{
-    messagePropFunction = function(element, eventMessage){
+    messagePropFunction = function(eventMessage){
       return eventMessage[messageProp];
     }
   }
@@ -548,7 +578,7 @@ function makeConcatFunction(targetProp, concatList){
       }
     }
     else{
-      var messagePropFunc = makeMessagePropRHS(eventMessage[concatList[1].messageProp]);
+      var messagePropFunc = makeMessagePropRHS(concatList[1].messageProp);
       concatFunction = function(element, eventMessage){
         if ((typeof element[targetProp]) !== "undefined"){
           element[targetProp] = element[concatList[0].elementProp] + messagePropFunc(element,eventMessage);
@@ -558,7 +588,7 @@ function makeConcatFunction(targetProp, concatList){
   }
   else{
     if (concatList[1].element == true){
-      var messagePropFunc = makeMessagePropRHS(eventMessage[concatList[0].messageProp]);
+      var messagePropFunc = makeMessagePropRHS(concatList[0].messageProp);
       concatFunction = function(element, eventMessage){
         if ((typeof element[targetProp]) !== "undefined"){
           element[targetProp] = messagePropFunc(element,eventMessage) + element[concatList[1].elementProp];
@@ -567,8 +597,8 @@ function makeConcatFunction(targetProp, concatList){
     }
     else{
       concatFunction = function(element, eventMessage){
-      var messagePropFunc0 = makeMessagePropRHS(eventMessage[concatList[0].messageProp]);
-      var messagePropFunc1 = makeMessagePropRHS(eventMessage[concatList[1].messageProp]);
+      var messagePropFunc0 = makeMessagePropRHS(concatList[0].messageProp);
+      var messagePropFunc1 = makeMessagePropRHS(concatList[1].messageProp);
         if ((typeof element[targetProp]) !== "undefined"){
           element[targetProp] = messagePropFunc0(element,eventMessage) + messagePropFunc1(element,eventMessage);
         }
@@ -628,6 +658,7 @@ function addCompensationEvent(name,typeOfNode,typeOfEvent,replayFunctions,record
   }
 
   annotationEvents[name] = {"guard":guard,"record":record,"replay":replay,"examples":examples};
+  return annotationEvents[name];
 };
 
 //function for sending an alert that the user will see
