@@ -363,8 +363,6 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
     for (var i=0;i<propsToChange.length;i++){
       var prop = propsToChange[i];
       
-      console.log("record prop before ", delta.record.prop[prop], "record prop after ", delta.replay.prop[prop]);
-      
       //correct the diverging value so we don't diverge, since
       //our annotation event won't be able to fire till next time
       //(becuase it might involve a record action)
@@ -826,6 +824,11 @@ function recursiveVisit(obj1,obj2){
       if (verbose || scenarioVerbose){
         console.log("Scenario 11 divergence, we tried to match a couple of nodes that aren't nodeEqual.");
         console.log(obj1,obj2);
+        if (obj1.prop && obj2.prop){
+          var props1 =_.omit(obj1.prop, "innerHTML", "outerHTML", "innerText", "outerText","textContent","className");
+          var props2 =_.omit(obj2.prop, "innerHTML", "outerHTML", "innerText", "outerText","textContent","className");
+          console.log(divergingProps({"prop":props1},{prop:props2}));
+        }
       }
       return[
         {"type":"We expect these nodes to be the same, but they're not.",
@@ -1332,7 +1335,9 @@ function nodeEquals(node1,node2){
       return true;
     }
     */
-    return _.isEqual(node1.prop, node2.prop);
+    var node1RelevantProps = _.omit(node1.prop, "innerHTML", "outerHTML", "innerText", "outerText","textContent","className","childElementCount");
+    var node2RelevantProps = _.omit(node2.prop, "innerHTML", "outerHTML", "innerText", "outerText","textContent","className","childElementCount");
+    return _.isEqual(node1RelevantProps, node2RelevantProps);
   }
   return node1==node2;
 };
