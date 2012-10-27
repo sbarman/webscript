@@ -400,6 +400,7 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
       eventData[prop+"_value"]=delta.record.prop[prop];
       console.log("NEW ANNOTATION: going to use the value of the record prop");
       replayFunctions.push(makeMirrorFunction(prop));
+      replayFunctions.push(makeMirrorFunction(prop));
       recordFunctions.push(makeMirrorRecordFunction(prop));
     }
     
@@ -579,7 +580,8 @@ function makeConcatFunction(targetProp, concatList){
       var messagePropFunc = makeMessagePropRHS(concatList[1].messageProp);
       concatFunction = function(element, eventMessage){
         if ((typeof element[targetProp]) !== "undefined"){
-          element[targetProp] = element[concatList[0].elementProp] + messagePropFunc(element,eventMessage);
+          console.log("Concat application.", element[concatList[0].elementProp] + messagePropFunc(eventMessage));
+          element[targetProp] = element[concatList[0].elementProp] + messagePropFunc(eventMessage);
         }
       }
     }
@@ -589,7 +591,7 @@ function makeConcatFunction(targetProp, concatList){
       var messagePropFunc = makeMessagePropRHS(concatList[0].messageProp);
       concatFunction = function(element, eventMessage){
         if ((typeof element[targetProp]) !== "undefined"){
-          element[targetProp] = messagePropFunc(element,eventMessage) + element[concatList[1].elementProp];
+          element[targetProp] = messagePropFunc(eventMessage) + element[concatList[1].elementProp];
         }
       }
     }
@@ -598,7 +600,7 @@ function makeConcatFunction(targetProp, concatList){
       var messagePropFunc0 = makeMessagePropRHS(concatList[0].messageProp);
       var messagePropFunc1 = makeMessagePropRHS(concatList[1].messageProp);
         if ((typeof element[targetProp]) !== "undefined"){
-          element[targetProp] = messagePropFunc0(element,eventMessage) + messagePropFunc1(element,eventMessage);
+          element[targetProp] = messagePropFunc0(eventMessage) + messagePropFunc1(eventMessage);
         }
       }
     }
