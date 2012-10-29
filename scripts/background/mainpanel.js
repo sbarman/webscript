@@ -136,7 +136,11 @@ var ScriptServer = (function ScriptServerClosure() {
           console.log(data, jqXHR, textStatus);
 
           var replayId = data.id;
-          for (var i = 0, ii = events.length; i < ii; ++i) {
+
+          function saveReplayEvent(i) {
+            if (i >= events.length)
+              return;
+
             // need to create new scope to variables don't get clobbered
             (function() {
               var postMsg = {};
@@ -186,8 +190,8 @@ var ScriptServer = (function ScriptServerClosure() {
                 },
                 success: function(data, textStatus, jqXHR) {
                   console.log(data, jqXHR, textStatus);
+                  saveReplayEvent(i + 1);
                 },
-                async: false,
                 contentType: "application/json",
                 data: JSON.stringify(postMsg),
                 dataType: "json",
@@ -197,6 +201,8 @@ var ScriptServer = (function ScriptServerClosure() {
               });
             })();
           }
+
+          saveReplayEvent(0);
         },
         contentType: "application/json",
         data: JSON.stringify(postMsg),
@@ -223,7 +229,10 @@ var ScriptServer = (function ScriptServerClosure() {
           console.log(data, jqXHR, textStatus);
 
           var scriptId = data.id;
-          for (var i = 0, ii = events.length; i < ii; ++i) {
+          function saveEvent(i) {
+            if (i >= events.length)
+              return;
+
             // need to create new scope to variables don't get clobbered
             (function() {
               var postMsg = {};
@@ -273,8 +282,8 @@ var ScriptServer = (function ScriptServerClosure() {
                 },
                 success: function(data, textStatus, jqXHR) {
                   console.log(data, jqXHR, textStatus);
+                  saveEvent(i + 1);
                 },
-                async: false,
                 contentType: "application/json",
                 data: JSON.stringify(postMsg),
                 dataType: "json",
@@ -284,6 +293,7 @@ var ScriptServer = (function ScriptServerClosure() {
               });
             })();
           }
+          saveEvent(0);
         },
         contentType: "application/json",
         data: JSON.stringify(postMsg),
