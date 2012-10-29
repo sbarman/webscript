@@ -5,7 +5,7 @@
 
 var snapshotDom = null;
 var compareDom = null;
-var ignoreClasses = {"replaystatus": true};
+//var ignoreClasses = {"replaystatus": true};
 var ignoreTags = {"script": true, "style": true};
  
 (function() {
