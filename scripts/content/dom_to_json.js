@@ -5,71 +5,88 @@
 
 var snapshotDom = null;
 var compareDom = null;
-var ignoreClasses = ["replaystatus"];
-var ignoreTags = ["script", "style"];
+var ignoreClasses = {"replaystatus": true};
+var ignoreTags = {"script": true, "style": true};
  
 (function() {
+  function createObjTree(node, nodeName) {
+    var returnVal = {children: [], prop: {}};
+    returnVal.prop["nodeName"] = nodeName;
 
-  function createObjTree(oNode) {
-    var vReturnVal = {children: [], prop: {}};
-    vReturnVal.prop["nodeName"] = oNode.nodeName.toLowerCase();
+    if (node.hasChildNodes()) {
+      var childNodes = node.childNodes
+      var children = returnVal.children;
 
-    if (oNode.hasChildNodes()) {
-      for (var oChild, nItem = 0; nItem < oNode.childNodes.length; nItem++) {
-        oChild = oNode.childNodes.item(nItem);
-        var children = vReturnVal.children;
+      for (var i = 0, ii = childNodes.length; i < ii; ++i) {
+        var child = childNodes.item(i);
+        var nodeType = child.nodeType;
+/*
         if (oChild.nodeType === 4) {
           var value = oChild.nodeValue;
           if (value)
-            children.push(value); /* nodeType is "CDATASection" (4) */
-        } else if (oChild.nodeType === 3) {
-          var value = oChild.nodeValue.trim();
+            children.push(value); // nodeType is "CDATASection" (4)
+        } else 
+*/
+        if (nodeType === 3) {
+          var value = child.nodeValue.trim();
           if (value)
-            children.push(value); /* nodeType is "Text" (3) */ 
-        } else if (oChild.nodeType === 1 && !oChild.prefix && !ignoreTag(oChild) && !ignoreClass(oChild)) {
-          var child = createObjTree(oChild); /* nodeType is "Element" (1) */
-          children.push(child);
+            children.push(value); // nodeType is "Text" (3)
+        } else if (nodeType === 1) {
+          /*&& !oChild.prefix &&*/
+          var childNodeName = child.nodeName.toLowerCase();
+          if (!(childNodeName in ignoreTags) && 
+              !child.classList.contains("replaystatus")) {
+            // nodeType is "Element" (1)
+            var child = createObjTree(child, childNodeName); 
+            children.push(child);
+          }
         }
       }
     }    
 
     // possible failure due to cross-domain browser restrictions
-    if (oNode.nodeName.toLowerCase() != "iframe") {
-    for (var prop in oNode) {
-      try {
-        var val = oNode[prop];
-        var firstChar = prop[0];
-        if (firstChar == firstChar.toLowerCase() && 
-            (typeof val == 'string' || typeof val == 'number' || 
-            typeof val == 'boolean')) {
-          vReturnVal.prop[prop] = val;
+    if (nodeName != "iframe") {
+      var propList = returnVal.prop;
+      for (var prop in node) {
+        try {
+          var firstChar = prop.charCodeAt(0);
+          if (firstChar >= 65 && firstChar <= 90)
+            continue;
+
+          val = node[prop]
+          var type = typeof val;
+          if (type == 'string' || type == 'number' || type == 'boolean') {
+            propList[prop] = val;
+          }
+        } catch(e) {
+          // do nothing
         }
-      } catch(e) {
-        // do nothing
       }
     }
-    }
-    return vReturnVal;
+    return returnVal;
   }
   
-  function descendToBody(oNode){
-    if (oNode.nodeName.toLowerCase()=="body"){
-      return createObjTree(oNode);
+  function descendToBody(node){
+    var nodeName = node.nodeName.toLowerCase();
+    if (nodeName == "body"){
+      var objTree = createObjTree(node, nodeName);
+      //console.log(objTree);
+      return objTree;
     }
 
-    if (oNode.hasChildNodes()) {
-      for (var oChild, nItem = 0; nItem < oNode.childNodes.length; nItem++) {
-        oChild = oNode.childNodes.item(nItem);
-        var ret = descendToBody(oChild);
-        if (ret){
+    if (node.hasChildNodes()) {
+      var childNodes = node.childNodes;
+      for (var i = 0, ii = childNodes.length; i < ii; ++i) {
+        var child = childNodes.item(i);
+        var ret = descendToBody(child);
+        if (ret)
           return ret;
-        }
       }
     }
-    
     return null;
   }
-  
+
+/*  
   function ignoreTag(oNode){
     return _.contains(ignoreTags,oNode.nodeName.toLowerCase());
   }
@@ -78,22 +95,7 @@ var ignoreTags = ["script", "style"];
     var lowerCaseClassList = _.map(oNode.classList,function(div){return div.toLowerCase();});
     return _.reduce(ignoreClasses, function(acc,div){return acc || _.contains(lowerCaseClassList,div);},false);
   }
-
-  function getDifferences(tree1, tree2) {
-    var props1 = tree1.prop;
-    var props2 = tree2.prop;
-    
-    for (var p1 in props1) {
-      if (p1 in props2 && props1[p1] == props2[p1]) {
-        // do nothin
-      } else {
-      }
-    }
-
-  }
-  
+*/  
   snapshotDom = descendToBody;
-  compareDom = getDifferences;
-
 })();
 
