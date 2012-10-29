@@ -9,7 +9,8 @@
 var recording = false;
 var id = "setme";
 var port;
-var curSnapshot;
+var curSnapshotRecord;
+var curSnapshotReplay;
 var similarityThreshold = .9;
 var acceptTags = {"HTML":true, "BODY":true, "HEAD":true};
 var initialDivergences = false;
@@ -23,7 +24,8 @@ var seenEvent = false;
 function snapshot() {
   return snapshotDom(document);
 }
-curSnapshot = snapshot();
+curSnapshotRecord = snapshot();
+curSnapshotReplay = curSnapshotRecord;
 
 // taken from http://stackoverflow.com/questions/2631820/im-storing-click-coor
 // dinates-in-my-db-and-then-reloading-them-later-and-showing/2631931#2631931
@@ -105,8 +107,8 @@ function processEvent(eventData) {
     eventMessage["dispatchType"] = dispatchType;
     eventMessage["nodeName"] = nodeName;
 
-    curSnapshot = snapshot();
-    eventMessage["snapshotBefore"] = curSnapshot;
+    curSnapshotRecord = snapshot();
+    eventMessage["snapshotBefore"] = curSnapshotRecord;
 
     for (var prop in properties) {
       if (prop in eventData) {
@@ -192,20 +194,6 @@ function simulate(element, eventData) {
     script(element, eventData);
     return;
   }
-   
-  // handle any quirks with the event type
-  var extension = extendEvents[eventName];
-  if (extension) {
-    extension.replay(element, eventData);
-  }
-
-  // handle any more quirks with a specific version of the event type
-  for (var i in annotationEvents) {
-    var annotation = annotationEvents[i];
-    if (annotation.replay && annotation.guard(element, eventData)) {
-      annotation.replay(element, eventData);
-    }
-  }
 
   var eventType = getEventType(eventName);
   var defaultProperties = getEventProps(eventName);
@@ -258,13 +246,17 @@ function simulate(element, eventData) {
   
   if (!seenEvent){
     seenEvent = true;
+    curSnapshotReplay = snapshot();
   }
   else {
     var recordDomBefore = prevEvent.eventData.snapshotBefore;
     var recordDomAfter = eventData.snapshotBefore;
-    var replayDomBefore = curSnapshot;
-    curSnapshot = snapshot();
-    var replayDomAfter = curSnapshot;
+    var replayDomBefore = curSnapshotReplay;
+    curSnapshotReplay = snapshot();
+    var replayDomAfter = curSnapshotReplay;
+    
+    console.log("EVENT for checking DIVERGENCE", prevEvent.eventData.type, prevEvent.eventData.nodeName);
+    console.log("EVENT about to DISPATCH", eventData.type, eventData.nodeName);
         
     //let's try seeing divergence for the last event, now that we have a
     //new more recent snapshot of the record DOM
@@ -272,6 +264,20 @@ function simulate(element, eventData) {
   }
   //this does the actual event simulation
   element.dispatchEvent(oEvent);
+  
+  // handle any quirks with the event type
+  var extension = extendEvents[eventName];
+  if (extension) {
+    extension.replay(element, eventData);
+  }
+
+  // handle any more quirks with a specific version of the event type
+  for (var i in annotationEvents) {
+    var annotation = annotationEvents[i];
+    if (annotation.replay && annotation.guard(element, eventData)) {
+      annotation.replay(element, eventData);
+    }
+  }
   
   //let's update a div letting us know what event we just got
   sendAlert("Received Event: "+eventData.type);
@@ -307,11 +313,11 @@ function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomB
   }
   
   //effects of events that were found in record browser but not replay browser
-  var recordDeltasNotMatched = filterOutInitialDivergences(recordDeltas, replayDeltas);
+  var recordDeltasNotMatched = filterDivergences(recordDeltas, replayDeltas);
   //effects of events that were found in replay browser but not record browser
-  var replayDeltasNotMatched = filterOutInitialDivergences(replayDeltas, recordDeltas);
+  //var replayDeltasNotMatched = filterOutInitialDivergences(replayDeltas, recordDeltas);
   console.log("recordDeltasNotMatched ", recordDeltasNotMatched);
-  console.log("replayDeltasNotMatched ", replayDeltasNotMatched);
+  //console.log("replayDeltasNotMatched ", replayDeltasNotMatched);
   
   for (var i=0;i<recordDeltasNotMatched.length;i++){
     var delta = recordDeltasNotMatched[i];
@@ -321,6 +327,7 @@ function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomB
     }
   }
   
+  /*
   for (var i=0;i<replayDeltasNotMatched.length;i++){
     var delta = replayDeltasNotMatched[i];
     if(delta.type == "We expect these nodes to be the same, but they're not."){
@@ -328,6 +335,7 @@ function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomB
       generateMismatchedValueCompensationEvent(element,eventData,delta,false);
     }
   }
+  */
 }
 
 //generate annotation events for the case where we just have different
@@ -366,7 +374,7 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
       //correct the diverging value so we don't diverge, since
       //our annotation event won't be able to fire till next time
       //(becuase it might involve a record action)
-      //element[prop] = delta.replay.prop[prop];
+      element[prop] = delta.replay.prop[prop];
       
       //if we can use a constant, use that
       var constant = delta.replay.prop[prop];
@@ -414,7 +422,7 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
     
 
     var compensationEvent = addCompensationEvent(name, typeOfNode, typeOfEvent, replayFunctions, recordFunctions,examples);
-    if (compensationEvent){compensationEvent.replay(element,eventData);}
+    //if (compensationEvent){compensationEvent.replay(element,eventData);}
     console.log("annotation events after ", annotationEvents);
   }
 };
@@ -685,16 +693,22 @@ function checkDomDivergence(recordDom, replayDom){
   return divergences;
 };
 
-function filterOutInitialDivergences(divergences, initialDivergences){
+//we're going to return the list of divergences, taking out any divergences
+//that also appear in divergencesToRemove
+//if we call this on recordDeltas, replayDeltas, we'll return the list of
+//recordDeltas that did not also appear during replay time
+function filterDivergences(divergences, divergencesToRemove){
   var finalDivergences = [];
   for (var i in divergences){
     var divergence = divergences[i];
     var divMatched = false;
     //console.log("divergence ", divergence);
-    for (var j in initialDivergences){
-      var initDivergence = initialDivergences[j];
-      //console.log("initDivergence", initDivergence);
-      if (divergenceSameAcrossBrowsers(divergence, initDivergence)){
+    for (var j in divergencesToRemove){
+      var divergenceToRemove = divergencesToRemove[j];
+      //now let's check if every property changed by divergence
+      //is also changed in the same way by divergenceToRemove
+      //in which case we can go ahead and say that divergence is matched
+      if (divergence2IncludesDivergence1(divergence,divergenceToRemove)){
         divMatched = true;
         continue;
       }
@@ -706,35 +720,36 @@ function filterOutInitialDivergences(divergences, initialDivergences){
   return finalDivergences;
 };
 
-//returns true if we match the divergence div1 and the divergence div2
-function divergenceSameAcrossBrowsers(div1,div2){
+//returns true if div2 changes all the props that div1 changes
+function divergence2IncludesDivergence1(div1,div2){
   var div1Before = div1.record;
   var div1After = div1.replay;
   var div2Before = div2.record;
   var div2After = div2.replay;
   
   //which properties are different after the event (in browser 1)?
-  var div1DivergingProps = divergingProps(div1Before,div1After).sort();
+  var divergingProps1 = divergingProps(div1Before,div1After);
   //which properties are different after the event (in browser 2)?
-  var div2DivergingProps = divergingProps(div2Before,div2After).sort();
+  var divergingProps2 = divergingProps(div2Before,div2After);
   
-  //if different numbers of properties are different, these
-  //divergences definitely don't match
-  if(div1DivergingProps.length != div2DivergingProps.length){
-    return false;
-  }
-  
-  //iterate through the sorted lists of props
-  //freak out if we get mismatched props (props with different names)
-  //or if the value of that changed prop is not the same in both
-  //browsers
-  for (var i = 0; i < div1DivergingProps.length; i++){
-    if(div1DivergingProps[i] != div2DivergingProps[i] ||
-        div1After[div1DivergingProps[i]] != div2After[div2DivergingProps[i]]){
+  //we have to make sure that any properties that were different
+  //in div1 are also different in div2
+  //Also, they should end with the same value.
+  for (var i = 0; i < divergingProps1.length; i++){
+    //console.log("diverging prop", divergingProps1[i]);
+    var ind = divergingProps2.indexOf(divergingProps1[i]);
+    if (ind==-1){
+      //console.log("ind is -1, returning false");
+      return false;
+    }
+    if (div1After.prop[divergingProps1[i]]!=div2After.prop[divergingProps2[ind]]){
+      //console.log("val not equal, returning false");
+      //console.log(div1After,div2After,div1After.prop[divergingProps1[i]],div2After.prop[divergingProps2[ind]]);
       return false;
     }
   }
   
+  console.log("returning true");
   return true;
 };
 
