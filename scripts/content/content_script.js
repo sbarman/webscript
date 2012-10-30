@@ -295,6 +295,8 @@ function checkWait(eventData) {
 function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomBefore,replayDomAfter){
   var element = prevEvent.element;
   var eventData = prevEvent.eventData;
+  
+  console.log(recordDomBefore, recordDomAfter);
 
   var recordDeltas = checkDomDivergence(recordDomBefore,recordDomAfter);
   console.log("RECORD DELTAS");
