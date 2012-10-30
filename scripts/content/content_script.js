@@ -854,6 +854,11 @@ function recursiveVisit(obj1,obj2){
     var numChildren1 = children1.length;
     var numChildren2 = children2.length;
     
+    //we've tried to match a node that turns out not to be nodeEqual
+    //we want to mark that this is a divergence, but we might also be
+    //calling it divergent even though there are more relevant divergences
+    //among its children, so let's just add this divergence and continue
+    //descending
     if (!nodeEquals(obj1,obj2)){
       if (verbose || scenarioVerbose){
         console.log("Scenario 11 divergence, we tried to match a couple of nodes that aren't nodeEqual.");
@@ -864,12 +869,12 @@ function recursiveVisit(obj1,obj2){
           console.log(divergingProps({"prop":props1},{prop:props2}));
         }
       }
-      return[
+      divergences.push(
         {"type":"We expect these nodes to be the same, but they're not.",
         "record":obj1,
         "replay":obj2,
         "relevantChildren":[],
-        "relevantChildrenXPaths":[xpathFromAbstractNode(obj2)]}];
+        "relevantChildrenXPaths":[xpathFromAbstractNode(obj2)]});
     }
     
     //if a different number of children, definitely want to assumerecursiveVisit
