@@ -470,8 +470,8 @@ var Panel = (function PanelClosure() {
         }
         var names = input.name.split('.');
 
-        var cur = obj;
-        for (var j = 0, jj = names.length - 1; j < jj; ++j) {
+        var cur = params;
+        for (var j = 1, jj = names.length - 1; j < jj; ++j) {
           var key = names[j];
           if (!(key in cur)) {
             cur[key] = {};
@@ -480,8 +480,6 @@ var Panel = (function PanelClosure() {
         }
         cur[names[names.length - 1]] = val;
       }
-
-      params = obj.params;
     },
     addEvent: function _addEvent(eventRecord) {
       var eventInfo = eventRecord.msg.value;

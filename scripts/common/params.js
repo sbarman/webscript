@@ -93,12 +93,19 @@ var params = null;
       'timeStamp': 0
     }
   };
+
+  var synthesis = {
+    omittedProps: ["innerHTML", "outerHTML", "innerText", "outerText",
+        "textContent", "className", "childElementCount", "scrollHeight",
+        "scrollWidth", "clientHeight", "clientWidth", "clientTop", "clientLeft",
+        "offsetHeight", "offsetWidth", "offsetTop", "offsetLeft"]
+  };
   
   params = {
     events: capturedEvents,
     simultaneous: true,
     timing: 0,
-//    server: "http://localhost:8000/api/",
+    synthesis: synthesis,
     server: "http://webscriptdb.herokuapp.com/api/",
     defaultProps: defaultOptions
   };

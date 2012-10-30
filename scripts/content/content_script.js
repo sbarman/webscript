@@ -388,7 +388,7 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
         }
       }
     }
-    propsToChange = _.without(propsToChange,"innerHTML", "outerHTML", "innerText", "outerText","textContent","className","childElementCount");
+    propsToChange = _.without(propsToChange, params.synthesis.omittedProps);
     
     if (synthesisVerbose){
       console.log(name,": propsToChange ", propsToChange);
@@ -864,8 +864,8 @@ function recursiveVisit(obj1,obj2){
         console.log("Scenario 11 divergence, we tried to match a couple of nodes that aren't nodeEqual.");
         console.log(obj1,obj2);
         if (obj1.prop && obj2.prop){
-          var props1 =_.omit(obj1.prop, "innerHTML", "outerHTML", "innerText", "outerText","textContent","className");
-          var props2 =_.omit(obj2.prop, "innerHTML", "outerHTML", "innerText", "outerText","textContent","className");
+          var props1 =_.omit(obj1.prop, params.synthesis.omittedProps);
+          var props2 =_.omit(obj2.prop, params.synthesis.omittedProps);
           console.log(divergingProps({"prop":props1},{prop:props2}));
         }
       }
@@ -1374,8 +1374,8 @@ function nodeEquals(node1,node2){
       return true;
     }
     */
-    var node1RelevantProps = _.omit(node1.prop, "innerHTML", "outerHTML", "innerText", "outerText","textContent","className","childElementCount");
-    var node2RelevantProps = _.omit(node2.prop, "innerHTML", "outerHTML", "innerText", "outerText","textContent","className","childElementCount");
+    var node1RelevantProps = _.omit(node1.prop, params.synthesis.omittedProps);
+    var node2RelevantProps = _.omit(node2.prop, params.synthesis.omittedProps);
     return _.isEqual(node1RelevantProps, node2RelevantProps);
   }
   return node1==node2;
