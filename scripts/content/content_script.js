@@ -28,6 +28,13 @@ function snapshot() {
 curSnapshotRecord = snapshot();
 curSnapshotReplay = curSnapshotRecord;
 
+function Node(type, val, leftNode, rightNode) {
+  this.type = type;
+  this.val = val;
+  this.leftNode = leftNode;
+  this.rightNode = rightNode;
+}
+
 // taken from http://stackoverflow.com/questions/2631820/im-storing-click-coor
 // dinates-in-my-db-and-then-reloading-them-later-and-showing/2631931#2631931
 function getPathTo(element) {
@@ -370,8 +377,12 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
     }
     
     //let's add the current instance to our list of examples
-    var messagePropMap = createMessagePropMap(eventData);
-    examples.push({"elementPropsBefore":delta.record.prop,"elementPropsAfter":delta.replay.prop,"messagePropMap":messagePropMap});
+    var messagePropNodes = createMessagePropNodes(eventData);
+    var elementPropNodesBefore = createElementPropNodes(delta.record.prop);
+    examples.push({"elementPropsBefore":delta.record.prop,
+      "elementPropsAfter":delta.replay.prop,
+      "messagePropNodeMap":messagePropNodes,
+      "elementPropNodeMapBefore":elementPropNodesBefore});
     
     if (synthesisVerbose){
       console.log("EXAMPLES", examples);
@@ -394,8 +405,8 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
       console.log(name,": propsToChange ", propsToChange);
     }
   
-    var replayFunctions = [];
-    var recordFunctions = [];
+    var replayNodes = [];
+    var recordNodes = [];
     for (var i=0;i<propsToChange.length;i++){
       var prop = propsToChange[i];
       
@@ -405,12 +416,12 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
       element[prop] = delta.replay.prop[prop];
       
       //if we can use a constant, use that
-      var constant = delta.replay.prop[prop];
-      if (_.reduce(examples,function(acc,ex){return (acc && ex.elementPropsAfter[prop]==constant);},true)){
+      var constant = constantMatchingValue(examples, prop);
+      if (constant){
         if (synthesisVerbose){
           console.log("NEW ANNOTATION: going to use constant, with ", prop, constant);
         }
-        replayFunctions.push(makeConstantFunction(prop,constant));
+        replayNodes.push(makeConstantNode(prop,constant));
         continue;
       }
       //if we can find a property of the message, use that
@@ -419,7 +430,7 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
         if (synthesisVerbose){
           console.log("NEW ANNOTATION: going to use messageProp, with ", prop, messageProp);
         }
-        replayFunctions.push(makeMessagePropFunction(prop,messageProp));
+        replayNodes.push(makeMessagePropNode(prop,messageProp));
         continue;
       }
       //if we can find a property of the original element, use that
@@ -428,7 +439,7 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
         if (synthesisVerbose){
           console.log("NEW ANNOTATION: going to use elementProp, with ", prop, elementProp);
         }
-        replayFunctions.push(makeElementPropFunction(prop,elementProp));
+        replayNodes.push(makeElementPropNode(prop,elementProp));
         continue;
       }
       //if we can find a concatenatio of one of those guys, use that
@@ -437,7 +448,7 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
         if (synthesisVerbose){
           console.log("NEW ANNOTATION: going to use concat, with ", prop, concatList);
         }
-        replayFunctions.push(makeConcatFunction(prop,concatList));
+        replayNodes.push(makeConcatNode(prop,concatList));
         continue;
       }
       //else, use the value of valueAtRecordAfter
@@ -445,9 +456,8 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
       if (synthesisVerbose){
         console.log("NEW ANNOTATION: going to use the value of the record prop", prop, element[prop]);
       }
-      replayFunctions.push(makeMirrorFunction(prop));
-      replayFunctions.push(makeMirrorFunction(prop));
-      recordFunctions.push(makeMirrorRecordFunction(prop));
+      replayNodes.push(makeMirrorNode(prop));
+      recordNodes.push(makeMirrorRecordNode(prop));
     }
     
     //now we know what statement we want to do at replay to correct each
@@ -460,28 +470,45 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
   }
 };
 
-function createMessagePropMap(eventMessage){
-  var messagePropMap = {};
+function createMessagePropNodes(eventMessage){
+  var messagePropNodes = {};
   for (var prop in eventMessage){
-    messagePropMap[prop]=eventMessage[prop];
+    messagePropNodes[prop] = Node("messageProp",prop);
   }
   if (eventMessage["keyCode"]){
-    messagePropMap["_charCode_keyCode"]=String.fromCharCode(eventMessage["keyCode"]);
+    messagePropNodes[prop] = Node("_charCode_keyCode",String.fromCharCode(eventMessage["keyCode"])));
   }
   if (eventMessage["charCode"]){
-    messagePropMap["_charCode_charCode"]=String.fromCharCode(eventMessage["charCode"]);
+    messagePropNodes.push(Node("_charCode_charCode",String.fromCharCode(eventMessage["charCode"])));
   }
-  return messagePropMap;
+  return messagePropNodes;
 }
 
+function createElementPropNodes(element){
+  var elementPropNodes = [];
+  for (var prop in element){
+    elementPropNodes.push(Node("elementProp",prop);
+  }
+  return elementPropNodes;
+}
+
+function constantMatchingValue(examples,targetProp){
+  var constant = examples[0].elementPropsAfter[targetProp];
+  if (_.reduce(examples,function(acc,ex){return (acc && ex.elementPropsAfter[targetProp]==constant);},true)){
+    return Node("constant", constant);
+  }
+  return null;
+};
+
 function messagePropMatchingValue(examples,targetProp){
-  var messagePropMap = examples[0].messagePropMap;
-  for (var prop in messagePropMap){
+  var messagePropNodes = examples[0].messagePropNodes;
+  for (var node in messagePropNodes){
+    var prop = node.val;
     //if for all examples this message prop is the same as the
     //target value for that example, return this message prop
     if (_.reduce(examples,function(acc,ex){return 
       (acc && ex.messagePropMap[prop] == ex.elementPropsAfter[targetProp]);},true)) {
-        return prop;
+        return Node("messageProp", prop);
     }
   }
   return null;
@@ -492,10 +519,14 @@ function elementPropMatchingValue(examples,targetProp){
   for (var prop in elementProps){
     if (_.reduce(examples,function(acc,ex){return 
       (acc && ex.elementPropsBefore[prop] == ex.elementPropsAfter[targetProp]);},true)) {
-      return prop;
+      return Node("elementProp", prop);
     }
   }
   return null;
+};
+
+function concatMatchingValue(examples,targetProp){
+  
 };
 
 function concatMatchingValue(examples,targetProp){
