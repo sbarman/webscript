@@ -321,7 +321,10 @@ function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomB
   
   for (var i=0;i<recordDeltasNotMatched.length;i++){
     var delta = recordDeltasNotMatched[i];
-    if(delta.type == "We expect these nodes to be the same, but they're not."){
+    console.log("eventData.nodeName", eventData.nodeName);
+    console.log("delta.record.nodeName", delta.record.prop.nodeName);
+    console.log("delta", delta);
+    if(delta.type == "We expect these nodes to be the same, but they're not." && delta.record.prop.nodeName.toLowerCase() == eventData.nodeName){
       console.log("here we'd generate annotation events, delta should happen");
       generateMismatchedValueCompensationEvent(element,eventData,delta,true);
     }
@@ -342,16 +345,11 @@ function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomB
 //values for properties of matched nodes
 function generateMismatchedValueCompensationEvent(element, eventData, delta, thisDeltaShouldHappen){
   if (thisDeltaShouldHappen){
-    console.log("about to find props");
-    var propsToChange = divergingProps(delta.record,delta.replay);
-    propsToChange = _.without(propsToChange,"innerHTML", "outerHTML", "innerText", "outerText","textContent","className");
     
     var typeOfNode = eventData.nodeName;
     var typeOfEvent = eventData.type;
     var name = typeOfEvent+"_"+typeOfNode;
-    
-    console.log(name,": propsToChange ", propsToChange);
-    console.log(eventData);
+
     
     //let's get the examples associated with this type of compensation event
     var examples = [];
@@ -366,6 +364,23 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
     
     console.log("EXAMPLES", examples);
     
+    var propsToChange = [];
+    for (var i=0;i<examples.length;i++){
+      var example = examples[i];
+      var props = divergingProps({"prop":example.elementPropsBefore},{"prop":example.elementPropsAfter});
+      for (var j=0;j<props.length;j++){
+        var prop = props[j];
+        if (!_.contains(propsToChange,prop)){
+          propsToChange.push(prop);
+        }
+      }
+    }
+    propsToChange = _.without(propsToChange,"innerHTML", "outerHTML", "innerText", "outerText","textContent","className","childElementCount");
+    
+        
+    console.log(name,": propsToChange ", propsToChange);
+    console.log(eventData);
+    
     var replayFunctions = [];
     var recordFunctions = [];
     for (var i=0;i<propsToChange.length;i++){
@@ -379,34 +394,34 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
       //if we can use a constant, use that
       var constant = delta.replay.prop[prop];
       if (_.reduce(examples,function(acc,ex){return (acc && ex.elementPropsAfter[prop]==constant);},true)){
-        console.log("NEW ANNOTATION: going to use constant, with ", constant);
+        console.log("NEW ANNOTATION: going to use constant, with ", prop, constant);
         replayFunctions.push(makeConstantFunction(prop,constant));
         continue;
       }
       //if we can find a property of the message, use that
       var messageProp = messagePropMatchingValue(examples,prop);
       if (messageProp){
-        console.log("NEW ANNOTATION: going to use messageProp, with ", messageProp);
+        console.log("NEW ANNOTATION: going to use messageProp, with ", prop, messageProp);
         replayFunctions.push(makeMessagePropFunction(prop,messageProp));
         continue;
       }
       //if we can find a property of the original element, use that
       var elementProp = elementPropMatchingValue(examples,prop);
       if (elementProp){
-        console.log("NEW ANNOTATION: going to use elementProp, with ", elementProp);
+        console.log("NEW ANNOTATION: going to use elementProp, with ", prop, elementProp);
         replayFunctions.push(makeElementPropFunction(prop,elementProp));
         continue;
       }
       //if we can find a concatenatio of one of those guys, use that
       var concatList = concatMatchingValue(examples,prop);
       if (concatList){
-        console.log("NEW ANNOTATION: going to use concat, with ", concatList);
+        console.log("NEW ANNOTATION: going to use concat, with ", prop, concatList);
         replayFunctions.push(makeConcatFunction(prop,concatList));
         continue;
       }
       //else, use the value of valueAtRecordAfter
       eventData[prop+"_value"]=delta.record.prop[prop];
-      console.log("NEW ANNOTATION: going to use the value of the record prop");
+      console.log("NEW ANNOTATION: going to use the value of the record prop", prop, element[prop]);
       replayFunctions.push(makeMirrorFunction(prop));
       replayFunctions.push(makeMirrorFunction(prop));
       recordFunctions.push(makeMirrorRecordFunction(prop));
@@ -415,9 +430,6 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
     //now we know what statement we want to do at replay to correct each
     //diverging prop
     console.log("-----------");
-    console.log("name");
-    console.log(replayFunctions);
-    console.log(recordFunctions);
     console.log("annotation events before ", annotationEvents);
     
 
@@ -742,14 +754,14 @@ function divergence2IncludesDivergence1(div1,div2){
       //console.log("ind is -1, returning false");
       return false;
     }
-    if (div1After.prop[divergingProps1[i]]!=div2After.prop[divergingProps2[ind]]){
+    if (div1After.prop[divergingProps1[i]]!==div2After.prop[divergingProps2[ind]]){
       //console.log("val not equal, returning false");
       //console.log(div1After,div2After,div1After.prop[divergingProps1[i]],div2After.prop[divergingProps2[ind]]);
       return false;
     }
   }
   
-  console.log("returning true");
+  //console.log("returning true");
   return true;
 };
 
