@@ -136,7 +136,11 @@ var ScriptServer = (function ScriptServerClosure() {
           console.log(data, jqXHR, textStatus);
 
           var replayId = data.id;
-          for (var i = 0, ii = events.length; i < ii; ++i) {
+
+          function saveReplayEvent(i) {
+            if (i >= events.length)
+              return;
+
             // need to create new scope to variables don't get clobbered
             (function() {
               var postMsg = {};
@@ -186,8 +190,8 @@ var ScriptServer = (function ScriptServerClosure() {
                 },
                 success: function(data, textStatus, jqXHR) {
                   console.log(data, jqXHR, textStatus);
+                  saveReplayEvent(i + 1);
                 },
-                async: false,
                 contentType: "application/json",
                 data: JSON.stringify(postMsg),
                 dataType: "json",
@@ -197,6 +201,8 @@ var ScriptServer = (function ScriptServerClosure() {
               });
             })();
           }
+
+          saveReplayEvent(0);
         },
         contentType: "application/json",
         data: JSON.stringify(postMsg),
@@ -223,7 +229,10 @@ var ScriptServer = (function ScriptServerClosure() {
           console.log(data, jqXHR, textStatus);
 
           var scriptId = data.id;
-          for (var i = 0, ii = events.length; i < ii; ++i) {
+          function saveEvent(i) {
+            if (i >= events.length)
+              return;
+
             // need to create new scope to variables don't get clobbered
             (function() {
               var postMsg = {};
@@ -273,8 +282,8 @@ var ScriptServer = (function ScriptServerClosure() {
                 },
                 success: function(data, textStatus, jqXHR) {
                   console.log(data, jqXHR, textStatus);
+                  saveEvent(i + 1);
                 },
-                async: false,
                 contentType: "application/json",
                 data: JSON.stringify(postMsg),
                 dataType: "json",
@@ -284,6 +293,7 @@ var ScriptServer = (function ScriptServerClosure() {
               });
             })();
           }
+          saveEvent(0);
         },
         contentType: "application/json",
         data: JSON.stringify(postMsg),
@@ -380,8 +390,8 @@ var Panel = (function PanelClosure() {
         controller.pause();
       });
 
-      $("#replayReset").click(function(eventObject) {
-        controller.replayReset();
+      $("#restart").click(function(eventObject) {
+        controller.restart();
       });
       
       $("#paramsDiv").hide(1000);
@@ -719,6 +729,12 @@ var Replay = (function ReplayClosure() {
     },
     pause: function _pause() {
       clearTimeout(this.timeoutHandle);
+      this.timeoutHandle = null;
+    },
+    restart: function _restart() {
+      if (this.timeoutHandle == null) {
+        this.setNextEvent(0);
+      }
     },
     finish: function _finish() {
       var record = this.record;
@@ -1065,8 +1081,8 @@ var Controller = (function ControllerClosure() {
     pause: function() {
       this.replay.pause();
     },
-    replayReset: function() {
-      this.replay.reset();
+    restart: function() {
+      this.replay.restart();
     },
     saveScript: function(name) {
       console.log("saving script");
