@@ -35,7 +35,7 @@ var ignoreTags = {"script": true, "style": true};
           /*&& !oChild.prefix &&*/
           var childNodeName = child.nodeName.toLowerCase();
           if (!(childNodeName in ignoreTags) && 
-              !child.classList.contains("replaystatus")) {
+              !child.classList.contains("replayStatus")) {
             // nodeType is "Element" (1)
             var child = createObjTree(child, childNodeName); 
             children.push(child);
