@@ -50,10 +50,10 @@ var ignoreTags = {"script": true, "style": true};
       for (var prop in node) {
         try {
           var firstChar = prop.charCodeAt(0);
-          if (firstChar >= 65 && firstChar <= 90)
+          if (firstChar >= 65 && firstChar <= 90){
             continue;
-
-          val = node[prop]
+          }
+          var val = node[prop];
           var type = typeof val;
           if (type == 'string' || type == 'number' || type == 'boolean') {
             propList[prop] = val;
