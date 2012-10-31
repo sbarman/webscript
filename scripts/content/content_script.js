@@ -310,6 +310,11 @@ function simulate(element, eventData) {
     //let's try seeing divergence for the last event, now that we have a
     //new more recent snapshot of the record DOM
     visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomBefore,replayDomAfter);
+    //visualizeDivergence will change the state of the DOM to be what it
+    //should have been, if the proper compensation events were in place
+    //but we don't want to associate these changes with the next event
+    //so let's snapshot the DOM again
+    curSnapshotReplay = snapshot();
   }
   //this does the actual event simulation
   element.dispatchEvent(oEvent);
@@ -506,7 +511,6 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
       var mirrorRecordNode = new Node("mirrorRecord",prop);
       recordNodes.push(new TopNode(prop,mirrorRecordNode));
     }
-    
     for (var i in replayNodes){
       console.log("NEW ANNOTATION STATEMENT ", name, replayNodes[i].toString());
     }
