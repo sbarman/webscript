@@ -35,6 +35,45 @@ function Node(type, val, leftNode, rightNode) {
   this.rightNode = rightNode;
 }
 
+Node.prototype = {
+  toString: function() {
+    if (this.type=="constant"){
+      return this.val;
+    }
+    else if (this.type=="messageProp"){
+      return "eventMessage["+this.val+"]";
+    }
+    else if (this.type=="elementProp"){
+      return "element["+this.val+"]";
+    }
+    else if (this.type=="concat"){
+      return this.leftNode.toString()+"+"+this.rightNode.toString();
+    }
+    else if (this.type=="mirror"){
+      return "eventMessage["+this.val+"_value]";
+    }
+    else if (this.type=="mirrorRecord"){
+      return "element["+this.val+"]";
+    }
+  }
+}
+
+function TopNode(targetProp, node) {
+  this.targetProp = targetProp;
+  this.node = node;
+}
+
+TopNode.prototype = {
+  toString: function() {
+    if (this.node.type == "mirrorRecord"){
+      return "eventMessage["+this.targetProp+"_value] = "+this.node.toString();
+    }
+    else {
+      return "element["+this.targetProp+"] = "+this.node.toString();
+    }
+  }
+}
+
 // taken from http://stackoverflow.com/questions/2631820/im-storing-click-coor
 // dinates-in-my-db-and-then-reloading-them-later-and-showing/2631931#2631931
 function getPathTo(element) {
@@ -376,13 +415,19 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
       examples = annotationEvents[name].examples;
     }
     
-    //let's add the current instance to our list of examples
+    //for the event message, associated properties with their values
+    var messagePropMap = createMessagePropMap(eventData);
+    //make nodes for all the message properties
     var messagePropNodes = createMessagePropNodes(eventData);
-    var elementPropNodesBefore = createElementPropNodes(delta.record.prop);
-    examples.push({"elementPropsBefore":delta.record.prop,
+    //make nodes for all the element properties
+    var elementPropNodes = createElementPropNodes(delta.record.prop);
+    //let's add the current instance to our list of examples
+    var newExample = {"messagePropMap":messagePropMap,
+      "elementPropsBefore":delta.record.prop,
       "elementPropsAfter":delta.replay.prop,
-      "messagePropNodeMap":messagePropNodes,
-      "elementPropNodeMapBefore":elementPropNodesBefore});
+      "messagePropNodes":messagePropNodes,
+      "elementPropNodes":elementPropNodes};
+    examples.push(newExample);
     
     if (synthesisVerbose){
       console.log("EXAMPLES", examples);
@@ -416,70 +461,90 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
       element[prop] = delta.replay.prop[prop];
       
       //if we can use a constant, use that
-      var constant = constantMatchingValue(examples, prop);
-      if (constant){
+      var constantNode = constantMatchingValue(examples, prop);
+      if (constantNode){
         if (synthesisVerbose){
-          console.log("NEW ANNOTATION: going to use constant, with ", prop, constant);
+          console.log("NEW ANNOTATION: going to use constant, with ", prop, constantNode);
         }
-        replayNodes.push(makeConstantNode(prop,constant));
+        replayNodes.push(new TopNode(prop,constantNode));
         continue;
       }
       //if we can find a property of the message, use that
-      var messageProp = messagePropMatchingValue(examples,prop);
-      if (messageProp){
+      var messagePropNode = messagePropMatchingValue(examples,prop);
+      if (messagePropNode){
         if (synthesisVerbose){
-          console.log("NEW ANNOTATION: going to use messageProp, with ", prop, messageProp);
+          console.log("NEW ANNOTATION: going to use messageProp, with ", prop, messagePropNode);
         }
-        replayNodes.push(makeMessagePropNode(prop,messageProp));
+        replayNodes.push(new TopNode(prop,messagePropNode));
         continue;
       }
       //if we can find a property of the original element, use that
-      var elementProp = elementPropMatchingValue(examples,prop);
-      if (elementProp){
+      var elementPropNode = elementPropMatchingValue(examples,prop);
+      if (elementPropNode){
         if (synthesisVerbose){
-          console.log("NEW ANNOTATION: going to use elementProp, with ", prop, elementProp);
+          console.log("NEW ANNOTATION: going to use elementProp, with ", prop, elementPropNode);
         }
-        replayNodes.push(makeElementPropNode(prop,elementProp));
+        replayNodes.push(new TopNode(prop,elementPropNode));
         continue;
       }
       //if we can find a concatenatio of one of those guys, use that
-      var concatList = concatMatchingValue(examples,prop);
-      if (concatList){
+      var concatNode = concatMatchingValue(examples,prop);
+      if (concatNode){
         if (synthesisVerbose){
-          console.log("NEW ANNOTATION: going to use concat, with ", prop, concatList);
+          console.log("NEW ANNOTATION: going to use concat, with ", prop, concatNode);
         }
-        replayNodes.push(makeConcatNode(prop,concatList));
+        replayNodes.push(new TopNode(prop,concatNode));
         continue;
       }
       //else, use the value of valueAtRecordAfter
       eventData[prop+"_value"]=delta.record.prop[prop];
       if (synthesisVerbose){
-        console.log("NEW ANNOTATION: going to use the value of the record prop", prop, element[prop]);
+        console.log("NEW ANNOTATION: going to use the value of the record prop", prop);
       }
-      replayNodes.push(makeMirrorNode(prop));
-      recordNodes.push(makeMirrorRecordNode(prop));
+      var mirrorNode = new Node("mirror",prop)
+      replayNodes.push(new TopNode(prop,mirrorNode));
+      var mirrorRecordNode = new Node("mirrorRecord",prop);
+      recordNodes.push(new TopNode(prop,mirrorRecordNode));
+    }
+    
+    for (var i in replayNodes){
+      console.log("NEW ANNOTATION STATEMENT ", name, replayNodes[i].toString());
     }
     
     //now we know what statement we want to do at replay to correct each
     //diverging prop
-    var compensationEvent = addCompensationEvent(name, typeOfNode, typeOfEvent, replayFunctions, recordFunctions,examples);
+    var compensationEvent = addCompensationEvent(name, typeOfNode, typeOfEvent, replayNodes, recordNodes, newExample);
     //if (compensationEvent){compensationEvent.replay(element,eventData);}
-    if (synthesisVerbose){
+    if (synthesisVerbose || true){
       console.log("annotation events after addition ", annotationEvents);
     }
   }
 };
 
-function createMessagePropNodes(eventMessage){
-  var messagePropNodes = {};
+function createMessagePropMap(eventMessage){
+  var messagePropMap = {};
   for (var prop in eventMessage){
-    messagePropNodes[prop] = Node("messageProp",prop);
+    messagePropMap[prop]=eventMessage[prop];
   }
   if (eventMessage["keyCode"]){
-    messagePropNodes[prop] = Node("_charCode_keyCode",String.fromCharCode(eventMessage["keyCode"])));
+    messagePropMap["_charCode_keyCode"]=String.fromCharCode(eventMessage["keyCode"]);
   }
   if (eventMessage["charCode"]){
-    messagePropNodes.push(Node("_charCode_charCode",String.fromCharCode(eventMessage["charCode"])));
+    messagePropMap["_charCode_charCode"]=String.fromCharCode(eventMessage["charCode"]);
+  }
+  return messagePropMap;
+}
+
+function createMessagePropNodes(eventMessage){
+  var messagePropNodes = [];
+  for (var prop in eventMessage){
+    messagePropNodes.push(new Node("messageProp",prop));
+  }
+  if (eventMessage["keyCode"]){
+    messagePropNodes.push(new Node("messageProp","_charCode_keyCode"));
+  }
+  if (eventMessage["charCode"]){
+    messagePropNodes.push(new Node("messageProp","_charCode_charCode"));
   }
   return messagePropNodes;
 }
@@ -487,15 +552,30 @@ function createMessagePropNodes(eventMessage){
 function createElementPropNodes(element){
   var elementPropNodes = [];
   for (var prop in element){
-    elementPropNodes.push(Node("elementProp",prop);
+    elementPropNodes.push(new Node("elementProp",prop));
   }
   return elementPropNodes;
+}
+
+function evaluateNodeOnExample(node,example){
+  if (node.type=="constant"){
+    return node.val;
+  }
+  else if (node.type=="messageProp"){
+    return example.messagePropMap[node.val];
+  }
+  else if (node.type=="elementProp"){
+    return example.elementPropsBefore[node.val];
+  }
+  else if (node.type=="concat"){
+    return evaluateNodeOnExample(node.leftNode,example)+evaluateNodeOnExample(node.rightNode,example);
+  }
 }
 
 function constantMatchingValue(examples,targetProp){
   var constant = examples[0].elementPropsAfter[targetProp];
   if (_.reduce(examples,function(acc,ex){return (acc && ex.elementPropsAfter[targetProp]==constant);},true)){
-    return Node("constant", constant);
+    return new Node("constant", constant);
   }
   return null;
 };
@@ -503,187 +583,154 @@ function constantMatchingValue(examples,targetProp){
 function messagePropMatchingValue(examples,targetProp){
   var messagePropNodes = examples[0].messagePropNodes;
   for (var node in messagePropNodes){
-    var prop = node.val;
     //if for all examples this message prop is the same as the
     //target value for that example, return this message prop
     if (_.reduce(examples,function(acc,ex){return 
-      (acc && ex.messagePropMap[prop] == ex.elementPropsAfter[targetProp]);},true)) {
-        return Node("messageProp", prop);
+      (acc && evaluateNodeOnExample(node,ex) == ex.elementPropsAfter[targetProp]);},true)) {
+        return node;
     }
   }
   return null;
 };
 
 function elementPropMatchingValue(examples,targetProp){
-  var elementProps = examples[0].elementPropsBefore;
-  for (var prop in elementProps){
+  var elementPropNodes = examples[0].elementPropNodes;
+  for (var node in elementPropNodes){
     if (_.reduce(examples,function(acc,ex){return 
-      (acc && ex.elementPropsBefore[prop] == ex.elementPropsAfter[targetProp]);},true)) {
-      return Node("elementProp", prop);
+      (acc && evaluateNodeOnExample(node,ex) == ex.elementPropsAfter[targetProp]);},true)) {
+      return node;
     }
   }
   return null;
 };
 
 function concatMatchingValue(examples,targetProp){
-  
-};
-
-function concatMatchingValue(examples,targetProp){
-  var messagePropMap = examples[0].messagePropMap;
-  var elementProps = examples[0].elementPropsBefore;
-  for (var prop1 in messagePropMap){
-    for (var prop2 in messagePropMap){
-      if (_.reduce(examples,function(acc,ex){return (acc && ex.messagePropMap[prop1]+ex.messagePropMap[prop2] == ex.elementPropsAfter[targetProp]);},true)) {
-        return [{"element":false,"messageProp":prop1},{"element":false,"messageProp":prop2}];
-      }
-    }
-    for (var prop2 in elementProps){
-      if (_.reduce(examples,function(acc,ex){return (acc && ex.messagePropMap[prop1]+ex.elementPropsBefore[prop2] == ex.elementPropsAfter[targetProp]);},true)) {
-        return [{"element":false,"messageProp":prop1},{"element":true,"elementProp":prop2}];
+  var messagePropNodes = examples[0].messagePropNodes;
+  var elementPropNodes = examples[0].elementPropNodes;
+  var nodes = messagePropNodes.concat(elementPropNodes);
+  for (var i in nodes){
+    for (var j in nodes){
+      var node1 = nodes[i];
+      var node2 = nodes[j];
+      if (_.reduce(examples,function(acc,ex){return (acc && evaluateNodeOnExample(node1,ex)+evaluateNodeOnExample(node2,ex) == ex.elementPropsAfter[targetProp]);},true)) {
+        return new Node("concat","",node1,node2);
       }
     }
   }
-  for (var prop1 in elementProps){
-    for (var prop2 in messagePropMap){
-      if (_.reduce(examples,function(acc,ex){return (acc && ex.elementPropsBefore[prop1]+ex.messagePropMap[prop2] == ex.elementPropsAfter[targetProp]);},true)) {
-        return [{"element":true,"elementProp":prop1},{"element":false,"messageProp":prop2}];
-      }
-    }
-    for (var prop2 in elementProps){
-      if (_.reduce(examples,function(acc,ex){return (acc && ex.elementPropsBefore[prop1]+ex.elementPropsBefore[prop2] == ex.elementPropsAfter[targetProp]);},true)) {
-        return [{"element":true,"elementProp":prop1},{"element":true,"elementProp":prop2}];
-      }
-    }
-  }
-  return null;
 };
 
-function makeConstantFunction(targetProp, constant){
-  var elementPropFunction = function(element, eventMessage){
-    if ((typeof element[targetProp]) !== "undefined"){
-      element[targetProp] = constant;
+function functionsFromNodes(nodes){
+  var functions = [];
+  for (var i in nodes){
+    var topNode = nodes[i];
+    var targetProp = topNode.targetProp;
+    var node = topNode.node;
+    var RHSFunction = functionFromNode(node);
+    var wholeFunction;
+    if (node.type == "mirrorRecord") {
+      wholeFunction = function(eventMessage,element){
+        if ((typeof element[targetProp]) !== "undefined"){
+          eventMessage[targetprop+"_value"] = RHSFunction(eventMessage,element);
+        }
+      }
     }
+    else{
+      wholeFunction = function(eventMessage,element){
+        if ((typeof element[targetProp]) !== "undefined"){
+          element[targetProp] = RHSFunction(eventMessage,element);
+        }
+      }
+    }
+    functions.push(wholeFunction);
+  }
+  return functions;
+}
+
+function functionFromNode(node){
+  if (node.type == "constant"){
+    return makeConstantFunction(node);
+  }
+  else if (node.type == "messageProp"){
+    return makeMessagePropFunction(node);
+  }
+  else if (node.type == "elementProp"){
+    return makeElementPropFunction(node);
+  }
+  else if (node.type == "concat"){
+    return makeConcatFunction(node);
+  }
+  else if (node.type == "mirror"){
+    return makeMirrorFunction(node);
+  }
+  else if (node.type == "mirrorRecord"){
+    return makeMirrorRecordFunction(node);
+  }
+}
+
+function makeConstantFunction(node){
+  var elementPropFunction = function(eventMessage,element){
+    return node.val;
   }
   return elementPropFunction;
 };
 
-function makeMessagePropFunction(targetProp, messageProp){
+function makeMessagePropFunction(node){
+  var messageProp = node.val;
   var messagePropFunction;
   if (messageProp=="_charCode_keyCode"){
-    messagePropFunction = function(element, eventMessage){
-      if ((typeof element[targetProp]) !== "undefined"){
-        element[targetProp] = String.fromCharCode(eventMessage["keyCode"]);
-      }
-    }
-  }
-  else if (messageProp=="_charCode_charCode"){
-    messagePropFunction = function(element, eventMessage){
-      if ((typeof element[targetProp]) !== "undefined"){
-        element[targetProp] = String.fromCharCode(eventMessage["charCode"]);
-      }
-    }
-  }
-  else{
-    messagePropFunction = function(element, eventMessage){
-      if ((typeof element[targetProp]) !== "undefined"){
-        element[targetProp] = eventMessage[messageProp];
-      }
-    }
-  }
-  return messagePropFunction;
-};
-
-function makeMessagePropRHS(messageProp){
-  var messagePropFunction;
-  if (messageProp=="_charCode_keyCode"){
-    messagePropFunction = function(eventMessage){
+    messagePropFunction = function(eventMessage,element){
       return String.fromCharCode(eventMessage["keyCode"]);
     }
   }
   else if (messageProp=="_charCode_charCode"){
-    messagePropFunction = function(eventMessage){
+    messagePropFunction = function(eventMessage,element){
       return String.fromCharCode(eventMessage["charCode"]);
     }
   }
   else{
-    messagePropFunction = function(eventMessage){
+    messagePropFunction = function(eventMessage,element){
       return eventMessage[messageProp];
     }
   }
   return messagePropFunction;
 };
 
-function makeElementPropFunction(targetProp, elementProp){
-  var elementPropFunction = function(element, eventMessage){
-    if ((typeof element[targetProp]) !== "undefined"){
-      element[targetProp] = element[elementProp];
-    }
+function makeElementPropFunction(node){
+  var elementProp = node.val;
+  var elementPropFunction = function(eventMessage,element){
+    return element[elementProp];
   }
   return elementPropFunction;
 };
 
-function makeConcatFunction(targetProp, concatList){
-  var concatFunction;
-  if (concatList[0].element == true){
-    if (concatList[1].element == true){
-      concatFunction = function(element, eventMessage){
-        if ((typeof element[targetProp]) !== "undefined"){
-          element[targetProp] = element[concatList[0].elementProp] + element[concatList[1].elementProp];
-        }
-      }
-    }
-    else{
-      var messagePropFunc = makeMessagePropRHS(concatList[1].messageProp);
-      concatFunction = function(element, eventMessage){
-        if ((typeof element[targetProp]) !== "undefined"){
-          element[targetProp] = element[concatList[0].elementProp] + messagePropFunc(eventMessage);
-        }
-      }
-    }
-  }
-  else{
-    if (concatList[1].element == true){
-      var messagePropFunc = makeMessagePropRHS(concatList[0].messageProp);
-      concatFunction = function(element, eventMessage){
-        if ((typeof element[targetProp]) !== "undefined"){
-          element[targetProp] = messagePropFunc(eventMessage) + element[concatList[1].elementProp];
-        }
-      }
-    }
-    else{
-      concatFunction = function(element, eventMessage){
-      var messagePropFunc0 = makeMessagePropRHS(concatList[0].messageProp);
-      var messagePropFunc1 = makeMessagePropRHS(concatList[1].messageProp);
-        if ((typeof element[targetProp]) !== "undefined"){
-          element[targetProp] = messagePropFunc0(eventMessage) + messagePropFunc1(eventMessage);
-        }
-      }
-    }
+function makeConcatFunction(node){
+  var leftNodeFunc = functionFromNode(node.leftNode);
+  var rightNodeFunc = functionFromNode(node.rightNode);
+  
+  var concatFunction = function(eventMessage,element){
+    return leftNodeFunc(eventMessage,element)+rightNodeFunc(eventMessage,element);
   }
   return concatFunction;
-}
+};
 
-function makeMirrorFunction(targetProp){
-  var mirrorFunction = function(element, eventMessage){
-    if ((typeof element[targetProp]) !== "undefined"){
-      element[targetProp] = eventMessage[targetProp+"_value"];
-    }
+function makeMirrorFunction(node){
+  var targetProp = node.val;
+  var mirrorFunction = function(eventMessage,element){
+    return eventMessage[targetProp+"_value"];
   }
   return mirrorFunction;
 };
 
-function makeMirrorRecordFunction(targetProp){
+function makeMirrorRecordFunction(node){
+  var targetProp = node.val;
   var mirrorRecordFunction = function(element, eventMessage){
-    if ((typeof element[targetProp]) !== "undefined"){
-      eventMessage[targetProp+"_value"] = element[targetProp];
-    }
+    return element[targetProp];
   }
   return mirrorRecordFunction;
 };
 
-function addCompensationEvent(name,typeOfNode,typeOfEvent,replayFunctions,recordFunctions,examples){
-  if(recordFunctions.length==0 && replayFunctions.length==0){
+function addCompensationEvent(name,typeOfNode,typeOfEvent,replayNodes,recordNodes,example){
+  if(recordNodes.length==0 && replayNodes.length==0){
     return;
   }
   
@@ -692,10 +739,13 @@ function addCompensationEvent(name,typeOfNode,typeOfEvent,replayFunctions,record
                         eventMessage.type == typeOfEvent;
               };
               
-  var replay = function(element, eventMessage) {
+  var replayFunctions = functionsFromNodes(replayNodes);
+  var recordFunctions = functionsFromNodes(recordNodes);
+              
+  var replay = function(element,eventMessage) {
                   //iterate through the statements we want to execute
                   for(var i=0;i<replayFunctions.length;i++){
-                    replayFunctions[i](element, eventMessage);
+                    replayFunctions[i](eventMessage,element);
                   }
                 };
                 
@@ -713,6 +763,12 @@ function addCompensationEvent(name,typeOfNode,typeOfEvent,replayFunctions,record
                   }
   }
 
+  //let's get the examples associated with this type of compensation event
+  var examples = [];
+  if (annotationEvents[name]){
+    examples = annotationEvents[name].examples;
+  }
+  examples.push(example);
   annotationEvents[name] = {"guard":guard,"record":record,"replay":replay,"examples":examples};
   return annotationEvents[name];
 };
