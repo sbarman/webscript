@@ -310,11 +310,6 @@ function simulate(element, eventData) {
     //let's try seeing divergence for the last event, now that we have a
     //new more recent snapshot of the record DOM
     visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomBefore,replayDomAfter);
-    //visualizeDivergence will change the state of the DOM to be what it
-    //should have been, if the proper compensation events were in place
-    //but we don't want to associate these changes with the next event
-    //so let's snapshot the DOM again
-    curSnapshotReplay = snapshot();
   }
   //this does the actual event simulation
   element.dispatchEvent(oEvent);
@@ -402,6 +397,14 @@ function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomB
     }
   }
   */
+  
+  //generateMismatchedValueCompensationEvent will change the state of the DOM to be what it
+  //should have been, if the proper compensation events were in place
+  //but we don't want to associate these changes with the next event
+  //so let's snapshot the DOM again
+  if (recordDeltasNotMatched.length>0 || replayDeltasNotMatched.length>0){
+    curSnapshotReplay = snapshot();
+  }
 }
 
 //generate annotation events for the case where we just have different
