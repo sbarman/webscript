@@ -777,8 +777,9 @@ function divergingProps(obj1,obj2){
     console.log("DIVERGING PROP WEIRDNESS ", obj1, obj2);
     return []; 
   }
-  var obj1props = obj1.prop;
-  var obj2props = obj2.prop;
+  var obj1props = _.omit(obj1.prop, params.synthesis.omittedProps);
+  var obj2props = _.omit(obj2.prop, params.synthesis.omittedProps);
+
   var divergingProps = []
   for (var prop in obj1props){
     if (obj1props[prop] != obj2props[prop]){
