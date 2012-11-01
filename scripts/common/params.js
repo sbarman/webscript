@@ -7,7 +7,7 @@ var params = null;
 
 (function() {
   // List of all events and whether or not we should capture them
-  var capturedEvents = {
+  var events = {
     'Event': {
       //'abort': true,
       'blur': true,
@@ -48,7 +48,7 @@ var params = null;
     }
   };
   
-  var defaultOptions = {
+  var defaultProps = {
     'Event': {
       'type': true,
       'bubbles': true,
@@ -100,14 +100,20 @@ var params = null;
         "scrollWidth", "clientHeight", "clientWidth", "clientTop", "clientLeft",
         "offsetHeight", "offsetWidth", "offsetTop", "offsetLeft"]
   };
+
+  var logging = {
+    level: 1,
+    enabled: ["event"]
+  }
   
   params = {
-    events: capturedEvents,
     simultaneous: true,
     timing: 0,
+    events: events,
+    logging: logging,
     synthesis: synthesis,
     server: "http://webscriptdb.herokuapp.com/api/",
-    defaultProps: defaultOptions
+    defaultProps: defaultProps
   };
 
 })();
