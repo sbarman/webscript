@@ -324,6 +324,9 @@ function simulate(element, eventData) {
   for (var i in annotationEvents) {
     var annotation = annotationEvents[i];
     if (annotation.replay && annotation.guard(element, eventData)) {
+      if (synthesisVerbose){
+        console.log("annotation event being used", i, annotation.recordNodes, annotation.replayNodes);
+      }
       annotation.replay(element, eventData);
     }
   }
@@ -383,7 +386,7 @@ function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomB
   
   for (var i=0;i<recordDeltasNotMatched.length;i++){
     var delta = recordDeltasNotMatched[i];
-    if(delta.type == "We expect these nodes to be the same, but they're not." && delta.record.prop.nodeName.toLowerCase() == eventData.nodeName){
+    if(delta.type == "We expect these nodes to be the same, but they're not."){
       generateMismatchedValueCompensationEvent(element,eventData,delta,true);
     }
   }
@@ -410,6 +413,18 @@ function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomB
 //generate annotation events for the case where we just have different
 //values for properties of matched nodes
 function generateMismatchedValueCompensationEvent(element, eventData, delta, thisDeltaShouldHappen){
+  //console.log(element, eventData, delta);
+  //first ensure that this element is actually the element on which we have diverged
+  if (eventData.nodeName!=delta.record.prop.nodeName.toLowerCase()){
+    return;
+  }
+  if (delta.record.prop.type && delta.replay.prop.type && delta.record.prop.type=="hidden" && delta.replay.prop.type=="hidden"){
+    return;
+  }
+  if (delta.record.prop.hidden && delta.replay.prop.hidden && delta.record.prop.hidden=="true" && delta.replay.prop.hidden=="true"){
+    return;
+  }
+  
   if (thisDeltaShouldHappen){
     
     var typeOfNode = eventData.nodeName;
@@ -467,6 +482,9 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
       //our annotation event won't be able to fire till next time
       //(becuase it might involve a record action)
       element[prop] = delta.replay.prop[prop];
+      if (synthesisVerbose){
+        console.log("setting prop ", prop, " to ", delta.replay.prop[prop]);
+      }
       
       //if we can use a constant, use that
       var constantNode = constantMatchingValue(examples, prop);
@@ -513,16 +531,23 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
       replayNodes.push(new TopNode(prop,mirrorNode));
       var mirrorRecordNode = new Node("mirrorRecord",prop);
       recordNodes.push(new TopNode(prop,mirrorRecordNode));
-    }
-    for (var i in replayNodes){
-      console.log("NEW ANNOTATION STATEMENT ", name, replayNodes[i].toString());
+      
+      
+      for (var i in replayNodes){
+        console.log("NEW ANNOTATION STATEMENT ", name, replayNodes[i].toString());
+        for (var i in examples){
+          var example = examples[i];
+          console.log("prop", prop, "before", example.elementPropsBefore[prop], "after", example.elementPropsAfter[prop]);
+        }
+      }
+      
     }
     
     //now we know what statement we want to do at replay to correct each
     //diverging prop
     var compensationEvent = addCompensationEvent(name, typeOfNode, typeOfEvent, replayNodes, recordNodes, newExample);
     //if (compensationEvent){compensationEvent.replay(element,eventData);}
-    if (synthesisVerbose || true){
+    if (synthesisVerbose){
       console.log("annotation events after addition ", annotationEvents);
     }
   }
@@ -614,7 +639,10 @@ function elementPropMatchingValue(examples,targetProp){
 function concatMatchingValue(examples,targetProp){
   var messagePropNodes = examples[0].messagePropNodes;
   var elementPropNodes = examples[0].elementPropNodes;
-  var nodes = messagePropNodes.concat(elementPropNodes);
+  var nodes = []
+  nodes.push(new Node("constant", 1));
+  nodes.push(new Node("constant", -1));
+  var nodes = nodes.concat(messagePropNodes,elementPropNodes);
   for (var i in nodes){
     for (var j in nodes){
       var node1 = nodes[i];
@@ -776,7 +804,7 @@ function addCompensationEvent(name,typeOfNode,typeOfEvent,replayNodes,recordNode
     examples = annotationEvents[name].examples;
   }
   examples.push(example);
-  annotationEvents[name] = {"guard":guard,"record":record,"replay":replay,"examples":examples};
+  annotationEvents[name] = {"guard":guard,"record":record,"replay":replay,"examples":examples,"replayNodes":replayNodes, "recordNodes":recordNodes};
   return annotationEvents[name];
 };
 
