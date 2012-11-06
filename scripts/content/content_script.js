@@ -415,6 +415,12 @@ function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomB
 function generateMismatchedValueCompensationEvent(element, eventData, delta, thisDeltaShouldHappen){
   //console.log(element, eventData, delta);
   //first ensure that this element is actually the element on which we have diverged
+  console.log(eventData.nodeName+"_"+eventData.type);
+  console.log(eventData.target.toLowerCase(), delta.record.prop.xpath.toLowerCase());
+  //we know that our element will have the same xpath as the eventData specified
+  //but this may not be the same xpath to the corresponding element that was used
+  //during record time.  So we have to make sure that the xpath of the correct divergence
+  //was matched with the xpath of the element
   if (eventData.nodeName!=delta.record.prop.nodeName.toLowerCase()){
     return;
   }
