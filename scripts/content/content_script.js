@@ -20,6 +20,10 @@ var synthesisVerbose = false;
 var prevEvent;
 var seenEvent = false;
 
+
+var oneArgFuncs = {"String.fromCharCode":String.fromCharCode};
+var twoArgFuncs = {"concat":concat};
+
 // Utility functions
 
 function snapshot() {
@@ -492,42 +496,12 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
         console.log("setting prop ", prop, " to ", delta.replay.prop[prop]);
       }
       
-      //if we can use a constant, use that
-      var constantNode = constantMatchingValue(examples, prop);
-      if (constantNode){
-        if (synthesisVerbose){
-          console.log("NEW ANNOTATION: going to use constant, with ", prop, constantNode);
-        }
-        replayNodes.push(new TopNode(prop,constantNode));
+      var newNode = findSatisfyingExpression(examples, prop, 1);
+      if (newNode){
+        replayNodes.push(new TopNode(prop,newNode));
         continue;
       }
-      //if we can find a property of the message, use that
-      var messagePropNode = messagePropMatchingValue(examples,prop);
-      if (messagePropNode){
-        if (synthesisVerbose){
-          console.log("NEW ANNOTATION: going to use messageProp, with ", prop, messagePropNode);
-        }
-        replayNodes.push(new TopNode(prop,messagePropNode));
-        continue;
-      }
-      //if we can find a property of the original element, use that
-      var elementPropNode = elementPropMatchingValue(examples,prop);
-      if (elementPropNode){
-        if (synthesisVerbose){
-          console.log("NEW ANNOTATION: going to use elementProp, with ", prop, elementPropNode);
-        }
-        replayNodes.push(new TopNode(prop,elementPropNode));
-        continue;
-      }
-      //if we can find a concatenatio of one of those guys, use that
-      var concatNode = concatMatchingValue(examples,prop);
-      if (concatNode){
-        if (synthesisVerbose){
-          console.log("NEW ANNOTATION: going to use concat, with ", prop, concatNode);
-        }
-        replayNodes.push(new TopNode(prop,concatNode));
-        continue;
-      }
+      
       //else, use the value of valueAtRecordAfter
       eventData[prop+"_value"]=delta.record.prop[prop];
       if (synthesisVerbose){
@@ -538,7 +512,6 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
       var mirrorRecordNode = new Node("mirrorRecord",prop);
       recordNodes.push(new TopNode(prop,mirrorRecordNode));
       
-      
       for (var i in replayNodes){
         console.log("NEW ANNOTATION STATEMENT ", name, replayNodes[i].toString());
         for (var i in examples){
@@ -546,7 +519,6 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
           console.log("prop", prop, "before", example.elementPropsBefore[prop], "after", example.elementPropsAfter[prop]);
         }
       }
-      
     }
     
     //now we know what statement we want to do at replay to correct each
@@ -558,6 +530,41 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
     }
   }
 };
+
+function findSatisfyingExpression(examples, prop, depth){
+  //if we can use a constant, use that
+  var constantNode = constantMatchingValue(examples, prop);
+  if (constantNode){
+    return constantNode;
+  }
+  //if we can find a property of the message, use that
+  var messagePropNode = messagePropMatchingValue(examples,prop);
+  if (messagePropNode){
+    return messagePropNode;
+  }
+  //if we can find a property of the original element, use that
+  var elementPropNode = elementPropMatchingValue(examples,prop);
+  if (elementPropNode){
+    return elementPropNode;
+  }
+  
+  //time to descend past depth 1
+  
+  //let's set up the first pool of nodes
+  var startNodes = []
+  var messagePropNodes = examples[0].messagePropNodes;
+  var elementPropNodes = examples[0].elementPropNodes;
+  startNodes = startNodes.concat(messagePropNodes,elementPropNodes);
+  startNodes.push(new Node("constant", 1));
+  startNodes.push(new Node("constant", -1));
+  
+  var deepNode = deepMatchingValue(examples,prop,startNodes);
+  return deepNode;
+};
+
+function concat(var1,var2){
+  return var1+var2;
+}
 
 function createMessagePropMap(eventMessage){
   var messagePropMap = {};
@@ -607,6 +614,14 @@ function evaluateNodeOnExample(node,example){
   }
   else if (node.type=="concat"){
     return evaluateNodeOnExample(node.leftNode,example)+evaluateNodeOnExample(node.rightNode,example);
+  }
+  else if (node.type=="function"){
+    if (node.val in oneArgFuncs){
+      return oneArgFuncs[node.val](evaluateNodeOnExample(node.leftNode,example));
+    }
+    if (node.val in twoArgFuncs){
+      return twoArgFuncs[node.val](evaluateNodeOnExample(node.leftNode,example),evaluateNodeOnExample(node.rightNode,example));
+    }
   }
 }
 
@@ -660,6 +675,42 @@ function concatMatchingValue(examples,targetProp){
   }
 };
 
+function deepMatchingValue(examples, targetProp, nodes, depth){
+  var nextLevelNodes = nodes;
+  
+  for (var i in nodes){
+    var node1 = nodes[i];
+    for (var funcName in oneArgFuncs){
+      var func = oneArgFuncs[funcName];
+      var newNode = new Node("function",funcName,node1);
+      if (_.reduce(examples,function(acc,ex){return (acc && evaluateNodeOnExample(newNode,ex) == ex.elementPropsAfter[targetProp]);},true)) {
+        return newNode;
+      }
+      nextLevelNodes.push(newNode);
+    }
+  }
+  
+  for (var i in nodes){
+    var node1 = nodes[i];
+      for (var j in nodes){
+        var node2 = nodes[j];
+        for (var funcName in twoArgFuncs){
+          var func = twoArgFuncs[funcName];
+          var newNode = new Node("function",funcName,node1,node2);
+          if (_.reduce(examples,function(acc,ex){return (acc && evaluateNodeOnExample(newNode,ex) == ex.elementPropsAfter[targetProp]);},true)) {
+            return newNode;
+          }
+          nextLevelNodes.push(newNode);
+        }
+      }
+  }
+  
+  if (depth>1){
+    return deepMatchingValue(examples, targetProp, nextLevelNodes, depth-1);
+  }
+  return null;
+};
+
 function functionsFromNodes(nodes){
   var functions = [];
   for (var i in nodes){
@@ -699,6 +750,9 @@ function functionFromNode(node){
   }
   else if (node.type == "concat"){
     return makeConcatFunction(node);
+  }
+  else if (node.type == "function"){
+    return makeFunctionFunction(node);
   }
   else if (node.type == "mirror"){
     return makeMirrorFunction(node);
@@ -750,6 +804,26 @@ function makeConcatFunction(node){
   
   var concatFunction = function(eventMessage,element){
     return leftNodeFunc(eventMessage,element)+rightNodeFunc(eventMessage,element);
+  }
+  return concatFunction;
+};
+
+function makeFunctionFunction(node){
+  var concatFunction;
+  if (node.val in oneArgFuncs){
+    var funcToApply = oneArgFuncs[node.val];
+    var leftNodeFunc = functionFromNode(node.leftNode);
+    concatFunction = function(eventMessage,element){
+      return funcToApply(leftNodeFunc(eventMessage,element));
+    }
+  }
+  if (node.val in twoArgFuncs){
+    var funcToApply = twoArgFuncs[node.val];
+    var leftNodeFunc = functionFromNode(node.leftNode);
+    var righNodeFunc = functionFromNode(node.rightNode);
+    concatFunction = function(eventMessage,element){
+      return funcToApply(leftNodeFunc(eventMessage,element),rightNodeFunc(eventMessage,element));
+    }
   }
   return concatFunction;
 };
