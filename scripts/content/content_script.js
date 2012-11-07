@@ -21,7 +21,8 @@ var prevEvent;
 var seenEvent = false;
 
 var oneArgFuncs = {"String.fromCharCode":String.fromCharCode};
-var twoArgFuncs = {"concat":concat};
+var twoArgFuncs = {"concat":concat, "eq_func":eq_func};
+var threeArgFuncs = {"if_func":if_func, "substr_func":substr_func};
 
 
 // Utility functions
@@ -32,11 +33,12 @@ function snapshot() {
 curSnapshotRecord = snapshot();
 curSnapshotReplay = curSnapshotRecord;
 
-function Node(type, val, leftNode, rightNode) {
+function Node(type, val, leftNode, rightNode, rightRightNode) {
   this.type = type;
   this.val = val;
   this.leftNode = leftNode;
   this.rightNode = rightNode;
+  this.rightRightNode = rightRightNode;
 }
 
 Node.prototype = {
@@ -54,6 +56,9 @@ Node.prototype = {
       return this.leftNode.toString()+"+"+this.rightNode.toString();
     }
     else if (this.type=="function"){
+      if (this.rightRightNode){
+        return this.val+"("+this.leftNode.toString()+","+this.rightNode.toString()+","+this.rightRightNode.toString()+")";
+      }
       if (this.rightNode){
         return this.val+"("+this.leftNode.toString()+","+this.rightNode.toString()+")";
       }
@@ -577,6 +582,23 @@ function concat(var1,var2){
   return var1+var2;
 }
 
+function eq_func(var1,var2){
+  return var1==var2;
+}
+
+function if_func(var1,var2,var3){
+  if(var1){
+    return var2;
+  }
+  else{
+    return var3;
+  }
+}
+
+function substr_func(var1,var2,var3){
+  return var1.substr(var2,var3);
+}
+
 function createMessagePropMap(eventMessage){
   var messagePropMap = {};
   for (var prop in eventMessage){
@@ -620,6 +642,9 @@ function evaluateNodeOnExample(node,example){
     }
     if (node.val in twoArgFuncs){
       return twoArgFuncs[node.val](evaluateNodeOnExample(node.leftNode,example),evaluateNodeOnExample(node.rightNode,example));
+    }
+    if (node.val in threeArgFuncs){
+      return threeArgFuncs[node.val](evaluateNodeOnExample(node.leftNode,example),evaluateNodeOnExample(node.rightNode,example),evaluateNodeOnExample(node.rightRightNode,example));
     }
   }
 }
@@ -677,6 +702,7 @@ function concatMatchingValue(examples,targetProp){
 function deepMatchingValue(examples, targetProp, nodesToTest, componentNodes, depth){
   var oneArgNodes = [];
   var twoArgNodes = [];
+  var threeArgNodes = [];
   
   for (var i in nodesToTest){
     var node = nodesToTest[i];
@@ -701,10 +727,17 @@ function deepMatchingValue(examples, targetProp, nodesToTest, componentNodes, de
           var newNode = new Node("function",funcName,node1,node2);
           twoArgNodes.push(newNode);
         }
+        for (var k in componentNodes){
+          var node3 = componentNodes[k];
+          for (var funcName in threeArgFuncs){
+            var newNode = new Node("function",funcName,node1,node2,node3);
+            threeArgNodes.push(newNode);
+          }
+        }
       }
   }
   
-  var nodesToTestNext = oneArgNodes.concat(twoArgNodes);
+  var nodesToTestNext = oneArgNodes.concat(twoArgNodes,threeArgNodes);
   var componentNodesNext = componentNodes.concat(nodesToTestNext);
   
   return deepMatchingValue(examples, targetProp, nodesToTestNext, componentNodesNext, depth-1);
@@ -823,6 +856,15 @@ function makeFunctionFunction(node){
     var rightNodeFunc = functionFromNode(node.rightNode);
     functionFunction = function(eventMessage,element){
       return funcToApply(leftNodeFunc(eventMessage,element),rightNodeFunc(eventMessage,element));
+    }
+  }
+  if (node.val in threeArgFuncs){
+    var funcToApply = threeArgFuncs[node.val];
+    var leftNodeFunc = functionFromNode(node.leftNode);
+    var rightNodeFunc = functionFromNode(node.rightNode);
+    var rightRightNodeFunc = functionFromNode(node.rightRightNode);
+    functionFunction = function(eventMessage,element){
+      return funcToApply(leftNodeFunc(eventMessage,element),rightNodeFunc(eventMessage,element),rightRightNodeFunc(eventMessage,element));
     }
   }
   return functionFunction;
