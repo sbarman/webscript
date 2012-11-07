@@ -112,7 +112,8 @@ var params = null;
     events: events,
     logging: logging,
     synthesis: synthesis,
-    server: "http://webscriptdb.herokuapp.com/api/",
+    //server: "http://webscriptdb.herokuapp.com/api/",
+    server: "http://sbarman.webfactional.com/api/",
     defaultProps: defaultProps
   };
 

@@ -121,6 +121,9 @@ var ScriptServer = (function ScriptServerClosure() {
 
   ScriptServer.prototype = {
     saveReplay: function _saveReplay(events, origScriptId) {
+      if (events.length == 0)
+        return;
+
       var server = this.server;
       var postMsg = {};
       postMsg["script_id"] = origScriptId
@@ -214,6 +217,9 @@ var ScriptServer = (function ScriptServerClosure() {
       console.log(req);
     },
     saveScript: function _saveScript(name, events) {
+      if (events.length == 0)
+        return;
+
       var server = this.server;
       var postMsg = {};
       postMsg["name"] = name;
@@ -561,18 +567,24 @@ var Record = (function RecordClosure() {
       // Tell the content scripts to begin recording
       this.ports.sendToAll({type: "recording", value: this.isRecording()});
     },
-    startReplayRecording: function _startReplayRecording() {
-      this.recordState = RecordState.REPLAYING;
-      this.replayEvents = [];
-
-      this.ports.sendToAll({type: "recording", value: this.isRecording()});
-    },
     stopRecording: function _stopRecording() {
       this.recordState = RecordState.STOPPED;
       this.panel.stopRecording();
 
       // Tell the content scripts to stop recording
       this.ports.sendToAll({type: "recording", value: this.isRecording()});
+    },
+    startReplayRecording: function _startReplayRecording() {
+      if (this.loadedScriptId != null) {
+        this.recordState = RecordState.REPLAYING;
+      } else {
+        this.recordState = RecordState.STOPPED;
+      }
+      this.replayEvents = [];
+      this.ports.sendToAll({type: "recording", value: this.isRecording()});
+    },
+    stopReplayRecording: function _stopReplayRecording() {
+      this.stopRecording();
     },
     addEvent: function _addEvent(eventRequest, portName) {
       var ports = this.ports; 
@@ -740,13 +752,14 @@ var Replay = (function ReplayClosure() {
       setTimeout(function() {
         var replayEvents = record.getReplayEvents();
         var scriptId = record.getLoadedScriptId();
-        if (scriptId) {
-          scriptServer.saveReplay(replayEvents, scriptId);
-        }
-        console.log(replayEvents);
-      }, 1000);
 
-      this.reset();
+        record.stopReplayRecording();
+
+        if (scriptId && replayEvents.length > 0) {
+          scriptServer.saveReplay(replayEvents, scriptId);
+          console.log(replayEvents);
+        }
+      }, 1000);
     },
     findPortInTab: function _findPortInTab(tab, topFrame,
         snapshot, msg) {
