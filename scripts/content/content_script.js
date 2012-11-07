@@ -20,9 +20,9 @@ var synthesisVerbose = false;
 var prevEvent;
 var seenEvent = false;
 
-
 var oneArgFuncs = {"String.fromCharCode":String.fromCharCode};
 var twoArgFuncs = {"concat":concat};
+
 
 // Utility functions
 
@@ -52,6 +52,12 @@ Node.prototype = {
     }
     else if (this.type=="concat"){
       return this.leftNode.toString()+"+"+this.rightNode.toString();
+    }
+    else if (this.type=="function"){
+      if (this.rightNode){
+        return this.val+"("+this.leftNode.toString()+","+this.rightNode.toString()+")";
+      }
+      return this.val+"("+this.leftNode.toString()+")";
     }
     else if (this.type=="mirror"){
       return "eventMessage["+this.val+"_value]";
@@ -165,6 +171,10 @@ function processEvent(eventData) {
       if (prop in eventData) {
         eventMessage[prop] = eventData[prop];
       }
+    }
+    
+    if (eventMessage["charCode"]){
+      eventMessage["char"] = String.fromCharCode(eventMessage["charCode"]);
     }
 
     var extension = extendEvents[type];
@@ -419,8 +429,7 @@ function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomB
 function generateMismatchedValueCompensationEvent(element, eventData, delta, thisDeltaShouldHappen){
   //console.log(element, eventData, delta);
   //first ensure that this element is actually the element on which we have diverged
-  console.log(eventData.nodeName+"_"+eventData.type);
-  console.log(eventData.target.toLowerCase(), delta.record.prop.xpath.toLowerCase());
+  
   //we know that our element will have the same xpath as the eventData specified
   //but this may not be the same xpath to the corresponding element that was used
   //during record time.  So we have to make sure that the xpath of the correct divergence
@@ -496,28 +505,27 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
         console.log("setting prop ", prop, " to ", delta.replay.prop[prop]);
       }
       
-      var newNode = findSatisfyingExpression(examples, prop, 1);
+      var newNode = findSatisfyingExpression(examples, prop, 2);
+      
       if (newNode){
         replayNodes.push(new TopNode(prop,newNode));
-        continue;
       }
-      
-      //else, use the value of valueAtRecordAfter
-      eventData[prop+"_value"]=delta.record.prop[prop];
-      if (synthesisVerbose){
-        console.log("NEW ANNOTATION: going to use the value of the record prop", prop);
-      }
-      var mirrorNode = new Node("mirror",prop)
-      replayNodes.push(new TopNode(prop,mirrorNode));
-      var mirrorRecordNode = new Node("mirrorRecord",prop);
-      recordNodes.push(new TopNode(prop,mirrorRecordNode));
-      
-      for (var i in replayNodes){
-        console.log("NEW ANNOTATION STATEMENT ", name, replayNodes[i].toString());
-        for (var i in examples){
-          var example = examples[i];
-          console.log("prop", prop, "before", example.elementPropsBefore[prop], "after", example.elementPropsAfter[prop]);
+      else{
+        //else, use the value of valueAtRecordAfter
+        eventData[prop+"_value"]=delta.record.prop[prop];
+        if (synthesisVerbose){
+          console.log("NEW ANNOTATION: going to use the value of the record prop", prop);
         }
+        newNode = new Node("mirror",prop)
+        replayNodes.push(new TopNode(prop,newNode));
+        var newRecordNode = new Node("mirrorRecord",prop);
+        recordNodes.push(new TopNode(prop,newRecordNode));
+      }
+      
+      console.log("NEW ANNOTATION STATEMENT", name, prop, newNode.toString());
+      for (var j in examples){
+        var example = examples[j];
+        console.log("prop", prop, "before", example.elementPropsBefore[prop], "after", example.elementPropsAfter[prop]);
       }
     }
     
@@ -537,6 +545,8 @@ function findSatisfyingExpression(examples, prop, depth){
   if (constantNode){
     return constantNode;
   }
+  
+  /*
   //if we can find a property of the message, use that
   var messagePropNode = messagePropMatchingValue(examples,prop);
   if (messagePropNode){
@@ -547,6 +557,7 @@ function findSatisfyingExpression(examples, prop, depth){
   if (elementPropNode){
     return elementPropNode;
   }
+  */
   
   //time to descend past depth 1
   
@@ -554,11 +565,11 @@ function findSatisfyingExpression(examples, prop, depth){
   var startNodes = []
   var messagePropNodes = examples[0].messagePropNodes;
   var elementPropNodes = examples[0].elementPropNodes;
-  startNodes = startNodes.concat(messagePropNodes,elementPropNodes);
   startNodes.push(new Node("constant", 1));
   startNodes.push(new Node("constant", -1));
+  startNodes = startNodes.concat(messagePropNodes,elementPropNodes);
   
-  var deepNode = deepMatchingValue(examples,prop,startNodes);
+  var deepNode = deepMatchingValue(examples,prop,startNodes,startNodes,depth);
   return deepNode;
 };
 
@@ -571,12 +582,6 @@ function createMessagePropMap(eventMessage){
   for (var prop in eventMessage){
     messagePropMap[prop]=eventMessage[prop];
   }
-  if (eventMessage["keyCode"]){
-    messagePropMap["_charCode_keyCode"]=String.fromCharCode(eventMessage["keyCode"]);
-  }
-  if (eventMessage["charCode"]){
-    messagePropMap["_charCode_charCode"]=String.fromCharCode(eventMessage["charCode"]);
-  }
   return messagePropMap;
 }
 
@@ -584,12 +589,6 @@ function createMessagePropNodes(eventMessage){
   var messagePropNodes = [];
   for (var prop in eventMessage){
     messagePropNodes.push(new Node("messageProp",prop));
-  }
-  if (eventMessage["keyCode"]){
-    messagePropNodes.push(new Node("messageProp","_charCode_keyCode"));
-  }
-  if (eventMessage["charCode"]){
-    messagePropNodes.push(new Node("messageProp","_charCode_charCode"));
   }
   return messagePropNodes;
 }
@@ -675,40 +674,40 @@ function concatMatchingValue(examples,targetProp){
   }
 };
 
-function deepMatchingValue(examples, targetProp, nodes, depth){
-  var nextLevelNodes = nodes;
+function deepMatchingValue(examples, targetProp, nodesToTest, componentNodes, depth){
+  var oneArgNodes = [];
+  var twoArgNodes = [];
   
-  for (var i in nodes){
-    var node1 = nodes[i];
-    for (var funcName in oneArgFuncs){
-      var func = oneArgFuncs[funcName];
-      var newNode = new Node("function",funcName,node1);
-      if (_.reduce(examples,function(acc,ex){return (acc && evaluateNodeOnExample(newNode,ex) == ex.elementPropsAfter[targetProp]);},true)) {
-        return newNode;
-      }
-      nextLevelNodes.push(newNode);
+  for (var i in nodesToTest){
+    var node = nodesToTest[i];
+    if (_.reduce(examples,function(acc,ex){return (acc && evaluateNodeOnExample(node,ex) == ex.elementPropsAfter[targetProp]);},true)) {
+      return node;
     }
   }
   
-  for (var i in nodes){
-    var node1 = nodes[i];
-      for (var j in nodes){
-        var node2 = nodes[j];
+  if (depth<=1){
+    return null;
+  }
+  
+  for (var i in componentNodes){
+    var node1 = componentNodes[i];
+      for (var funcName in oneArgFuncs){
+        var newNode = new Node("function",funcName,node1);
+        oneArgNodes.push(newNode);
+      }
+      for (var j in componentNodes){
+        var node2 = componentNodes[j];
         for (var funcName in twoArgFuncs){
-          var func = twoArgFuncs[funcName];
           var newNode = new Node("function",funcName,node1,node2);
-          if (_.reduce(examples,function(acc,ex){return (acc && evaluateNodeOnExample(newNode,ex) == ex.elementPropsAfter[targetProp]);},true)) {
-            return newNode;
-          }
-          nextLevelNodes.push(newNode);
+          twoArgNodes.push(newNode);
         }
       }
   }
   
-  if (depth>1){
-    return deepMatchingValue(examples, targetProp, nextLevelNodes, depth-1);
-  }
-  return null;
+  var nodesToTestNext = oneArgNodes.concat(twoArgNodes);
+  var componentNodesNext = componentNodes.concat(nodesToTestNext);
+  
+  return deepMatchingValue(examples, targetProp, nodesToTestNext, componentNodesNext, depth-1);
 };
 
 function functionsFromNodes(nodes){
@@ -729,6 +728,7 @@ function functionsFromNodes(nodes){
     else{
       wholeFunction = function(eventMessage,element){
         if ((typeof element[targetProp]) !== "undefined"){
+          console.log("changing element["+targetProp+"] to "+RHSFunction(eventMessage,element));
           element[targetProp] = RHSFunction(eventMessage,element);
         }
       }
@@ -809,23 +809,23 @@ function makeConcatFunction(node){
 };
 
 function makeFunctionFunction(node){
-  var concatFunction;
+  var functionFunction;
   if (node.val in oneArgFuncs){
     var funcToApply = oneArgFuncs[node.val];
     var leftNodeFunc = functionFromNode(node.leftNode);
-    concatFunction = function(eventMessage,element){
+    functionFunction = function(eventMessage,element){
       return funcToApply(leftNodeFunc(eventMessage,element));
     }
   }
   if (node.val in twoArgFuncs){
     var funcToApply = twoArgFuncs[node.val];
     var leftNodeFunc = functionFromNode(node.leftNode);
-    var righNodeFunc = functionFromNode(node.rightNode);
-    concatFunction = function(eventMessage,element){
+    var rightNodeFunc = functionFromNode(node.rightNode);
+    functionFunction = function(eventMessage,element){
       return funcToApply(leftNodeFunc(eventMessage,element),rightNodeFunc(eventMessage,element));
     }
   }
-  return concatFunction;
+  return functionFunction;
 };
 
 function makeMirrorFunction(node){
