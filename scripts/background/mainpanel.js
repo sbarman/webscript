@@ -690,8 +690,9 @@ var Replay = (function ReplayClosure() {
   }
 
   var ReplayState = {
-    REPLAYING: 0,
-    ACK: 1
+    REPLAYING: 1,
+    REPLAY_ACK: 2,
+    WAIT_ACK: 3
   }
 
   Replay.prototype = {
@@ -899,37 +900,49 @@ var Replay = (function ReplayClosure() {
         return;
       }
 
+      // we have hopefully found a matching port, lets dispatch to that port
       var type = msg.value.type;
-      if (type == "wait") {
-        if (this.replayState == ReplayState.ACK) {
-          var ackReturn = this.ports.getAck(this.ackVar);
-          if (ackReturn != null && ackReturn == true) {
-            this.index++;
-          } else {
-            replayPort.postMessage(msg);
-          }
-        } else if (this.replayState == ReplayState.REPLAYING) {
-          this.ports.clearAck();
-          this.replayState = ReplayState.ACK;
-          replayPort.postMessage(msg);
+      var replayState = this.replayState;
+
+      if (replayState == ReplayState.WAIT_ACK) {
+        var ackReturn = this.ports.getAck(this.ackVar);
+        if (ackReturn != null && ackReturn == true) {
+          this.replayState = ReplayState.REPLAYING;
+          this.setNextEvent(0); 
         } else {
-          throw "unknown replay state";
-        }
-        this.setNextEvent(1000); 
-
-      } else {
-        // send message 
-        try {
           replayPort.postMessage(msg);
-        } catch(err) {
-          console.log("Error:", err.message);
+          this.setNextEvent(1000); 
         }
-
-        this.index++;
-        this.setNextEvent();
+      } else if (replayState == ReplayState.REPLAY_ACK) {
+        var ackReturn = this.ports.getAck(this.ackVar);
+        if (ackReturn != null && ackReturn == true) {
+          this.replayState = ReplayState.REPLAYING;
+          this.setNextEvent(0);
+        } else {
+          this.setNextEvent(1000); 
+        }
+      } else if (replayState == ReplayState.REPLAYING) {
+        this.ports.clearAck();
+        if (type == "wait") {
+          replayPort.postMessage(msg);
+          this.index++;
+          this.replayState = ReplayState.WAIT_ACK;
+          this.setNextEvent(0); 
+        } else {
+          // send message 
+          try {
+            replayPort.postMessage(msg);
+            this.index++;
+            this.replayState = ReplayState.REPLAY_ACK;
+          } catch(err) {
+            console.log("Error:", err.message);
+          }
+          this.setNextEvent();
+        }
+      } else {
+        throw "unknown replay state"
       }
     },
-    
   };
   
   return Replay;
