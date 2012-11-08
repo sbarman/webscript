@@ -690,8 +690,9 @@ var Replay = (function ReplayClosure() {
   }
 
   var ReplayState = {
-    REPLAYING: 0,
-    ACK: 1
+    REPLAYING: 1,
+    REPLAY_ACK: 2,
+    WAIT_ACK: 3
   }
 
   Replay.prototype = {
