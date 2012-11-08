@@ -205,20 +205,7 @@ function handleMessage(request) {
   } else if (request.type == "params") {
     updateParams(request.value);
   } else if (request.type == "event") {
-    //console.log("extension event", request, request.value.type)
-    var e = request.value;
-    if (e.type == "wait") {
-      checkWait(e);
-    } else {
-      var nodes = xPathToNodes(e.target);
-      //if we don't successfully find nodes, let's alert
-      if(nodes.length==0){
-        sendAlert("Couldn't find the DOM node we needed.");
-      }
-      for (var i = 0, ii = nodes.length; i < ii; ++i) {
-        simulate(nodes[i], e);
-      }
-    }
+    simulate(request);
   } else if (request.type == "snapshot") {
     port.postMessage({type: "snapshot", value: snapshotDom(document)});
   }
@@ -247,8 +234,24 @@ function updateParams(newParams) {
   }
 }
 
-function simulate(element, eventData) {
+function simulate(request) {
+  //console.log("extension event", request, request.value.type)
+  var eventData = request.value;
   var eventName = eventData.type;
+
+  if (eventName == "wait") {
+    checkWait(eventData);
+    return;
+  }
+
+  var nodes = xPathToNodes(eventData.target);
+  //if we don't successfully find nodes, let's alert
+  if(nodes.length != 1){
+    sendAlert("Couldn't find the DOM node we needed.");
+    return;
+  }
+
+  var element = nodes[0];
 
   if (eventName == "custom") {
     var script = eval(eventData.script);
@@ -304,6 +307,7 @@ function simulate(element, eventData) {
     console.log("Unknown type of event");
   }
   console.log("[" + id + "] dispatchEvent", eventName, options, oEvent);
+  port.postMessage({type: "ack", value: true});
   
   if (!seenEvent){
     seenEvent = true;
