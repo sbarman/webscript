@@ -20,7 +20,7 @@ var synthesisVerbose = false;
 var prevEvent;
 var seenEvent = false;
 
-var oneArgFuncs = {"String.fromCharCode":String.fromCharCode};
+var oneArgFuncs = {};
 var twoArgFuncs = {"concat":concat, "eq_func":eq_func};
 var threeArgFuncs = {"if_func":if_func, "substr_func":substr_func};
 
@@ -510,7 +510,7 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
         console.log("setting prop ", prop, " to ", delta.replay.prop[prop]);
       }
       
-      var newNode = findSatisfyingExpression(examples, prop, 2);
+      var newNode = findSatisfyingExpressionOptimized(examples, prop, 2);
       
       if (newNode){
         replayNodes.push(new TopNode(prop,newNode));
@@ -544,39 +544,6 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
   }
 };
 
-function findSatisfyingExpression(examples, prop, depth){
-  //if we can use a constant, use that
-  var constantNode = constantMatchingValue(examples, prop);
-  if (constantNode){
-    return constantNode;
-  }
-  
-  /*
-  //if we can find a property of the message, use that
-  var messagePropNode = messagePropMatchingValue(examples,prop);
-  if (messagePropNode){
-    return messagePropNode;
-  }
-  //if we can find a property of the original element, use that
-  var elementPropNode = elementPropMatchingValue(examples,prop);
-  if (elementPropNode){
-    return elementPropNode;
-  }
-  */
-  
-  //time to descend past depth 1
-  
-  //let's set up the first pool of nodes
-  var startNodes = []
-  var messagePropNodes = examples[0].messagePropNodes;
-  var elementPropNodes = examples[0].elementPropNodes;
-  startNodes.push(new Node("constant", 1));
-  startNodes.push(new Node("constant", -1));
-  startNodes = startNodes.concat(messagePropNodes,elementPropNodes);
-  
-  var deepNode = deepMatchingValue(examples,prop,startNodes,startNodes,depth);
-  return deepNode;
-};
 
 function concat(var1,var2){
   return var1+var2;
@@ -596,7 +563,12 @@ function if_func(var1,var2,var3){
 }
 
 function substr_func(var1,var2,var3){
-  return var1.substr(var2,var3);
+  try{
+    return var1.substr(var2,var3);
+  }
+  catch(err){
+    //do nothing
+  }
 }
 
 function createMessagePropMap(eventMessage){
@@ -624,28 +596,33 @@ function createElementPropNodes(element){
 }
 
 function evaluateNodeOnExample(node,example){
-  if (node.type=="constant"){
-    return node.val;
-  }
-  else if (node.type=="messageProp"){
-    return example.messagePropMap[node.val];
-  }
-  else if (node.type=="elementProp"){
-    return example.elementPropsBefore[node.val];
-  }
-  else if (node.type=="concat"){
-    return evaluateNodeOnExample(node.leftNode,example)+evaluateNodeOnExample(node.rightNode,example);
-  }
-  else if (node.type=="function"){
-    if (node.val in oneArgFuncs){
-      return oneArgFuncs[node.val](evaluateNodeOnExample(node.leftNode,example));
+  try{
+    if (node.type=="constant"){
+      return node.val;
     }
-    if (node.val in twoArgFuncs){
-      return twoArgFuncs[node.val](evaluateNodeOnExample(node.leftNode,example),evaluateNodeOnExample(node.rightNode,example));
+    else if (node.type=="messageProp"){
+      return example.messagePropMap[node.val];
     }
-    if (node.val in threeArgFuncs){
-      return threeArgFuncs[node.val](evaluateNodeOnExample(node.leftNode,example),evaluateNodeOnExample(node.rightNode,example),evaluateNodeOnExample(node.rightRightNode,example));
+    else if (node.type=="elementProp"){
+      return example.elementPropsBefore[node.val];
     }
+    else if (node.type=="concat"){
+      return evaluateNodeOnExample(node.leftNode,example)+evaluateNodeOnExample(node.rightNode,example);
+    }
+    else if (node.type=="function"){
+      if (node.val in oneArgFuncs){
+        return oneArgFuncs[node.val](evaluateNodeOnExample(node.leftNode,example));
+      }
+      if (node.val in twoArgFuncs){
+        return twoArgFuncs[node.val](evaluateNodeOnExample(node.leftNode,example),evaluateNodeOnExample(node.rightNode,example));
+      }
+      if (node.val in threeArgFuncs){
+        return threeArgFuncs[node.val](evaluateNodeOnExample(node.leftNode,example),evaluateNodeOnExample(node.rightNode,example),evaluateNodeOnExample(node.rightRightNode,example));
+      }
+    }
+  }
+  catch(err){
+    //do nothing
   }
 }
 
@@ -697,6 +674,184 @@ function concatMatchingValue(examples,targetProp){
       }
     }
   }
+};
+
+
+function findSatisfyingExpression(examples, prop, depth){
+  //if we can use a constant, use that
+  var constantNode = constantMatchingValue(examples, prop);
+  if (constantNode){
+    return constantNode;
+  }
+  
+  //let's set up the first pool of nodes
+  var startNodes = []
+  var messagePropNodes = examples[0].messagePropNodes;
+  var elementPropNodes = examples[0].elementPropNodes;
+  startNodes.push(new Node("constant", 1));
+  startNodes.push(new Node("constant", -1));
+  startNodes = startNodes.concat(messagePropNodes,elementPropNodes);
+  
+  var deepNode = deepMatchingValue(examples,prop,startNodes,startNodes,depth);
+  return deepNode;
+};
+
+function findSatisfyingExpressionOptimized(examples, prop, depth){
+  //if we can use a constant, use that
+  var constantNode = constantMatchingValue(examples, prop);
+  if (constantNode){
+    return constantNode;
+  }
+  
+  //let's set up the first pool of nodes
+  var startNodes = []
+  var messagePropNodes = examples[0].messagePropNodes;
+  var elementPropNodes = examples[0].elementPropNodes;
+  startNodes.push(new Node("constant", 1));
+  startNodes.push(new Node("constant", -1));
+  startNodes = startNodes.concat(messagePropNodes,elementPropNodes);
+  
+  var correctTuple = [];
+  for (var i in examples){
+    var example = examples[i];
+    correctTuple.push(example.elementPropsAfter[prop]);
+  }
+  
+  var values = {};
+  for (var i in startNodes){
+    var node = startNodes[i];
+    var tuple = [];
+    for (var i in examples){
+      var example = examples[i];
+      tuple.push(evaluateNodeOnExample(node,example));
+    }
+    var tupleString = tuple.toString();
+    if (!(tupleString in values)){
+      if (_.isEqual(tuple,correctTuple)){
+        return node;
+      }
+      values[tupleString] = [tuple,node];
+    }
+  }
+  
+  console.log(values);
+  
+  var deepNode = deepMatchingValueOptimized(examples,prop,values,depth);
+  return deepNode;
+};
+
+function getObjectSize(myObject) {
+  var count=0;
+  for (var key in myObject)
+    count++;
+  return count;
+}
+
+function deepMatchingValueOptimized(examples, targetProp, values, depth){
+  console.log(examples, targetProp, values, depth);
+  var valuesForLater = _.clone(values);
+  var examplesLength = examples.length;
+  
+  var correctTuple = [];
+  for (var i in examples){
+    var example = examples[i];
+    correctTuple.push(example.elementPropsAfter[targetProp]);
+  }
+  
+  var t1 = new Date();
+  console.log("lengths at start ",getObjectSize(values));
+  
+  if (depth<=1){
+    return null;
+  }
+  
+  for (var tuple1 in values){
+    var tuple1vals = values[tuple1][0];
+    var node1 = values[tuple1][1];
+    for (var funcName in oneArgFuncs){
+      var func = oneArgFuncs[funcName];
+      var tuple = [];
+      for (var i = 0; i<examplesLength;i++){
+        tuple.push(func(tuple1vals[i]));
+      }
+      var tupleString = tuple.toString();
+      if (!(tupleString in values)){
+        var newNode = new Node("function", funcName, node1);
+        if (_.isEqual(tuple,correctTuple)){
+          return newNode;
+        }
+        valuesForLater[tupleString] = [tuple,newNode];
+      }
+    }
+  }
+  
+  for (var tuple1 in values){
+    var tuple1vals = values[tuple1][0];
+    var node1 = values[tuple1][1];
+    for (var tuple2 in values){
+      var tuple2vals = values[tuple2][0];
+      var node2 = values[tuple2][1];
+      for (var funcName in twoArgFuncs){
+        var func = twoArgFuncs[funcName];
+        var tuple = [];
+        for (var i = 0; i<examplesLength;i++){
+          var val = func(tuple1vals[i],tuple2vals[i]);
+          tuple.push(val);
+        }
+        var tupleString = tuple.toString();
+        if (!(tupleString in values)){
+          if(node1.val=="value" && node2.val=="char"){
+            console.log("new tuple", tuple);
+            console.log("correct tuple", correctTuple);
+            console.log(node1,node2,funcName);
+          }
+          var newNode = new Node("function", funcName, node1,node2);
+          if (_.isEqual(tuple,correctTuple)){
+            return newNode;
+          }
+          valuesForLater[tupleString] = [tuple,newNode];
+        }
+      }
+    }
+  }
+  
+  for (var tuple1 in values){
+    var tuple1vals = values[tuple1][0];
+    var node1 = values[tuple1][1];
+    for (var tuple2 in values){
+      var tuple2vals = values[tuple2][0];
+      var node2 = values[tuple2][1];
+      for (var tuple3 in values){
+        var tuple3vals = values[tuple3][0];
+        var node3 = values[tuple3][1];
+        for (var funcName in threeArgFuncs){
+          var func = threeArgFuncs[funcName];
+          var tuple = [];
+          for (var i = 0; i<examplesLength;i++){
+            var val = func(tuple1vals[i],tuple2vals[i],tuple3vals[i]);
+            tuple.push(val);
+          }
+          var tupleString = tuple.toString();
+          if (!(tupleString in values)){
+            var newNode = new Node("function", funcName, node1,node2,node3);
+            if (_.isEqual(tuple,correctTuple)){
+              return newNode;
+            }
+            valuesForLater[tupleString] = [tuple,newNode];
+          }
+        }
+      }
+    }
+  }
+  
+  console.log("values after", valuesForLater);
+  
+  console.log("lengths at end ",getObjectSize(valuesForLater));
+  var t2 = new Date();
+  var time = t2-t1;
+  console.log("time: ", time);
+  
+  return deepMatchingValueOptimized(examples, targetProp, valuesForLater, depth-1);
 };
 
 function deepMatchingValue(examples, targetProp, nodesToTest, componentNodes, depth){
