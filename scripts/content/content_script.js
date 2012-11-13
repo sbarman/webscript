@@ -89,6 +89,10 @@ TopNode.prototype = {
   }
 }
 
+function addComment(name, value) {
+  port.postMessage({type: "comment", value: {name: name, value: value}});
+}
+
 // taken from http://stackoverflow.com/questions/2631820/im-storing-click-coor
 // dinates-in-my-db-and-then-reloading-them-later-and-showing/2631931#2631931
 function getPathTo(element) {
@@ -409,6 +413,7 @@ function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomB
   
   for (var i=0;i<recordDeltasNotMatched.length;i++){
     var delta = recordDeltasNotMatched[i];
+    addComment("delta", JSON.stringify(recordDeltasNotMatched))
     if(delta.type == "We expect these nodes to be the same, but they're not."){
       generateMismatchedValueCompensationEvent(element,eventData,delta,true);
     }
