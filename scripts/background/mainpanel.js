@@ -120,7 +120,7 @@ var ScriptServer = (function ScriptServerClosure() {
   }
 
   ScriptServer.prototype = {
-    saveReplay: function _saveReplay(events, origScriptId) {
+    saveReplay: function _saveReplay(events, comments, origScriptId) {
       if (events.length == 0)
         return;
 
@@ -129,11 +129,11 @@ var ScriptServer = (function ScriptServerClosure() {
       postMsg["script_id"] = origScriptId
       postMsg["user"] = {username: "shaon"};
       postMsg["events"] = [];
-      console.log("replay:", postMsg);
+      console.log("saving replay:", postMsg);
 
       var req = $.ajax({
         error: function(jqXHR, textStatus, errorThrown) {
-          console.log(jqXHR, textStatus, errorThrown);
+          console.log("error saving replay:", jqXHR, textStatus, errorThrown);
         },
         success: function(data, textStatus, jqXHR) {
           console.log(data, jqXHR, textStatus);
@@ -145,67 +145,97 @@ var ScriptServer = (function ScriptServerClosure() {
               return;
 
             // need to create new scope to variables don't get clobbered
-            (function() {
-              var postMsg = {};
-              var evtMsg = {};
+            var postMsg = {};
+            var evtMsg = {};
 
-              var e = events[i];
-              var msgValue = e.msg.value;
-              evtMsg["dom_post_event_state"] = msgValue.snapshotAfter;
-              evtMsg["dom_pre_event_state"] = msgValue.snapshotBefore;
-              evtMsg["event_type"] = msgValue.type;
-              evtMsg["execution_order"] = i;
+            var e = events[i];
+            var msgValue = e.msg.value;
+            evtMsg["dom_post_event_state"] = msgValue.snapshotAfter;
+            evtMsg["dom_pre_event_state"] = msgValue.snapshotBefore;
+            evtMsg["event_type"] = msgValue.type;
+            evtMsg["execution_order"] = i;
 
-              var parameters = [];
-              prop: for (var prop in e) {
-                if (prop == "msg") {
-                  continue prop;
-                }
-                var propMsg = {};
-                var val = e[prop];
-                propMsg["name"] = "_" + prop;
-                propMsg["value"] = JSON.stringify(val);
-                propMsg["data_type"] = typeof val; 
-                parameters.push(propMsg);
+            var parameters = [];
+            prop: for (var prop in e) {
+              if (prop == "msg") {
+                continue prop;
               }
-              
-              msgprop: for (var prop in msgValue) {
-                if (prop == "snapshotBefore" || prop == "snapshotAfter") {
-                  continue msgprop;
-                }
-                var propMsg = {};
-                var val = msgValue[prop];
-                propMsg["name"] = prop;
-                propMsg["value"] = JSON.stringify(val);
-                propMsg["data_type"] = typeof val; 
-                parameters.push(propMsg);
+              var propMsg = {};
+              var val = e[prop];
+              propMsg["name"] = "_" + prop;
+              propMsg["value"] = JSON.stringify(val);
+              propMsg["data_type"] = typeof val; 
+              parameters.push(propMsg);
+            }
+            
+            msgprop: for (var prop in msgValue) {
+              if (prop == "snapshotBefore" || prop == "snapshotAfter") {
+                continue msgprop;
               }
+              var propMsg = {};
+              var val = msgValue[prop];
+              propMsg["name"] = prop;
+              propMsg["value"] = JSON.stringify(val);
+              propMsg["data_type"] = typeof val; 
+              parameters.push(propMsg);
+            }
 
-              evtMsg["parameters"] = parameters;
+            evtMsg["parameters"] = parameters;
 
-              postMsg["replay_id"] = replayId;
-              postMsg["events"] = [evtMsg];
+            postMsg["replay_id"] = replayId;
+            postMsg["events"] = [evtMsg];
 
-              console.log("event:", postMsg);
-              $.ajax({
-                error: function(jqXHR, textStatus, errorThrown) {
-                  console.log(data, jqXHR, textStatus);
-                },
-                success: function(data, textStatus, jqXHR) {
-                  console.log(data, jqXHR, textStatus);
-                  saveReplayEvent(i + 1);
-                },
-                contentType: "application/json",
-                data: JSON.stringify(postMsg),
-                dataType: "json",
-                processData: false,
-                type: "POST",
-                url: server + "replay_event/",
-              });
-            })();
+            console.log("saving replay event:", postMsg);
+            $.ajax({
+              error: function(jqXHR, textStatus, errorThrown) {
+                console.log("error saving replay event", data, jqXHR, textStatus);
+              },
+              success: function(data, textStatus, jqXHR) {
+                console.log(data, jqXHR, textStatus);
+                saveReplayEvent(i + 1);
+              },
+              contentType: "application/json",
+              data: JSON.stringify(postMsg),
+              dataType: "json",
+              processData: false,
+              type: "POST",
+              url: server + "replay_event/",
+            });
           }
 
           saveReplayEvent(0);
+
+          function saveComments() {
+            if (!comments)
+              return;
+
+            var postMsg = {};
+            var commentMsg = [];
+            for (var i = 0, ii = comments.length; i < ii; ++i) {
+              var c = comments[i];
+              c["replay_id"] = replayId;
+              commentMsg.push(c);
+            }
+
+            postMsg["comments"] = commentMsg;
+            console.log("saving comments:", postMsg);
+            $.ajax({
+              error: function(jqXHR, textStatus, errorThrown) {
+                console.log("error saving comments", data, jqXHR, textStatus);
+              },
+              success: function(data, textStatus, jqXHR) {
+                console.log(data, jqXHR, textStatus);
+              },
+              contentType: "application/json",
+              data: JSON.stringify(postMsg),
+              dataType: "json",
+              processData: false,
+              type: "POST",
+              url: server + "comment/",
+            });
+          }
+
+          saveComments(); 
         },
         contentType: "application/json",
         data: JSON.stringify(postMsg),
@@ -216,7 +246,7 @@ var ScriptServer = (function ScriptServerClosure() {
       });
       console.log(req);
     },
-    saveScript: function _saveScript(name, events) {
+    saveScript: function _saveScript(name, events, comments) {
       if (events.length == 0)
         return;
 
@@ -225,11 +255,11 @@ var ScriptServer = (function ScriptServerClosure() {
       postMsg["name"] = name;
       postMsg["user"] = {username: "shaon"};
       postMsg["events"] = [];
-      console.log("script:", postMsg);
+      console.log("saving script:", postMsg);
 
       var req = $.ajax({
         error: function(jqXHR, textStatus, errorThrown) {
-          console.log(jqXHR, textStatus, errorThrown);
+          console.log("error saving script", jqXHR, textStatus, errorThrown);
         },
         success: function(data, textStatus, jqXHR) {
           console.log(data, jqXHR, textStatus);
@@ -239,67 +269,98 @@ var ScriptServer = (function ScriptServerClosure() {
             if (i >= events.length)
               return;
 
-            // need to create new scope to variables don't get clobbered
-            (function() {
-              var postMsg = {};
-              var evtMsg = {};
+            var postMsg = {};
+            var evtMsg = {};
 
-              var e = events[i];
-              var msgValue = e.msg.value;
-              evtMsg["dom_post_event_state"] = msgValue.snapshotAfter;
-              evtMsg["dom_pre_event_state"] = msgValue.snapshotBefore;
-              evtMsg["event_type"] = msgValue.type;
-              evtMsg["execution_order"] = i;
+            var e = events[i];
+            var msgValue = e.msg.value;
+            evtMsg["dom_post_event_state"] = msgValue.snapshotAfter;
+            evtMsg["dom_pre_event_state"] = msgValue.snapshotBefore;
+            evtMsg["event_type"] = msgValue.type;
+            evtMsg["execution_order"] = i;
 
-              var parameters = [];
-              prop: for (var prop in e) {
-                if (prop == "msg") {
-                  continue prop;
-                }
-                var propMsg = {};
-                var val = e[prop];
-                propMsg["name"] = "_" + prop;
-                propMsg["value"] = JSON.stringify(val);
-                propMsg["data_type"] = typeof val; 
-                parameters.push(propMsg);
+            var parameters = [];
+            prop: for (var prop in e) {
+              if (prop == "msg") {
+                continue prop;
               }
-              
-              msgprop: for (var prop in msgValue) {
-                if (prop == "snapshotBefore" || prop == "snapshotAfter") {
-                  continue msgprop;
-                }
-                var propMsg = {};
-                var val = msgValue[prop];
-                propMsg["name"] = prop;
-                propMsg["value"] = JSON.stringify(val);
-                propMsg["data_type"] = typeof val; 
-                parameters.push(propMsg);
+              var propMsg = {};
+              var val = e[prop];
+              propMsg["name"] = "_" + prop;
+              propMsg["value"] = JSON.stringify(val);
+              propMsg["data_type"] = typeof val; 
+              parameters.push(propMsg);
+            }
+            
+            msgprop: for (var prop in msgValue) {
+              if (prop == "snapshotBefore" || prop == "snapshotAfter") {
+                continue msgprop;
               }
+              var propMsg = {};
+              var val = msgValue[prop];
+              propMsg["name"] = prop;
+              propMsg["value"] = JSON.stringify(val);
+              propMsg["data_type"] = typeof val; 
+              parameters.push(propMsg);
+            }
 
-              evtMsg["parameters"] = parameters;
+            evtMsg["parameters"] = parameters;
 
-              postMsg["script_id"] = scriptId;
-              postMsg["events"] = [evtMsg];
+            postMsg["script_id"] = scriptId;
+            postMsg["events"] = [evtMsg];
 
-              console.log("event:", postMsg);
-              $.ajax({
-                error: function(jqXHR, textStatus, errorThrown) {
-                  console.log(data, jqXHR, textStatus);
-                },
-                success: function(data, textStatus, jqXHR) {
-                  console.log(data, jqXHR, textStatus);
-                  saveEvent(i + 1);
-                },
-                contentType: "application/json",
-                data: JSON.stringify(postMsg),
-                dataType: "json",
-                processData: false,
-                type: "POST",
-                url: server + "event/",
-              });
-            })();
+            console.log("saving event:", postMsg);
+            $.ajax({
+              error: function(jqXHR, textStatus, errorThrown) {
+                console.log("error saving event", data, jqXHR, textStatus);
+              },
+              success: function(data, textStatus, jqXHR) {
+                console.log(data, jqXHR, textStatus);
+                saveEvent(i + 1);
+              },
+              contentType: "application/json",
+              data: JSON.stringify(postMsg),
+              dataType: "json",
+              processData: false,
+              type: "POST",
+              url: server + "event/",
+            });
           }
+
           saveEvent(0);
+
+          function saveComments() {
+            if (!comments)
+              return;
+
+            var postMsg = {};
+            var commentMsg = [];
+            for (var i = 0, ii = comments.length; i < ii; ++i) {
+              var c = comments[i];
+              c["script_id"] = scriptId;
+              commentMsg.push(c);
+            }
+
+            postMsg["comments"] = commentMsg;
+            console.log("saving comments", commentMsg);
+
+            $.ajax({
+              error: function(jqXHR, textStatus, errorThrown) {
+                console.log("error saving comments", data, jqXHR, textStatus);
+              },
+              success: function(data, textStatus, jqXHR) {
+                console.log(data, jqXHR, textStatus);
+              },
+              contentType: "application/json",
+              data: JSON.stringify(postMsg),
+              dataType: "json",
+              processData: false,
+              type: "POST",
+              url: server + "comment/",
+            });
+          }
+
+          saveComments();
         },
         contentType: "application/json",
         data: JSON.stringify(postMsg),
@@ -535,7 +596,10 @@ var Record = (function RecordClosure() {
   function Record(ports) {
     this.ports = ports;
     this.events = [];
+    this.comments = [];
     this.replayEvents = [];
+    this.replayComments = [];
+    this.commentCounter = 0;
     this.recordState = RecordState.STOPPED;
     this.simultaneousReplayer = null;
     this.lastTime = 0;
@@ -581,10 +645,29 @@ var Record = (function RecordClosure() {
         this.recordState = RecordState.STOPPED;
       }
       this.replayEvents = [];
+      this.replayComments = [];
+      this.commentCounter = 0;
       this.ports.sendToAll({type: "recording", value: this.isRecording()});
     },
     stopReplayRecording: function _stopReplayRecording() {
       this.stopRecording();
+    },
+    addComment: function _addComment(eventRequest, portName) {
+      var value = eventRequest.value;
+      var comment = {};
+      comment.name = value.name;
+      comment.value = value.value;
+
+      if (this.recordState == RecordState.RECORDING) {
+        comment.execution_order = this.events.length + (0.01 * 
+            (this.commentCounter + 1));
+        this.comments.push(comment);
+      } else if (this.recordState == RecordState.REPLAYING) {
+        comment.execution_order = this.replayEvents.length + (0.01 * 
+            (this.commentCounter + 1));
+        this.replayComments.push(comment);
+      }   
+      this.commentCounter += 1;
     },
     addEvent: function _addEvent(eventRequest, portName) {
       var ports = this.ports; 
@@ -644,10 +727,12 @@ var Record = (function RecordClosure() {
 
         replayEvents.push(eventRecord);
       }
+      this.commentCounter = 0;
     },
     clearEvents: function _clearEvents() {
       this.loadedScriptId = null;
       this.events = [];
+      this.comments = [];
       this.panel.clearEvents();
     },
     getEvents: function _getEvents() {
@@ -656,9 +741,16 @@ var Record = (function RecordClosure() {
     getReplayEvents: function _getReplayEvents() {
       return this.replayEvents.slice(0);
     },
+    getComments: function _getComments() {
+      return this.comments.slice(0);
+    },
+    getReplayComments: function _getReplayComments() {
+      return this.replayComments.slice(0);
+    },
     setEvents: function _setEvents(events) {
       this.loadedScriptId = null;
       this.events = events;
+      this.comments = [];
       this.panel.clearEvents();
       for (var i = 0, ii = events.length; i < ii; ++i) {
         this.panel.addEvent(events[i]);
@@ -752,12 +844,13 @@ var Replay = (function ReplayClosure() {
       var scriptServer = this.scriptServer;
       setTimeout(function() {
         var replayEvents = record.getReplayEvents();
+        var comments = record.getReplayComments();
         var scriptId = record.getLoadedScriptId();
 
         record.stopReplayRecording();
 
         if (scriptId && replayEvents.length > 0) {
-          scriptServer.saveReplay(replayEvents, scriptId);
+          scriptServer.saveReplay(replayEvents, comments, scriptId);
           console.log(replayEvents);
         }
       }, 1000);
@@ -1111,7 +1204,8 @@ var Controller = (function ControllerClosure() {
     saveScript: function(name) {
       console.log("saving script");
       var events = this.record.getEvents();
-      this.scriptServer.saveScript(name, events); 
+      var comments = this.record.getComments();
+      this.scriptServer.saveScript(name, events, comments); 
     },
     getScript: function(name) {
       console.log("getting script");
@@ -1156,6 +1250,8 @@ function handleIdMessage(request, sender, sendResponse) {
 var handleMessage = function(port, request) {
   if (request.type == "event") {
     record.addEvent(request, port.name);
+  } else if (request.type == "comment") {
+    record.addComment(request, port.name);
   } else if (request.type == "getRecording") {
     port.postMessage({type: "recording", value: record.isRecording()});
   } else if (request.type == "getParams") {
