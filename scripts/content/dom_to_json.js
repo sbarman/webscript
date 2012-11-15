@@ -46,7 +46,7 @@ var ignoreTags = {"script": true, "style": true};
         } else if (nodeType === 1) {
           /*&& !oChild.prefix &&*/
           if (!(childNodeName in ignoreTags) && 
-              !child.classList.contains("replaystatus")) {
+              !child.classList.contains("replayStatus")) {
             // nodeType is "Element" (1)
             var newPath = xpath+"/"+childNodeName+"["+childrenTags[childNodeName]+"]";
             var child = createObjTree(child, childNodeName, newPath); 

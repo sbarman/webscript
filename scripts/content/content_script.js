@@ -89,6 +89,10 @@ TopNode.prototype = {
   }
 }
 
+function addComment(name, value) {
+  port.postMessage({type: "comment", value: {name: name, value: value}});
+}
+
 // taken from http://stackoverflow.com/questions/2631820/im-storing-click-coor
 // dinates-in-my-db-and-then-reloading-them-later-and-showing/2631931#2631931
 function getPathTo(element) {
@@ -210,22 +214,7 @@ function handleMessage(request) {
   } else if (request.type == "params") {
     updateParams(request.value);
   } else if (request.type == "event") {
-    //console.log("extension event", request, request.value.type)
-    var e = request.value;
-    if (e.type == "wait") {
-      console.log("check wait");
-      checkWait(e);
-    } else {
-      console.log("not wait");
-      var nodes = xPathToNodes(e.target);
-      //if we don't successfully find nodes, let's alert
-      if(nodes.length==0){
-        sendAlert("Couldn't find the DOM node we needed.");
-      }
-      for (var i = 0, ii = nodes.length; i < ii; ++i) {
-        simulate(nodes[i], e);
-      }
-    }
+    simulate(request);
   } else if (request.type == "snapshot") {
     port.postMessage({type: "snapshot", value: snapshotDom(document)});
   }
@@ -254,8 +243,24 @@ function updateParams(newParams) {
   }
 }
 
-function simulate(element, eventData) {
+function simulate(request) {
+  //console.log("extension event", request, request.value.type)
+  var eventData = request.value;
   var eventName = eventData.type;
+
+  if (eventName == "wait") {
+    checkWait(eventData);
+    return;
+  }
+
+  var nodes = xPathToNodes(eventData.target);
+  //if we don't successfully find nodes, let's alert
+  if(nodes.length != 1){
+    sendAlert("Couldn't find the DOM node we needed.");
+    return;
+  }
+
+  var element = nodes[0];
 
   if (eventName == "custom") {
     var script = eval(eventData.script);
@@ -311,6 +316,7 @@ function simulate(element, eventData) {
     console.log("Unknown type of event");
   }
   console.log("[" + id + "] dispatchEvent", eventName, options, oEvent);
+  port.postMessage({type: "ack", value: true});
   
   if (!seenEvent){
     seenEvent = true;
@@ -407,6 +413,7 @@ function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomB
   
   for (var i=0;i<recordDeltasNotMatched.length;i++){
     var delta = recordDeltasNotMatched[i];
+    addComment("delta", JSON.stringify(recordDeltasNotMatched))
     if(delta.type == "We expect these nodes to be the same, but they're not."){
       generateMismatchedValueCompensationEvent(element,eventData,delta,true);
     }
@@ -493,7 +500,7 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
         }
       }
     }
-    propsToChange = _.without(propsToChange,"innerHTML", "outerHTML", "innerText", "outerText","textContent","className","childElementCount");
+    propsToChange = _.without(propsToChange, params.synthesis.omittedProps);
     
     if (synthesisVerbose){
       console.log(name,": propsToChange ", propsToChange);
@@ -1178,8 +1185,9 @@ function divergingProps(obj1,obj2){
     console.log("DIVERGING PROP WEIRDNESS ", obj1, obj2);
     return []; 
   }
-  var obj1props = obj1.prop;
-  var obj2props = obj2.prop;
+  var obj1props = _.omit(obj1.prop, params.synthesis.omittedProps);
+  var obj2props = _.omit(obj2.prop, params.synthesis.omittedProps);
+
   var divergingProps = []
   for (var prop in obj1props){
     if (obj1props[prop] != obj2props[prop]){
@@ -1265,8 +1273,8 @@ function recursiveVisit(obj1,obj2){
         console.log("Scenario 11 divergence, we tried to match a couple of nodes that aren't nodeEqual.");
         console.log(obj1,obj2);
         if (obj1.prop && obj2.prop){
-          var props1 =_.omit(obj1.prop, "innerHTML", "outerHTML", "innerText", "outerText","textContent","className");
-          var props2 =_.omit(obj2.prop, "innerHTML", "outerHTML", "innerText", "outerText","textContent","className");
+          var props1 =_.omit(obj1.prop, params.synthesis.omittedProps);
+          var props2 =_.omit(obj2.prop, params.synthesis.omittedProps);
           console.log(divergingProps({"prop":props1},{prop:props2}));
         }
       }
@@ -1775,8 +1783,8 @@ function nodeEquals(node1,node2){
       return true;
     }
     */
-    var node1RelevantProps = _.omit(node1.prop, "innerHTML", "outerHTML", "innerText", "outerText","textContent","className","childElementCount");
-    var node2RelevantProps = _.omit(node2.prop, "innerHTML", "outerHTML", "innerText", "outerText","textContent","className","childElementCount");
+    var node1RelevantProps = _.omit(node1.prop, params.synthesis.omittedProps);
+    var node2RelevantProps = _.omit(node2.prop, params.synthesis.omittedProps);
     return _.isEqual(node1RelevantProps, node2RelevantProps);
   }
   return node1==node2;
