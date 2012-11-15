@@ -16,7 +16,7 @@ var acceptTags = {"HTML":true, "BODY":true, "HEAD":true};
 var initialDivergences = false;
 var verbose = false;
 var scenarioVerbose = false;
-var synthesisVerbose = false;
+var synthesisVerbose = true;
 var prevEvent;
 var seenEvent = false;
 
@@ -213,8 +213,10 @@ function handleMessage(request) {
     //console.log("extension event", request, request.value.type)
     var e = request.value;
     if (e.type == "wait") {
+      console.log("check wait");
       checkWait(e);
     } else {
+      console.log("not wait");
       var nodes = xPathToNodes(e.target);
       //if we don't successfully find nodes, let's alert
       if(nodes.length==0){
