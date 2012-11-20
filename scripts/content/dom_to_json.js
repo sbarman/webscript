@@ -4,11 +4,11 @@
 'use strict';
 
 var snapshotDom = null;
-var compareDom = null;
-//var ignoreClasses = {"replaystatus": true};
-var ignoreTags = {"script": true, "style": true};
+var snapshot = null;
  
 (function() {
+  var ignoreTags = {"script": true, "style": true};
+
   function createObjTree(node, nodeName, xpath) {
     var returnVal = {children: [], prop: {}};
     returnVal.prop["nodeName"] = nodeName;
@@ -98,16 +98,10 @@ var ignoreTags = {"script": true, "style": true};
     return null;
   }
 
-/*  
-  function ignoreTag(oNode){
-    return _.contains(ignoreTags,oNode.nodeName.toLowerCase());
-  }
-  
-  function ignoreClass(oNode){
-    var lowerCaseClassList = _.map(oNode.classList,function(div){return div.toLowerCase();});
-    return _.reduce(ignoreClasses, function(acc,div){return acc || _.contains(lowerCaseClassList,div);},false);
-  }
-*/  
   snapshotDom = descendToBody;
+  snapshot = function() {
+    return snapshotDom(document);
+  };
+
 })();
 
