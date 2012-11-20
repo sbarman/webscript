@@ -413,7 +413,7 @@ function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomB
   
   for (var i=0;i<recordDeltasNotMatched.length;i++){
     var delta = recordDeltasNotMatched[i];
-    addComment("delta", JSON.stringify(recordDeltasNotMatched))
+    addComment("delta", JSON.stringify(recordDeltasNotMatched));
     if(delta.type == "We expect these nodes to be the same, but they're not."){
       generateMismatchedValueCompensationEvent(element,eventData,delta,true);
     }
@@ -500,6 +500,10 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
         }
       }
     }
+    for (var i in propsToChange){
+      var prop = propsToChange[i];
+      addComment("divergingProp", name+" ; "+prop);
+    }
     propsToChange = _.without(propsToChange, params.synthesis.omittedProps);
     
     if (synthesisVerbose){
@@ -537,10 +541,13 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
       }
       
       console.log("NEW ANNOTATION STATEMENT", name, prop, newNode.toString());
+      var examplesArray = [];
       for (var j in examples){
         var example = examples[j];
         console.log("prop", prop, "before", example.elementPropsBefore[prop], "after", example.elementPropsAfter[prop]);
+        examplesArray.push([example.elementPropsBefore[prop],example.elementPropsAfter[prop]]);
       }
+      addComment("newStatement", name+" ; "+ prop+" ; "+newNode.toString()+" ; "+JSON.stringify(examplesArray));
     }
     
     //now we know what statement we want to do at replay to correct each
