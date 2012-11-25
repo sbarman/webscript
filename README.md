@@ -3,6 +3,13 @@ webscript
 
 Platform to record and replay interactions with the browser.
 
+Dependencies
+-------------------
+
+make.js
+ * node.js
+ * google javascript lint (gjslint)
+
 Quick Setup
 -------------------
 
