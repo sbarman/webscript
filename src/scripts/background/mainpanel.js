@@ -788,7 +788,9 @@ var Replay = (function ReplayClosure() {
       }
       var newPort = null;
       if (topFrame) {
-        newPort = ports.getPort(portInfo.top.portName);
+        var topFrame = portInfo.top;
+        if (topFrame.URL == msg.value.URL)
+          newPort = ports.getPort(topFrame.portName);
       } else {
         var frames = portInfo.frames;
         var urlFrames = [];
