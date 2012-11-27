@@ -94,27 +94,26 @@ var params = null;
     }
   };
 
-  var synthesis = {
-    omittedProps: ["innerHTML", "outerHTML", "innerText", "outerText",
-        "textContent", "className", "childElementCount", "scrollHeight",
-        "scrollWidth", "clientHeight", "clientWidth", "clientTop", "clientLeft",
-        "offsetHeight", "offsetWidth", "offsetTop", "offsetLeft"]
-  };
-
-  var logging = {
-    level: 1,
-    enabled: ["event"]
-  }
-  
   params = {
-    simultaneous: true,
+    simultaneous: false,
     timing: 0,
     events: events,
-    logging: logging,
-    synthesis: synthesis,
-    //server: "http://webscriptdb.herokuapp.com/api/",
+    defaultProps: defaultProps,
+    logging: {
+      level: 1,
+      enabled: ["event"]
+    },
+    synthesis: {
+      omittedProps: ["innerHTML", "outerHTML", "innerText", "outerText",
+          "textContent", "className", "childElementCount", "scrollHeight",
+          "scrollWidth", "clientHeight", "clientWidth", "clientTop",
+          "clientLeft", "offsetHeight", "offsetWidth", "offsetTop",
+          "offsetLeft"]
+    },
+    recording: {
+      allEventProps: true
+    },
     server: "http://sbarman.webfactional.com/api/",
-    defaultProps: defaultProps
   };
 
 })();

@@ -105,11 +105,24 @@ function processEvent(eventData) {
         eventMessage[prop] = eventData[prop];
       }
     }
+
+    if (params.recording.allEventProps) {
+      for (var prop in eventData) {
+        try {
+          var type = typeof(eventData[prop]);
+          if (type == "number" || type == "boolean" || type == "string" ||
+              type == "undefined") {
+            eventMessage[prop] = eventData[prop];
+          }
+        } catch (e) {}
+      }
+    }
     
     if (eventMessage["charCode"]){
       eventMessage["char"] = String.fromCharCode(eventMessage["charCode"]);
     }
 
+/*
     var extension = extendEvents[type];
     if (extension) {
       extension.record(eventData, eventMessage);
@@ -121,7 +134,7 @@ function processEvent(eventData) {
         annotation.record(eventData, eventMessage);
       }
     }
-
+*/
 
    // console.log("extension sending:", eventMessage);
     console.log("[" + id + "] event message:", eventMessage);
@@ -223,8 +236,11 @@ function simulate(request) {
         options.shiftKey, options.metaKey, options.keyCode,
         options.charCode);
 
-    setEventProp(oEvent, "charCode", options.charCode);
-    setEventProp(oEvent, "keyCode", options.keyCode);
+    var propsToSet = ['charCode', 'keyCode', 'shiftKey', 'metaKey'];
+    for (var i = 0, ii = propsToSet.length; i < ii; ++i) {
+      var prop = propsToSet[i];
+      setEventProp(oEvent, prop, options[prop]);
+    }
     /*
     for (var p in options) {
       if (p != "nodeName" && p != "dispatchType" && p != "URL" && 
@@ -264,7 +280,8 @@ function simulate(request) {
   }
   //this does the actual event simulation
   element.dispatchEvent(oEvent);
-  
+ 
+/* 
   // handle any quirks with the event type
   var extension = extendEvents[eventName];
   if (extension) {
@@ -281,6 +298,7 @@ function simulate(request) {
       annotation.replay(element, eventData);
     }
   }
+*/
   
   //let's update a div letting us know what event we just got
   sendAlert("Received Event: "+eventData.type);
