@@ -138,8 +138,8 @@ var ScriptServer = (function ScriptServerClosure() {
 
         var e = events[i];
         var msgValue = e.msg.value;
-        evtMsg["dom_post_event_state"] = msgValue.snapshotAfter;
-        evtMsg["dom_pre_event_state"] = msgValue.snapshotBefore;
+        evtMsg["dom_post_event_state"] = JSON.stringify(msgValue.snapshotAfter);
+        evtMsg["dom_pre_event_state"] = JSON.stringify(msgValue.snapshotBefore);
         evtMsg["event_type"] = msgValue.type;
         evtMsg["execution_order"] = i;
 
@@ -298,7 +298,7 @@ var ScriptServer = (function ScriptServerClosure() {
       var server = this.server;
       $.ajax({
         error: function(jqXHR, textStatus, errorThrown) {
-          console.log(data, jqXHR, textStatus);
+          console.log(jqXHR, textStatus, errorThrown);
         },
         success: function(data, textStatus, jqXHR) {
           console.log(data, textStatus, jqXHR);
@@ -321,7 +321,11 @@ var ScriptServer = (function ScriptServerClosure() {
               var serverParams = e.parameters;
               var event = {}
               event.msg = {type: "event", value: {}};
+
               var msgValue = event.msg.value;
+              msgValue.snapshotBefore = JSON.parse(e.dom_pre_event_state);
+              msgValue.snapshotAfter = JSON.parse(e.dom_post_event_state);
+
               for (var j = 0, jj = serverParams.length; j < jj; ++j) {
                 var p = serverParams[j];
                 if (p.name.charAt(0) == '_') {

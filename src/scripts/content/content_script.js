@@ -236,7 +236,8 @@ function simulate(request) {
         options.shiftKey, options.metaKey, options.keyCode,
         options.charCode);
 
-    var propsToSet = ['charCode', 'keyCode', 'shiftKey', 'metaKey'];
+    var propsToSet = ['charCode', 'keyCode', 'shiftKey', 'metaKey',
+                      'keyIdentifier', 'which'];
     for (var i = 0, ii = propsToSet.length; i < ii; ++i) {
       var prop = propsToSet[i];
       setEventProp(oEvent, prop, options[prop]);
