@@ -271,7 +271,7 @@ function simulate(request) {
         
     //let's try seeing divergence for the last event, now that we have a
     //new more recent snapshot of the record DOM
-    visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomBefore,replayDomAfter);
+    visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomBefore,replayDomAfter, oEvent);
   }
   //this does the actual event simulation
   element.dispatchEvent(oEvent);
