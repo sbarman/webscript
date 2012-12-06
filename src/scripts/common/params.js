@@ -44,7 +44,7 @@ var params = null;
       'keypress': true,
     },
     'TextEvent': {
-      'textInput': false,  // similar to input event, doesn trigger with cp/pst
+      'textInput': true,  // similar to input event, doesn trigger with cp/pst
     }
   };
   
@@ -112,6 +112,9 @@ var params = null;
     },
     recording: {
       allEventProps: true
+    },
+    replaying: {
+      enableAlerts: false
     },
     server: "http://sbarman.webfactional.com/api/",
   };

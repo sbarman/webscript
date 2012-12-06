@@ -386,6 +386,10 @@ var Panel = (function PanelClosure() {
       $("#restart").click(function(eventObject) {
         controller.restart();
       });
+
+      $("#skip").click(function(eventObject) {
+        controller.skip();
+      });
       
       $("#paramsDiv").hide(1000);
       
@@ -765,6 +769,9 @@ var Replay = (function ReplayClosure() {
         this.setNextEvent(0);
       }
     },
+    skip: function _skip() {
+      this.index++;
+    },
     finish: function _finish() {
       var record = this.record;
       var scriptServer = this.scriptServer;
@@ -1129,6 +1136,9 @@ var Controller = (function ControllerClosure() {
     restart: function() {
       this.replay.restart();
     },
+    skip: function() {
+      this.replay.skip();
+    },
     saveScript: function(name) {
       console.log("saving script");
       var events = this.record.getEvents();
@@ -1188,6 +1198,7 @@ var handleMessage = function(port, request) {
     ports.addSnapshot(port.name, request.value);
   } else if (request.type == "ack") {
     ports.setAck(request.value);
+    console.log("got ack");
   }
 };
 

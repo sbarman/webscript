@@ -807,6 +807,9 @@ function addCompensationEvent(name,typeOfNode,typeOfEvent,replayNodes,recordNode
 
 //function for sending an alert that the user will see
 function sendAlert(msg){
+  if (!params.replaying.enableAlerts)
+    return;
+
   var replayStatusDiv = document.createElement("div");
   replayStatusDiv.setAttribute('class','replayStatus');
   replayStatusDiv.setAttribute('style',
