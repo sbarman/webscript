@@ -83,7 +83,7 @@ function withoutArray(arr1,arr2){
   return _.without.apply(_, [arr1].concat(arr2));
 };
 
-function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomBefore,replayDomAfter){
+function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomBefore,replayDomAfter, oEvent){
   var element = prevEvent.element;
   var eventData = prevEvent.eventData;
   
@@ -156,48 +156,10 @@ function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomB
         //console.log(recordProps);
         for (var index in props){
           var prop = props[index];
-          console.log("setting prop ", prop," from", elem[prop], " to ", recordProps[prop], ".");
-          elem[prop] = recordProps[prop];
+          console.log("what the element says prop ", prop, " is: ", elem[prop]);
+          console.log("setting prop ", prop," from", elem[prop], " to ", delta.replay.prop[prop], ".");
+          elem[prop] = delta.replay.prop[prop];
         }
-      }
-      else if (false){
-        //console.log("we're going to have to come up with some other way of making the xpath");
-        //console.log("delta", delta);
-        //console.log(divergingProps(delta.record,delta.replay));
-        //console.log(document.evaluate(xpath, document, null, XPathResult.ANY_TYPE, null));
-        //console.log(delta.record,delta.replay);
-        //console.log(delta.record.prop.xpath);
-        //console.log(delta.replay.prop.xpath);
-        //console.log(xPathToNodes(delta.record.prop.xpath));
-        //console.log("replay xpath", delta.relevantChildrenXPaths[0]);
-        //console.log(xPathToNodes(delta.relevantChildrenXPaths[0]));
-        
-        var props = _.keys(delta.record.prop);
-        var divergeProps = divergingProps(delta.record,delta.replay);
-        var sameProps = withoutArray(props, divergeProps);
-        sameProps = withoutArray(sameProps, params.synthesis.omittedProps);
-        var addedAttributes = ["nodeName", "xpath", "tagName"];
-        sameProps = withoutArray(sameProps,addedAttributes);
-        var xpath = delta.record.prop.nodeName+"[";
-        var limitLength = sameProps.length;
-        var addedFirst = false;
-        for (var index = 0; index<limitLength;index++){
-          var prop = sameProps[index];
-          if (typeof (delta.replay.prop[prop]+1) != "string" || delta.replay.prop[prop]==''){
-            continue;
-          }
-          if (addedFirst){
-            xpath+=" and ";
-          }
-          else{
-            addedFirst = true;
-          }
-          xpath+="@"+prop+"='"+delta.replay.prop[prop]+"'";
-        }
-        xpath+="]";
-        console.log("xpath after loop", xpath);
-        var nodes = xPathToNodes(xpath);
-        console.log("nodes ", nodes);
       }
       else{
         xpath = delta.replay.prop.xpath;
@@ -213,13 +175,20 @@ function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomB
         var recordProps = delta.record.prop;
         for (var index in props){
           var prop = props[index];
+          console.log("xpath case");
           console.log("what the element says prop ", prop, " is: ", elem[prop]);
-          console.log("setting prop ", prop," from", delta.replay.prop[prop], " to ", recordProps[prop], ".");
+          console.log("record time transition was ", prop," from", delta.record.prop[prop], " to ", delta.replay.prop[prop], ".");
+          console.log("setting prop ", prop," from", elem[prop], " to ", delta.replay.prop[prop], ".");
+          console.log("what the element says prop ", prop, " is: ", elem[prop]);
           elem[prop] = delta.replay.prop[prop];
         }
       }
       
     }
+    
+  //this does the actual event simulation
+  //console.log("dispatching event", oEvent);
+  //element.dispatchEvent(oEvent);
   }
   
   
