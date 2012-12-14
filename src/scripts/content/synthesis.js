@@ -1,3 +1,5 @@
+/* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
 
 var similarityThreshold = .9;
 var acceptTags = {"HTML":true, "BODY":true, "HEAD":true};
@@ -805,6 +807,9 @@ function addCompensationEvent(name,typeOfNode,typeOfEvent,replayNodes,recordNode
 
 //function for sending an alert that the user will see
 function sendAlert(msg){
+  if (!params.replaying.enableAlerts)
+    return;
+
   var replayStatusDiv = document.createElement("div");
   replayStatusDiv.setAttribute('class','replayStatus');
   replayStatusDiv.setAttribute('style',
