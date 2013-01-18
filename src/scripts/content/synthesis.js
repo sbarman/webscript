@@ -114,8 +114,8 @@ function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomB
   }
   
   var node = xPathToNodes("html/body[1]/div[3]/div[1]/div[1]/div[2]/div[2]/div[1]/form[1]/input[1]")[0];
-  console.log("NODE ", node);
-  console.log("DEFAULT Value according to element ", node.defaultValue);
+  //console.log("NODE ", node);
+  //console.log("DEFAULT Value according to element ", node.defaultValue);
   
   //effects of events that were found in record browser but not replay browser
   var recordDeltasNotMatched = filterDivergences(recordDeltas, replayDeltas);
@@ -128,7 +128,7 @@ function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomB
   }
   
   //the thing below is the stuff that's doing divergence synthesis
-  /*
+  
   for (var i=0;i<recordDeltasNotMatched.length;i++){
     var delta = recordDeltasNotMatched[i];
     addComment("delta", JSON.stringify(recordDeltasNotMatched))
@@ -136,7 +136,8 @@ function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomB
       generateMismatchedValueCompensationEvent(element,eventData,delta,true);
     }
   }
-  * */
+  
+  /*
   //let's replace synthesis with just copying over the state of all mismatched items
   for (var index in recordDeltasNotMatched){
 	  var delta = recordDeltasNotMatched[index];
@@ -190,7 +191,7 @@ function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomB
   //console.log("dispatching event", oEvent);
   //element.dispatchEvent(oEvent);
   }
-  
+  */
   
   /*
   for (var i=0;i<replayDeltasNotMatched.length;i++){
@@ -304,7 +305,7 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
         console.log("setting prop ", prop, " to ", delta.replay.prop[prop]);
       }
       
-      var newNode = findSatisfyingExpressionOptimized(examples, prop, 2);
+      var newNode = findSatisfyingExpressionWithOptimizationLevel(examples, prop, 2, 2);
       
       if (newNode){
         replayNodes.push(new TopNode(prop,newNode));
@@ -322,6 +323,7 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta, thi
       }
       
       console.log("NEW ANNOTATION STATEMENT", name, prop, newNode.toString());
+      sendAlertRight(name+" "+prop+"<br>"+newNode.toString());
       for (var j in examples){
         var example = examples[j];
         console.log("prop", prop, "before", example.elementPropsBefore[prop], "after", example.elementPropsAfter[prop]);
@@ -470,6 +472,10 @@ function concatMatchingValue(examples,targetProp){
   }
 };
 
+function findSatisfyingExpressionWithOptimizationLevel(examples, prop, depth, optimizationLevel){
+  var functions = [findSatisfyingExpression,findSatisfyingExpressionOptimized,findSatisfyingExpressionOptimized2];
+  return functions[optimizationLevel](examples,prop,depth);
+}
 
 function findSatisfyingExpression(examples, prop, depth){
   //if we can use a constant, use that
@@ -534,12 +540,98 @@ function findSatisfyingExpressionOptimized(examples, prop, depth){
   return deepNode;
 };
 
+function findSatisfyingExpressionOptimized2(examples, prop, depth){
+  //if we can use a constant, use that
+  var constantNode = constantMatchingValue(examples, prop);
+  if (constantNode){
+    return constantNode;
+  }
+
+  //let's set up the first pool of nodes
+  var startNodes = []
+  var messagePropNodes = examples[0].messagePropNodes;
+  var elementPropNodes = examples[0].elementPropNodes;
+  startNodes.push(new Node("constant", 1));
+  startNodes.push(new Node("constant", -1));
+  startNodes = startNodes.concat(messagePropNodes,elementPropNodes);
+  
+  var correctTuple = [];
+  for (var i in examples){
+    var example = examples[i];
+    correctTuple.push(example.elementPropsAfter[prop]);
+  }
+  
+  var values = {};
+  for (var i in startNodes){
+    var node = startNodes[i];
+    var tuple = [];
+    for (var i in examples){
+      var example = examples[i];
+      tuple.push(evaluateNodeOnExample(node,example));
+    }
+    var tupleString = tuple.toString();
+    if (!(tupleString in values)){
+      if (tuple == correctTuple){
+        return node;
+      }
+      values[tupleString] = [tuple,node];
+    }
+  }
+  
+  var deepNode = deepMatchingValueOptimized2(examples,prop,values,depth);
+  return deepNode;
+};
+
 function getObjectSize(myObject) {
   var count=0;
   for (var key in myObject)
     count++;
   return count;
 }
+
+function deepMatchingValue(examples, targetProp, nodesToTest, componentNodes, depth){
+  var oneArgNodes = [];
+  var twoArgNodes = [];
+  var threeArgNodes = [];
+  
+  for (var i in nodesToTest){
+    var node = nodesToTest[i];
+    if (_.reduce(examples,function(acc,ex){return (acc && evaluateNodeOnExample(node,ex) == ex.elementPropsAfter[targetProp]);},true)) {
+      return node;
+    }
+  }
+  
+  if (depth<=1){
+    return null;
+  }
+  
+  for (var i in componentNodes){
+    var node1 = componentNodes[i];
+      for (var funcName in oneArgFuncs){
+        var newNode = new Node("function",funcName,node1);
+        oneArgNodes.push(newNode);
+      }
+      for (var j in componentNodes){
+        var node2 = componentNodes[j];
+        for (var funcName in twoArgFuncs){
+          var newNode = new Node("function",funcName,node1,node2);
+          twoArgNodes.push(newNode);
+        }
+        for (var k in componentNodes){
+          var node3 = componentNodes[k];
+          for (var funcName in threeArgFuncs){
+            var newNode = new Node("function",funcName,node1,node2,node3);
+            threeArgNodes.push(newNode);
+          }
+        }
+      }
+  }
+  
+  var nodesToTestNext = oneArgNodes.concat(twoArgNodes,threeArgNodes);
+  var componentNodesNext = componentNodes.concat(nodesToTestNext);
+  
+  return deepMatchingValue(examples, targetProp, nodesToTestNext, componentNodesNext, depth-1);
+};
 
 function deepMatchingValueOptimized(examples, targetProp, values, depth){
   console.log(examples, targetProp, values, depth);
@@ -648,48 +740,215 @@ function deepMatchingValueOptimized(examples, targetProp, values, depth){
   return deepMatchingValueOptimized(examples, targetProp, valuesForLater, depth-1);
 };
 
-function deepMatchingValue(examples, targetProp, nodesToTest, componentNodes, depth){
-  var oneArgNodes = [];
-  var twoArgNodes = [];
-  var threeArgNodes = [];
+function deepMatchingValueOptimized2(examples, targetProp, values, depth){
+  var valuesForLater = _.clone(values);
+  var examplesLength = examples.length;
   
-  for (var i in nodesToTest){
-    var node = nodesToTest[i];
-    if (_.reduce(examples,function(acc,ex){return (acc && evaluateNodeOnExample(node,ex) == ex.elementPropsAfter[targetProp]);},true)) {
-      return node;
-    }
+  var correctTuple = [];
+  for (var i in examples){
+    var example = examples[i];
+    correctTuple.push(example.elementPropsAfter[targetProp]);
   }
   
   if (depth<=1){
     return null;
   }
   
-  for (var i in componentNodes){
-    var node1 = componentNodes[i];
-      for (var funcName in oneArgFuncs){
-        var newNode = new Node("function",funcName,node1);
-        oneArgNodes.push(newNode);
+  for (var tuple1 in values){
+    var tuple1vals = values[tuple1][0];
+    var node1 = values[tuple1][1];
+    for (var funcName in oneArgFuncs){
+      var func = oneArgFuncs[funcName];
+      var tuple = [];
+      for (var i = 0; i<examplesLength;i++){
+        tuple.push(func(tuple1vals[i]));
       }
-      for (var j in componentNodes){
-        var node2 = componentNodes[j];
-        for (var funcName in twoArgFuncs){
-          var newNode = new Node("function",funcName,node1,node2);
-          twoArgNodes.push(newNode);
+      var tupleString = tuple.toString();
+      if (!(tupleString in values)){
+        var newNode = new Node("function", funcName, node1);
+        if (sameTuple(correctTuple,tuple)){
+          return newNode;
         }
-        for (var k in componentNodes){
-          var node3 = componentNodes[k];
-          for (var funcName in threeArgFuncs){
-            var newNode = new Node("function",funcName,node1,node2,node3);
-            threeArgNodes.push(newNode);
+        valuesForLater[tupleString] = [tuple,newNode];
+      }
+    }
+  }
+  
+  var twoArgFuncsRestricted = _.omit(twoArgFuncs, "concat");
+  var doConcat = _.contains(_.keys(twoArgFuncs),"concat");
+  
+  for (var tuple1 in values){
+    var tuple1vals = values[tuple1][0];
+    var node1 = values[tuple1][1];
+    for (var tuple2 in values){
+      var tuple2vals = values[tuple2][0];
+      var node2 = values[tuple2][1];
+      for (var funcName in twoArgFuncsRestricted){
+        var func = twoArgFuncs[funcName];
+        var tuple = [];
+        for (var i = 0; i<examplesLength;i++){
+          var val = func(tuple1vals[i],tuple2vals[i]);
+          tuple.push(val);
+        }
+        var tupleString = tuple.toString();
+        if (!(tupleString in values)){
+          var newNode = new Node("function", funcName, node1,node2);
+          if (sameTuple(correctTuple,tuple)){
+            return newNode;
+          }
+          valuesForLater[tupleString] = [tuple,newNode];
+        }
+      }
+      //now let's take care of concat separately
+      if (doConcat){
+        var func = twoArgFuncs["concat"];
+        var tuple = [];
+        for (var i = 0; i<examplesLength;i++){
+          var val = func(tuple1vals[i],tuple2vals[i]);
+          tuple.push(val);
+        }
+        var tupleString = tuple.toString();
+        if (!(tupleString in values)){
+          var newNode = new Node("function", "concat", node1,node2);
+          if (sameTuple(correctTuple,tuple)){
+            return newNode;
+          }
+          if (includesTuple(correctTuple,tuple)){
+            valuesForLater[tupleString] = [tuple,newNode];
           }
         }
       }
+    }
   }
   
-  var nodesToTestNext = oneArgNodes.concat(twoArgNodes,threeArgNodes);
-  var componentNodesNext = componentNodes.concat(nodesToTestNext);
+  var threeArgFuncsRestricted = _.omit(threeArgFuncs, "if_func");
+  var doIf = _.contains(_.keys(threeArgFuncs),"if_func");
   
-  return deepMatchingValue(examples, targetProp, nodesToTestNext, componentNodesNext, depth-1);
+  for (var tuple1 in values){
+    var tuple1vals = values[tuple1][0];
+    var node1 = values[tuple1][1];
+    for (var tuple2 in values){
+      var tuple2vals = values[tuple2][0];
+      var node2 = values[tuple2][1];
+      for (var tuple3 in values){
+        var tuple3vals = values[tuple3][0];
+        var node3 = values[tuple3][1];
+        for (var funcName in threeArgFuncs){
+          var func = threeArgFuncs[funcName];
+          var tuple = [];
+          for (var i = 0; i<examplesLength;i++){
+            var val = func(tuple1vals[i],tuple2vals[i],tuple3vals[i]);
+            tuple.push(val);
+          }
+          var tupleString = tuple.toString();
+          if (!(tupleString in values)){
+            var newNode = new Node("function", funcName, node1,node2,node3);
+            if (sameTuple(correctTuple,tuple)){
+              return newNode;
+            }
+            valuesForLater[tupleString] = [tuple,newNode];
+          }
+        }
+        //if the new thing is an if, split into two pools and do two separate searches
+        //also, first check if the if actually splits the pool at all.  if it doesn't, skip the if
+        //if we can't find a solution for one pool, don't do the if either
+        if (doIf){
+          var trueList = [];
+          var trueIndexes = [];
+          var falseList = [];
+          var falseIndexes = [];
+          for (var i = 0; i<examplesLength;i++){
+            var example = examples[i];
+            if(evaluateNodeOnExample(node1,example)){
+              trueList.push(example);
+              trueIndexes.push(i);
+            }
+            else {
+              falseList.push(example);
+              falseIndexes.push(i);
+            }
+          }
+          //now all the examples for which node1 would evaluate true are
+          //in trueList, and all examples for which node2 would evaluate
+          //false are in falseList
+          if (trueList.length==0 || falseList.length==0){
+            //if our condition doesn't split the pool of examples, it's
+            //silly to use it
+            continue;
+          }
+          //because of our concat optimization, concats might get thrown out
+          //if they don't work for all examples, so we can't just use the values
+          //we've already built up.  we're going to have to try to generate
+          //a wholly new expression of the appropriate depth, for each branch
+          
+          //let's send off a search for an expression that works for all trueList examples
+          var trueExpression = deepMatchingValueOptimized2(trueList, targetProp, generateValuesForExamples(trueList, correctTuple), depth-1);
+          if (trueExpression == null){
+            //again, silly to try this if, so we continue
+            continue;
+          }
+          var falseExpression = deepMatchingValueOptimized2(falseList, targetProp, generateValuesForExamples(falseList, correctTuple), depth-1);
+          if (falseExpression == null){
+            //again, silly to try this if, so we continue
+            continue;
+          }
+          //we actually only get to this point if we've found an if
+          //that's successful for the whole subset of examples on
+          //which it needs to succeed.
+          return new Node("function", "if_func", node1,trueExpression, falseExpression);
+        }
+      }
+    }
+  }
+  
+  return deepMatchingValueOptimized2(examples, targetProp, valuesForLater, depth-1);
+};
+
+function sameTuple(tuple1,tuple2){
+  var len = tuple1.length;
+  for (var i=0; i<len; i++){
+    if (tuple1[i]!=tuple2[i]){
+      return false;
+    }
+  }
+  return true;
+};
+
+function includesTuple(targetTuple, tuple){
+  for (var tupleIndex in targetTuple){
+    if (typeof targetTuple[tupleIndex] == "string" && targetTuple[tupleIndex].indexOf(tuple[tupleIndex])==-1){
+      return false;
+    }
+  }
+  return true;
+};
+
+function generateValuesForExamples(examples, correctTuple){
+  //let's set up the first pool of nodes
+  var startNodes = [];
+  var messagePropNodes = examples[0].messagePropNodes;
+  var elementPropNodes = examples[0].elementPropNodes;
+  startNodes.push(new Node("constant", 1));
+  startNodes.push(new Node("constant", -1));
+  startNodes = startNodes.concat(messagePropNodes,elementPropNodes);
+  
+  var values = {};
+  for (var i in startNodes){
+    var node = startNodes[i];
+    var tuple = [];
+    for (var i in examples){
+      var example = examples[i];
+      tuple.push(evaluateNodeOnExample(node,example));
+    }
+    var tupleString = tuple.toString();
+    if (!(tupleString in values)){
+      if (tuple == correctTuple){
+        return node;
+      }
+      values[tupleString] = [tuple,node];
+    }
+  }
+  return values;
 };
 
 function functionsFromNodes(nodes){
@@ -891,6 +1150,22 @@ function sendAlert(msg){
     top:0px; \
     width:200px; \
     font-size:10px');
+  replayStatusDiv.innerHTML = msg;
+  document.body.appendChild(replayStatusDiv);	
+  console.log("appended child", replayStatusDiv.innerHTML);
+}
+
+function sendAlertRight(msg){
+  var replayStatusDiv = document.createElement("div");
+  replayStatusDiv.setAttribute('class','replayStatus');
+  replayStatusDiv.setAttribute('style',
+    'z-index:99999999999999999999999999; \
+    background-color:yellow; \
+    position:fixed; \
+    right:0px; \
+    top:0px; \
+    width:500px; \
+    font-size:13px');
   replayStatusDiv.innerHTML = msg;
   document.body.appendChild(replayStatusDiv);	
   console.log("appended child", replayStatusDiv.innerHTML);
