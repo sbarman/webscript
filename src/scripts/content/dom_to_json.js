@@ -26,7 +26,7 @@ var snapshot = null;
         //let's track the number of tags of this kind we've seen in the
         //children so far, to build the xpath
         var childNodeName = child.nodeName.toLowerCase();
-        if(!(nodeName in childrenTags)){
+        if(!(childNodeName in childrenTags)){
           childrenTags[childNodeName]=1;
         }
         else{

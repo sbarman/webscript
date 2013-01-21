@@ -12,6 +12,16 @@ var recording = false;
 var id = "setme";
 var curSnapshotRecord;
 var curSnapshotReplay;
+/*
+var similarityThreshold = .9;
+var acceptTags = {"HTML":true, "BODY":true, "HEAD":true};
+var initialDivergences = false;
+var verbose = false;
+var scenarioVerbose = false;
+var synthesisVerbose = true;
+*/
+var synthesisVerbose = true;
+var verbose = true;
 
 var prevEvent;
 var seenEvent = false;
@@ -184,6 +194,7 @@ function simulate(request) {
   //console.log("extension event", request, request.value.type)
   var eventData = request.value;
   var eventName = eventData.type;
+  console.log("EVENT DATA", eventData);
 
   if (eventName == "wait") {
     checkWait(eventData);
@@ -277,7 +288,7 @@ function simulate(request) {
         
     //let's try seeing divergence for the last event, now that we have a
     //new more recent snapshot of the record DOM
-    visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomBefore,replayDomAfter);
+    visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomBefore,replayDomAfter, oEvent);
   }
   //this does the actual event simulation
   element.dispatchEvent(oEvent);
