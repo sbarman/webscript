@@ -4,6 +4,8 @@
 'use strict';
 
 var PortManager = (function PortManagerClosure() {
+  var portLog = getLog('ports');
+
   function PortManager() {
     this.numPorts = 0;
     this.ports = {}; 
@@ -17,6 +19,7 @@ var PortManager = (function PortManagerClosure() {
   
   PortManager.prototype = {
     sendToAll: function(message) {
+      portLog.log('sending to all:', message);
       var ports = this.ports;
       for (var portName in ports) {
         ports[portName].postMessage(message);
@@ -43,6 +46,8 @@ var PortManager = (function PortManagerClosure() {
     getNewId: function(value, sender) {
       this.numPorts++;
       var portName = "" + this.numPorts
+      
+      portLog.log("adding new id: ", portName, value)
 
       // Update various mappings
       var tabId = sender.tab.id;
@@ -57,6 +62,7 @@ var PortManager = (function PortManagerClosure() {
       tabIdToPortNames[tabId].push(portName);
       
       value.portName = portName;
+
       if (value.top) {
         this.tabIdToCurrentPortInfo[tabId] = {top: value, frames: []};
       } else {
@@ -77,6 +83,8 @@ var PortManager = (function PortManagerClosure() {
     
       var portManager = this;
       port.onDisconnect.addListener(function(evt) {
+        portLog.log("disconnect port:", port);
+
         if (portName in ports) {
           delete ports[portName];
         } else {
@@ -104,9 +112,11 @@ var PortManager = (function PortManagerClosure() {
       return this.ack;
     },
     setAck: function(val) {
+      portLog.log("set ack:", val);
       this.ack = val;
     },
     clearAck: function() {
+      portLog.log("clear ack");
       this.ack = null;
     }
   };
@@ -115,6 +125,8 @@ var PortManager = (function PortManagerClosure() {
 })();
 
 var ScriptServer = (function ScriptServerClosure() {
+  var scriptLog = getLog('script');
+
   function ScriptServer(server) {
     this.server = server;
   }
@@ -128,7 +140,7 @@ var ScriptServer = (function ScriptServerClosure() {
 
       function saveEvent(i) {
         if (i >= events.length) {
-          console.log("Done saving");
+          scriptLog.log("Done saving");
           return;
         }
 
@@ -177,13 +189,13 @@ var ScriptServer = (function ScriptServerClosure() {
         }
         postMsg["events"] = [evtMsg];
 
-        console.log("saving event:", postMsg);
+        scriptLog.log("saving event:", postMsg);
         $.ajax({
           error: function(jqXHR, textStatus, errorThrown) {
-            console.log("error saving event", jqXHR, textStatus, errorThrown);
+            scriptLog.log("error saving event", jqXHR, textStatus, errorThrown);
           },
           success: function(data, textStatus, jqXHR) {
-            console.log(data, jqXHR, textStatus);
+            scriptLog.log(data, jqXHR, textStatus);
             saveEvent(i + 1);
           },
           contentType: "application/json",
@@ -212,13 +224,13 @@ var ScriptServer = (function ScriptServerClosure() {
         }
 
         postMsg["comments"] = commentMsg;
-        console.log("saving comments:", postMsg);
+        scriptLog.log("saving comments:", postMsg);
         $.ajax({
           error: function(jqXHR, textStatus, errorThrown) {
-            console.log("error comments", jqXHR, textStatus, errorThrown);
+            scriptLog.log("error comments", jqXHR, textStatus, errorThrown);
           },
           success: function(data, textStatus, jqXHR) {
-            console.log(data, jqXHR, textStatus);
+            scriptLog.log(data, jqXHR, textStatus);
           },
           contentType: "application/json",
           data: JSON.stringify(postMsg),
@@ -242,14 +254,14 @@ var ScriptServer = (function ScriptServerClosure() {
       postMsg["script_id"] = origScriptId
       postMsg["user"] = {username: "shaon"};
       postMsg["events"] = [];
-      console.log("saving replay:", postMsg);
+      scriptLog.log("saving replay:", postMsg);
 
       var req = $.ajax({
         error: function(jqXHR, textStatus, errorThrown) {
-          console.log("error saving replay:", jqXHR, textStatus, errorThrown);
+          scriptLog.log("error saving replay:", jqXHR, textStatus, errorThrown);
         },
         success: function(data, textStatus, jqXHR) {
-          console.log(data, jqXHR, textStatus);
+          scriptLog.log(data, jqXHR, textStatus);
 
           var replayId = data.id;
           scriptServer.saveEvents(false, replayId, events, comments);
@@ -261,7 +273,7 @@ var ScriptServer = (function ScriptServerClosure() {
         type: "POST",
         url: server + "replay/",
       });
-      console.log(req);
+      scriptLog.log(req);
     },
     saveScript: function _saveScript(name, events, comments) {
       if (events.length == 0)
@@ -273,14 +285,14 @@ var ScriptServer = (function ScriptServerClosure() {
       postMsg["name"] = name;
       postMsg["user"] = {username: "shaon"};
       postMsg["events"] = [];
-      console.log("saving script:", postMsg);
+      scriptLog.log("saving script:", postMsg);
 
       var req = $.ajax({
         error: function(jqXHR, textStatus, errorThrown) {
-          console.log("error saving script", jqXHR, textStatus, errorThrown);
+          scriptLog.log("error saving script", jqXHR, textStatus, errorThrown);
         },
         success: function(data, textStatus, jqXHR) {
-          console.log(data, jqXHR, textStatus);
+          scriptLog.log(data, jqXHR, textStatus);
 
           var scriptId = data.id;
           scriptServer.saveEvents(true, scriptId, events, comments);
@@ -292,16 +304,16 @@ var ScriptServer = (function ScriptServerClosure() {
         type: "POST",
         url: server + "script/",
       });
-      console.log(req);
+      scriptLog.log(req);
     },
     getScript: function _getScript(name, controller) {
       var server = this.server;
       $.ajax({
         error: function(jqXHR, textStatus, errorThrown) {
-          console.log(jqXHR, textStatus, errorThrown);
+          scriptLog.log(jqXHR, textStatus, errorThrown);
         },
         success: function(data, textStatus, jqXHR) {
-          console.log(data, textStatus, jqXHR);
+          scriptLog.log(data, textStatus, jqXHR);
           var scripts = data;
           if (scripts.length != 0) {
             var script = scripts[0];
@@ -523,6 +535,8 @@ var Panel = (function PanelClosure() {
 })();
 
 var Record = (function RecordClosure() {
+  var recordLog = getLog('record');
+
   function Record(ports) {
     this.ports = ports;
     this.events = [];
@@ -555,6 +569,8 @@ var Record = (function RecordClosure() {
              recordState == RecordState.REPLAYING;
     },
     startRecording: function _startRecording() {
+      recordLog.log('starting record');
+
       this.recordState = RecordState.RECORDING;
       this.panel.startRecording();
 
@@ -562,6 +578,8 @@ var Record = (function RecordClosure() {
       this.ports.sendToAll({type: "recording", value: this.isRecording()});
     },
     stopRecording: function _stopRecording() {
+      recordLog.log('stoping record');
+
       this.recordState = RecordState.STOPPED;
       this.panel.stopRecording();
 
@@ -588,6 +606,8 @@ var Record = (function RecordClosure() {
       comment.name = value.name;
       comment.value = value.value;
 
+      recordLog.log('added comment:', comment, portName);
+
       if (this.recordState == RecordState.RECORDING) {
         comment.execution_order = this.events.length + (0.01 * 
             (this.commentCounter + 1));
@@ -604,7 +624,7 @@ var Record = (function RecordClosure() {
       var tab = ports.getTab(portName);
       var portInfo = ports.getTabInfo(tab);
       var topURL = portInfo.top.URL;
-      
+
       // don't record this action if it's being generated by our simultaneous
       // replay
       var window = this.ports.getTabFromTabId(tab).windowId;
@@ -639,6 +659,8 @@ var Record = (function RecordClosure() {
       var eventRecord = {msg: eventRequest, port: portName, topURL: topURL,
           topFrame: topFrame, iframeIndex: iframeIndex, tab: tab,
           waitTime: waitTime};
+      
+      recordLog.log('added event:', eventRequest, portName, eventRecord);
       
       if (this.recordState == RecordState.RECORDING) {
         this.loadedScriptId = null;
@@ -698,6 +720,8 @@ var Record = (function RecordClosure() {
 })();
 
 var Replay = (function ReplayClosure() {
+  var replayLog = getLog('replay');
+
   function Replay(events, panel, ports, record, scriptServer) {
     this.panel = panel;
     this.events = events;
@@ -719,6 +743,7 @@ var Replay = (function ReplayClosure() {
 
   Replay.prototype = {
     replay: function _replay() {
+      replayLog.log('starting replay');
       this.record.startReplayRecording();
 
       var replay = this;
@@ -773,6 +798,7 @@ var Replay = (function ReplayClosure() {
       this.index++;
     },
     finish: function _finish() {
+      replayLog.log('finishing replay');
       var record = this.record;
       var scriptServer = this.scriptServer;
       setTimeout(function() {
@@ -784,7 +810,7 @@ var Replay = (function ReplayClosure() {
 
         if (scriptId && replayEvents.length > 0) {
           scriptServer.saveReplay(replayEvents, comments, scriptId);
-          console.log(replayEvents);
+          replayLog.log('saving replay:', replayEvents);
         }
       }, 1000);
     },
@@ -893,13 +919,14 @@ var Replay = (function ReplayClosure() {
       $("#" + id).get(0).scrollIntoView();
       //$("#container").scrollTop($("#" + e.id).prop("offsetTop"));
 
-      console.log("background replay:", id, msg, port, tab);
+      replayLog.log("background replay:", id, msg, port, tab);
 
       // lets find the corresponding port
       var replayPort = null;
       // we have already seen this port, reuse existing mapping
       if (port in portMapping) {
         replayPort = portMapping[port];
+        replayLog.log('port already seen', replayPort);
 
       // we have already seen this tab, find equivalent port for tab
       // for now we will just choose the last port added from this tab
@@ -909,14 +936,17 @@ var Replay = (function ReplayClosure() {
         if (newPort) {
           portMapping[port] = newPort;
           replayPort = newPort;
+          replayLog.log('tab already seen, found port:', replayPort);
         } else {
           this.setNextEvent();
+          replayLog.log('tab already seen, no port found');
           return;
         }
 
       // need to open new tab
       } else {
         var replay = this;
+        replayLog.log('need to open new tab');
         chrome.tabs.create({url: url, active: true}, 
           function(newTab) {
             var newTabId = newTab.id;
@@ -936,18 +966,26 @@ var Replay = (function ReplayClosure() {
         var ackReturn = this.ports.getAck(this.ackVar);
         if (ackReturn != null && ackReturn == true) {
           this.replayState = ReplayState.REPLAYING;
-          this.setNextEvent(0); 
+          this.setNextEvent(0);
+
+          replayLog.log('found wait ack');
         } else {
           replayPort.postMessage(msg);
           this.setNextEvent(1000); 
+
+          replayLog.log('continue waiting for wait ack');
         }
       } else if (replayState == ReplayState.REPLAY_ACK) {
         var ackReturn = this.ports.getAck(this.ackVar);
         if (ackReturn != null && ackReturn == true) {
           this.replayState = ReplayState.REPLAYING;
           this.setNextEvent(0);
+
+          replayLog.log('found replay ack');
         } else {
-          this.setNextEvent(1000); 
+          this.setNextEvent(1000);
+
+          replayLog.log('continue waiting for replay ack');
         }
       } else if (replayState == ReplayState.REPLAYING) {
         this.ports.clearAck();
@@ -956,14 +994,21 @@ var Replay = (function ReplayClosure() {
           this.index++;
           this.replayState = ReplayState.WAIT_ACK;
           this.setNextEvent(0); 
+
+          replayLog.log('start waiting for wait ack');
         } else {
           // send message 
           try {
             replayPort.postMessage(msg);
+            replayLog.log('sent message', msg);
+
             this.index++;
             this.replayState = ReplayState.REPLAY_ACK;
+
+            replayLog.log('start waiting for replay ack');
           } catch(err) {
-            console.log("Error:", err.message);
+            replayLog.log(err.message, err);
+            throw err;
           }
           this.setNextEvent();
         }
@@ -1066,6 +1111,8 @@ var SimultaneousReplay = (function SimultaneousReplayClosure() {
 // Utility functions
 
 var Controller = (function ControllerClosure() {
+  var ctlLog = getLog("controllerLog");
+
   function Controller(record, scriptServer, ports) {
     this.record = record;
     this.scriptServer = scriptServer;
@@ -1075,11 +1122,11 @@ var Controller = (function ControllerClosure() {
   Controller.prototype = {
     setPanel: function(panel) {
       this.panel = panel;
-      console.log("setting the controller's panel");
+      ctlLog.log("setting the controller's panel");
     },
     // The user started recording
     start: function() {
-      console.log("start");
+      ctlLog.log("start");
       if (params.simultaneous){
         //make the window in which we will simulataneously replay events
         var panel = this.panel;
@@ -1108,7 +1155,7 @@ var Controller = (function ControllerClosure() {
       }
     },
     stop: function() {
-      console.log("stop");
+      ctlLog.log("stop");
       this.record.stopRecording();
     
       // Update the UI
@@ -1116,11 +1163,11 @@ var Controller = (function ControllerClosure() {
       chrome.browserAction.setBadgeText({text: "OFF"});
     },
     reset: function() {
-      console.log("reset");
+      ctlLog.log("reset");
       this.record.clearEvents();
     },    
     replayScript: function() {
-      console.log("replay");
+      ctlLog.log("replay");
       this.stop();
 
       var record = this.record;
@@ -1140,13 +1187,13 @@ var Controller = (function ControllerClosure() {
       this.replay.skip();
     },
     saveScript: function(name) {
-      console.log("saving script");
+      ctlLog.log("saving script");
       var events = this.record.getEvents();
       var comments = this.record.getComments();
       this.scriptServer.saveScript(name, events, comments); 
     },
     getScript: function(name) {
-      console.log("getting script");
+      ctlLog.log("getting script");
       var events = this.scriptServer.getScript(name, this);
     },
     setLoadedEvents: function(scriptId, events) {
@@ -1175,9 +1222,10 @@ record.setSimultaneousReplayer(simultaneousReplayer);
 
 // Add event handlers
 
+var bgLog = getLog('background');
 // The first message content scripts send is to get a unique id
 function handleIdMessage(request, sender, sendResponse) {
-  console.log("background receiving:", request, "from", sender);
+  bgLog.log("background receiving:", request, "from", sender);
   if (request.type == "getId") {
     var portName = ports.getNewId(request.value, sender)
     sendResponse({type: "id", value: portName});
@@ -1198,7 +1246,7 @@ var handleMessage = function(port, request) {
     ports.addSnapshot(port.name, request.value);
   } else if (request.type == "ack") {
     ports.setAck(request.value);
-    console.log("got ack");
+    bgLog.log("got ack");
   }
 };
 

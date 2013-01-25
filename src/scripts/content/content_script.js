@@ -26,6 +26,8 @@ var verbose = true;
 var prevEvent;
 var seenEvent = false;
 
+var log = getLog('content');
+
 // Utility functions
 
 curSnapshotRecord = snapshot();
@@ -33,6 +35,7 @@ curSnapshotReplay = curSnapshotRecord;
 
 
 function addComment(name, value) {
+  log.log(name, value);
   port.postMessage({type: "comment", value: {name: name, value: value}});
 }
 
@@ -96,7 +99,7 @@ function processEvent(eventData) {
     var type = eventData.type;
     var dispatchType = getEventType(type);
     var properties = getEventProps(type);
-    console.log("[" + id + "] process event:", type, dispatchType, eventData);
+    log.log("[" + id + "] process event:", type, dispatchType, eventData);
 
     var target = eventData.target;
     var nodeName = target.nodeName.toLowerCase();
@@ -147,7 +150,7 @@ function processEvent(eventData) {
 */
 
    // console.log("extension sending:", eventMessage);
-    console.log("[" + id + "] event message:", eventMessage);
+    log.log("[" + id + "] event message:", eventMessage);
     port.postMessage({type: "event", value: eventMessage});
   }
   return true;
@@ -155,7 +158,7 @@ function processEvent(eventData) {
 
 // event handler for messages coming from the background page
 function handleMessage(request) {
-  console.log("[" + id + "] handle message:", request, request.type);
+  log.log("[" + id + "] handle message:", request, request.type);
   if (request.type == "recording") {
     recording = request.value;
   } else if (request.type == "params") {
@@ -180,10 +183,10 @@ function updateParams(newParams) {
     var oldListOfEvents = oldEvents[eventType];
     for (var e in listOfEvents) {
       if (listOfEvents[e] && !oldListOfEvents[e]) {
-        console.log("[" + id + "] extension listening for " + e);
+        log.log("[" + id + "] extension listening for " + e);
         document.addEventListener(e, processEvent, true);
       } else if (!listOfEvents[e] && oldListOfEvents[e]) {
-        console.log("[" + id + "] extension stopped listening for " + e);
+        log.log("[" + id + "] extension stopped listening for " + e);
         document.removeEventListener(e, processEvent, true);
       }
     }
@@ -194,12 +197,13 @@ function simulate(request) {
   //console.log("extension event", request, request.value.type)
   var eventData = request.value;
   var eventName = eventData.type;
-  console.log("EVENT DATA", eventData);
 
   if (eventName == "wait") {
     checkWait(eventData);
     return;
   }
+
+  log.log("simulating: ", eventData);
 
   var nodes = xPathToNodes(eventData.target);
   //if we don't successfully find nodes, let's alert
@@ -265,9 +269,9 @@ function simulate(request) {
         document.defaultView, options.data, options.inputMethod,
         options.locale);
   } else {
-    console.log("Unknown type of event");
+    log.log("Unknown type of event");
   }
-  console.log("[" + id + "] dispatchEvent", eventName, options, oEvent);
+  log.log("[" + id + "] dispatchEvent", eventName, options, oEvent);
   port.postMessage({type: "ack", value: true});
   
   if (!seenEvent){
@@ -282,8 +286,8 @@ function simulate(request) {
     var replayDomAfter = curSnapshotReplay;
     
     if (synthesisVerbose){
-      console.log("EVENT for checking DIVERGENCE", prevEvent.eventData.type, prevEvent.eventData.nodeName);
-      console.log("EVENT about to DISPATCH", eventData.type, eventData.nodeName);
+      log.log("EVENT for checking DIVERGENCE", prevEvent.eventData.type, prevEvent.eventData.nodeName);
+      log.log("EVENT about to DISPATCH", eventData.type, eventData.nodeName);
     }
         
     //let's try seeing divergence for the last event, now that we have a
@@ -320,7 +324,7 @@ function simulate(request) {
 }
 
 function checkWait(eventData) {
-  console.log("checking:", eventData);
+  log.log("checking:", eventData);
   var result = eval(eventData.condition);
   port.postMessage({type: "ack", value: result});
 }

@@ -101,7 +101,8 @@ var params = null;
     defaultProps: defaultProps,
     logging: {
       level: 1,
-      enabled: ["event"]
+      enabled: ["ports", "event", "record", "replay", "script", "background",
+                "content"]
     },
     synthesis: {
       omittedProps: ["innerHTML", "outerHTML", "innerText", "outerText",
