@@ -371,6 +371,12 @@ var Panel = (function PanelClosure() {
 
     this.loadParams();
     this.attachHandlers(controller);
+
+    var total = $('#top').height();
+    var header = $('#headerDiv').height();
+    var containerHeight = window.innerHeight - header - 16
+
+    $('#container').css('height',containerHeight+'px');
   }
 
   Panel.prototype = {
@@ -771,19 +777,19 @@ var Replay = (function ReplayClosure() {
       var timing = params.timing;
       var index = this.index;
       var events = this.events;
+      var waitTime = 0;
 
-      if (index == 0 || index == events.length)
-        return 0;
-
-      if (timing == 0) {
-        var waitTime = events[index].waitTime;
+      if (index == 0 || index == events.length) {
+        waitTime = 1000;
+      } else if (timing == 0) {
+        waitTime = events[index].waitTime;
         if (waitTime > 10000)
           waitTime = 10000;
-
-        return waitTime;
       } else {
-        return timing;
+        waitTime = timing;
       }
+      replayLog.log("wait time:", waitTime);
+      return waitTime;
     },
     pause: function _pause() {
       clearTimeout(this.timeoutHandle);
@@ -796,6 +802,7 @@ var Replay = (function ReplayClosure() {
     },
     skip: function _skip() {
       this.index++;
+      this.replayState = ReplayState.REPLAYING;
     },
     finish: function _finish() {
       replayLog.log('finishing replay');
@@ -820,15 +827,19 @@ var Replay = (function ReplayClosure() {
       var ports = this.ports;
       var newTabId = this.tabMapping[tab];
       var portInfo = ports.getTabInfo(newTabId);
+      replayLog.log("trying to find port in tab:", portInfo);     
+
       if (!portInfo) {
         return;
       }
       var newPort = null;
       if (topFrame) {
+        replayLog.log("assume port is top level page");
         var topFrame = portInfo.top;
         if (topFrame.URL == msg.value.URL)
           newPort = ports.getPort(topFrame.portName);
       } else {
+        replayLog.log("try to find port in one of the iframes");
         var frames = portInfo.frames;
         var urlFrames = [];
         for (var i = 0, ii = frames.length; i < ii; i++) {
@@ -892,6 +903,7 @@ var Replay = (function ReplayClosure() {
           }
         }
       }
+      replayLog.log("found port:", newPort);
       return newPort;
     },
     guts: function _guts() {
@@ -949,6 +961,7 @@ var Replay = (function ReplayClosure() {
         replayLog.log('need to open new tab');
         chrome.tabs.create({url: url, active: true}, 
           function(newTab) {
+            replayLog.log('new tab opened:', newTab);
             var newTabId = newTab.id;
             replay.tabMapping[tab] = newTabId;
             replay.ports.tabIdToTab[newTabId] = newTab;

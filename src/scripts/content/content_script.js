@@ -27,6 +27,8 @@ var prevEvent;
 var seenEvent = false;
 
 var log = getLog('content');
+var recordLog = getLog('record');
+var replayLog = getLog('replay');
 
 // Utility functions
 
@@ -35,7 +37,7 @@ curSnapshotReplay = curSnapshotRecord;
 
 
 function addComment(name, value) {
-  log.log(name, value);
+  log.log("comment added:", name, value);
   port.postMessage({type: "comment", value: {name: name, value: value}});
 }
 
@@ -99,7 +101,7 @@ function processEvent(eventData) {
     var type = eventData.type;
     var dispatchType = getEventType(type);
     var properties = getEventProps(type);
-    log.log("[" + id + "] process event:", type, dispatchType, eventData);
+    recordLog.log("[" + id + "] process event:", type, dispatchType, eventData);
 
     var target = eventData.target;
     var nodeName = target.nodeName.toLowerCase();
@@ -150,7 +152,7 @@ function processEvent(eventData) {
 */
 
    // console.log("extension sending:", eventMessage);
-    log.log("[" + id + "] event message:", eventMessage);
+    recordLog.log("[" + id + "] event message:", eventMessage);
     port.postMessage({type: "event", value: eventMessage});
   }
   return true;
@@ -203,7 +205,7 @@ function simulate(request) {
     return;
   }
 
-  log.log("simulating: ", eventData);
+  replayLog.log("simulating: ", eventData);
 
   var nodes = xPathToNodes(eventData.target);
   //if we don't successfully find nodes, let's alert
@@ -271,9 +273,10 @@ function simulate(request) {
   } else {
     log.log("Unknown type of event");
   }
-  log.log("[" + id + "] dispatchEvent", eventName, options, oEvent);
+  replayLog.log("[" + id + "] dispatchEvent", eventName, options, oEvent);
   port.postMessage({type: "ack", value: true});
-  
+  replayLog.log("[" + id + "] sent ack"); 
+ 
   if (!seenEvent){
     seenEvent = true;
     curSnapshotReplay = snapshot();
@@ -324,7 +327,7 @@ function simulate(request) {
 }
 
 function checkWait(eventData) {
-  log.log("checking:", eventData);
+  replayLog.log("checking:", eventData);
   var result = eval(eventData.condition);
   port.postMessage({type: "ack", value: result});
 }
