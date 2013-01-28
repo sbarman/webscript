@@ -113,10 +113,6 @@ function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomB
     }
   }
   
-  var node = xPathToNodes("html/body[1]/div[3]/div[1]/div[1]/div[2]/div[2]/div[1]/form[1]/input[1]")[0];
-  //console.log("NODE ", node);
-  //console.log("DEFAULT Value according to element ", node.defaultValue);
-  
   //effects of events that were found in record browser but not replay browser
   var recordDeltasNotMatched = filterDivergences(recordDeltas, replayDeltas);
   //effects of events that were found in replay browser but not record browser

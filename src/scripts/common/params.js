@@ -95,6 +95,7 @@ var params = null;
   };
 
   var synthesis = {
+	enabled: true,
     omittedProps: ["innerHTML", "outerHTML", "innerText", "outerText",
         "textContent", "className", "childElementCount", "scrollHeight",
         "scrollWidth", "clientHeight", "clientWidth", "clientTop", "clientLeft",
