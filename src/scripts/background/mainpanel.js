@@ -4,6 +4,8 @@
 'use strict';
 
 var PortManager = (function PortManagerClosure() {
+  var portLog = getLog('ports');
+
   function PortManager() {
     this.numPorts = 0;
     this.ports = {}; 
@@ -17,6 +19,7 @@ var PortManager = (function PortManagerClosure() {
   
   PortManager.prototype = {
     sendToAll: function(message) {
+      portLog.log('sending to all:', message);
       var ports = this.ports;
       for (var portName in ports) {
         ports[portName].postMessage(message);
@@ -43,6 +46,8 @@ var PortManager = (function PortManagerClosure() {
     getNewId: function(value, sender) {
       this.numPorts++;
       var portName = "" + this.numPorts
+      
+      portLog.log("adding new id: ", portName, value)
 
       // Update various mappings
       var tabId = sender.tab.id;
@@ -57,6 +62,7 @@ var PortManager = (function PortManagerClosure() {
       tabIdToPortNames[tabId].push(portName);
       
       value.portName = portName;
+
       if (value.top) {
         this.tabIdToCurrentPortInfo[tabId] = {top: value, frames: []};
       } else {
@@ -77,6 +83,8 @@ var PortManager = (function PortManagerClosure() {
     
       var portManager = this;
       port.onDisconnect.addListener(function(evt) {
+        portLog.log("disconnect port:", port);
+
         if (portName in ports) {
           delete ports[portName];
         } else {
@@ -104,9 +112,11 @@ var PortManager = (function PortManagerClosure() {
       return this.ack;
     },
     setAck: function(val) {
+      portLog.log("set ack:", val);
       this.ack = val;
     },
     clearAck: function() {
+      portLog.log("clear ack");
       this.ack = null;
     }
   };
@@ -115,127 +125,146 @@ var PortManager = (function PortManagerClosure() {
 })();
 
 var ScriptServer = (function ScriptServerClosure() {
+  var scriptLog = getLog('script');
+
   function ScriptServer(server) {
     this.server = server;
   }
 
   ScriptServer.prototype = {
+    saveEvents: function _saveEvents(isScriptEvent, parentId, events,
+                                     comments) {
+      var server = this.server;
+      var eventUrl = isScriptEvent ? server + "event/" :
+                                     server + "replay_event/";
+
+      function saveEvent(i) {
+        if (i >= events.length) {
+          scriptLog.log("Done saving");
+          return;
+        }
+
+        // need to create new scope to variables don't get clobbered
+        var postMsg = {};
+        var evtMsg = {};
+
+        var e = events[i];
+        var msgValue = e.msg.value;
+        evtMsg["dom_post_event_state"] = JSON.stringify(msgValue.snapshotAfter);
+        evtMsg["dom_pre_event_state"] = JSON.stringify(msgValue.snapshotBefore);
+        evtMsg["event_type"] = msgValue.type;
+        evtMsg["execution_order"] = i;
+
+        var parameters = [];
+        prop: for (var prop in e) {
+          if (prop == "msg") {
+            continue prop;
+          }
+          var propMsg = {};
+          var val = e[prop];
+          propMsg["name"] = "_" + prop;
+          propMsg["value"] = JSON.stringify(val);
+          propMsg["data_type"] = typeof val; 
+          parameters.push(propMsg);
+        }
+        
+        msgprop: for (var prop in msgValue) {
+          if (prop == "snapshotBefore" || prop == "snapshotAfter") {
+            continue msgprop;
+          }
+          var propMsg = {};
+          var val = msgValue[prop];
+          propMsg["name"] = prop;
+          propMsg["value"] = JSON.stringify(val);
+          propMsg["data_type"] = typeof val; 
+          parameters.push(propMsg);
+        }
+
+        evtMsg["parameters"] = parameters;
+        
+        if (isScriptEvent) {
+          postMsg["script_id"] = parentId;
+        } else {
+          postMsg["replay_id"] = parentId;
+        }
+        postMsg["events"] = [evtMsg];
+
+        scriptLog.log("saving event:", postMsg);
+        $.ajax({
+          error: function(jqXHR, textStatus, errorThrown) {
+            scriptLog.log("error saving event", jqXHR, textStatus, errorThrown);
+          },
+          success: function(data, textStatus, jqXHR) {
+            scriptLog.log(data, jqXHR, textStatus);
+            saveEvent(i + 1);
+          },
+          contentType: "application/json",
+          data: JSON.stringify(postMsg),
+          dataType: "json",
+          processData: false,
+          type: "POST",
+          url: eventUrl,
+        });
+      }
+
+      function saveComments() {
+        if (!comments)
+          return;
+
+        var postMsg = {};
+        var commentMsg = [];
+        for (var i = 0, ii = comments.length; i < ii; ++i) {
+          var comment = comments[i];
+          if (isScriptEvent) {
+            comment["script_id"] = parentId;
+          } else {
+            comment["replay_id"] = parentId;
+          }
+          commentMsg.push(comment);
+        }
+
+        postMsg["comments"] = commentMsg;
+        scriptLog.log("saving comments:", postMsg);
+        $.ajax({
+          error: function(jqXHR, textStatus, errorThrown) {
+            scriptLog.log("error comments", jqXHR, textStatus, errorThrown);
+          },
+          success: function(data, textStatus, jqXHR) {
+            scriptLog.log(data, jqXHR, textStatus);
+          },
+          contentType: "application/json",
+          data: JSON.stringify(postMsg),
+          dataType: "json",
+          processData: false,
+          type: "POST",
+          url: server + "comment/",
+        });
+      }
+
+      saveEvent(0);
+      saveComments(); 
+    },
     saveReplay: function _saveReplay(events, comments, origScriptId) {
       if (events.length == 0)
         return;
 
+      var scriptServer = this;
       var server = this.server;
       var postMsg = {};
       postMsg["script_id"] = origScriptId
       postMsg["user"] = {username: "shaon"};
       postMsg["events"] = [];
-      console.log("saving replay:", postMsg);
+      scriptLog.log("saving replay:", postMsg);
 
       var req = $.ajax({
         error: function(jqXHR, textStatus, errorThrown) {
-          console.log("error saving replay:", jqXHR, textStatus, errorThrown);
+          scriptLog.log("error saving replay:", jqXHR, textStatus, errorThrown);
         },
         success: function(data, textStatus, jqXHR) {
-          console.log(data, jqXHR, textStatus);
+          scriptLog.log(data, jqXHR, textStatus);
 
           var replayId = data.id;
-
-          function saveReplayEvent(i) {
-            if (i >= events.length)
-              return;
-
-            // need to create new scope to variables don't get clobbered
-            var postMsg = {};
-            var evtMsg = {};
-
-            var e = events[i];
-            var msgValue = e.msg.value;
-            evtMsg["dom_post_event_state"] = msgValue.snapshotAfter;
-            evtMsg["dom_pre_event_state"] = msgValue.snapshotBefore;
-            evtMsg["event_type"] = msgValue.type;
-            evtMsg["execution_order"] = i;
-
-            var parameters = [];
-            prop: for (var prop in e) {
-              if (prop == "msg") {
-                continue prop;
-              }
-              var propMsg = {};
-              var val = e[prop];
-              propMsg["name"] = "_" + prop;
-              propMsg["value"] = JSON.stringify(val);
-              propMsg["data_type"] = typeof val; 
-              parameters.push(propMsg);
-            }
-            
-            msgprop: for (var prop in msgValue) {
-              if (prop == "snapshotBefore" || prop == "snapshotAfter") {
-                continue msgprop;
-              }
-              var propMsg = {};
-              var val = msgValue[prop];
-              propMsg["name"] = prop;
-              propMsg["value"] = JSON.stringify(val);
-              propMsg["data_type"] = typeof val; 
-              parameters.push(propMsg);
-            }
-
-            evtMsg["parameters"] = parameters;
-
-            postMsg["replay_id"] = replayId;
-            postMsg["events"] = [evtMsg];
-
-            console.log("saving replay event:", postMsg);
-            $.ajax({
-              error: function(jqXHR, textStatus, errorThrown) {
-                console.log("error saving replay event", data, jqXHR, textStatus);
-              },
-              success: function(data, textStatus, jqXHR) {
-                console.log(data, jqXHR, textStatus);
-                saveReplayEvent(i + 1);
-              },
-              contentType: "application/json",
-              data: JSON.stringify(postMsg),
-              dataType: "json",
-              processData: false,
-              type: "POST",
-              url: server + "replay_event/",
-            });
-          }
-
-          saveReplayEvent(0);
-
-          function saveComments() {
-            if (!comments)
-              return;
-
-            var postMsg = {};
-            var commentMsg = [];
-            for (var i = 0, ii = comments.length; i < ii; ++i) {
-              var c = comments[i];
-              c["replay_id"] = replayId;
-              commentMsg.push(c);
-            }
-
-            postMsg["comments"] = commentMsg;
-            console.log("saving comments:", postMsg);
-            $.ajax({
-              error: function(jqXHR, textStatus, errorThrown) {
-                console.log("error saving comments", data, jqXHR, textStatus);
-              },
-              success: function(data, textStatus, jqXHR) {
-                console.log(data, jqXHR, textStatus);
-              },
-              contentType: "application/json",
-              data: JSON.stringify(postMsg),
-              dataType: "json",
-              processData: false,
-              type: "POST",
-              url: server + "comment/",
-            });
-          }
-
-          saveComments(); 
+          scriptServer.saveEvents(false, replayId, events, comments);
         },
         contentType: "application/json",
         data: JSON.stringify(postMsg),
@@ -244,123 +273,29 @@ var ScriptServer = (function ScriptServerClosure() {
         type: "POST",
         url: server + "replay/",
       });
-      console.log(req);
+      scriptLog.log(req);
     },
     saveScript: function _saveScript(name, events, comments) {
       if (events.length == 0)
         return;
 
+      var scriptServer = this;
       var server = this.server;
       var postMsg = {};
       postMsg["name"] = name;
       postMsg["user"] = {username: "shaon"};
       postMsg["events"] = [];
-      console.log("saving script:", postMsg);
+      scriptLog.log("saving script:", postMsg);
 
       var req = $.ajax({
         error: function(jqXHR, textStatus, errorThrown) {
-          console.log("error saving script", jqXHR, textStatus, errorThrown);
+          scriptLog.log("error saving script", jqXHR, textStatus, errorThrown);
         },
         success: function(data, textStatus, jqXHR) {
-          console.log(data, jqXHR, textStatus);
+          scriptLog.log(data, jqXHR, textStatus);
 
           var scriptId = data.id;
-          function saveEvent(i) {
-            if (i >= events.length)
-              return;
-
-            var postMsg = {};
-            var evtMsg = {};
-
-            var e = events[i];
-            var msgValue = e.msg.value;
-            evtMsg["dom_post_event_state"] = msgValue.snapshotAfter;
-            evtMsg["dom_pre_event_state"] = msgValue.snapshotBefore;
-            evtMsg["event_type"] = msgValue.type;
-            evtMsg["execution_order"] = i;
-
-            var parameters = [];
-            prop: for (var prop in e) {
-              if (prop == "msg") {
-                continue prop;
-              }
-              var propMsg = {};
-              var val = e[prop];
-              propMsg["name"] = "_" + prop;
-              propMsg["value"] = JSON.stringify(val);
-              propMsg["data_type"] = typeof val; 
-              parameters.push(propMsg);
-            }
-            
-            msgprop: for (var prop in msgValue) {
-              if (prop == "snapshotBefore" || prop == "snapshotAfter") {
-                continue msgprop;
-              }
-              var propMsg = {};
-              var val = msgValue[prop];
-              propMsg["name"] = prop;
-              propMsg["value"] = JSON.stringify(val);
-              propMsg["data_type"] = typeof val; 
-              parameters.push(propMsg);
-            }
-
-            evtMsg["parameters"] = parameters;
-
-            postMsg["script_id"] = scriptId;
-            postMsg["events"] = [evtMsg];
-
-            console.log("saving event:", postMsg);
-            $.ajax({
-              error: function(jqXHR, textStatus, errorThrown) {
-                console.log("error saving event", data, jqXHR, textStatus);
-              },
-              success: function(data, textStatus, jqXHR) {
-                console.log(data, jqXHR, textStatus);
-                saveEvent(i + 1);
-              },
-              contentType: "application/json",
-              data: JSON.stringify(postMsg),
-              dataType: "json",
-              processData: false,
-              type: "POST",
-              url: server + "event/",
-            });
-          }
-
-          saveEvent(0);
-
-          function saveComments() {
-            if (!comments)
-              return;
-
-            var postMsg = {};
-            var commentMsg = [];
-            for (var i = 0, ii = comments.length; i < ii; ++i) {
-              var c = comments[i];
-              c["script_id"] = scriptId;
-              commentMsg.push(c);
-            }
-
-            postMsg["comments"] = commentMsg;
-            console.log("saving comments", commentMsg);
-
-            $.ajax({
-              error: function(jqXHR, textStatus, errorThrown) {
-                console.log("error saving comments", data, jqXHR, textStatus);
-              },
-              success: function(data, textStatus, jqXHR) {
-                console.log(data, jqXHR, textStatus);
-              },
-              contentType: "application/json",
-              data: JSON.stringify(postMsg),
-              dataType: "json",
-              processData: false,
-              type: "POST",
-              url: server + "comment/",
-            });
-          }
-
-          saveComments();
+          scriptServer.saveEvents(true, scriptId, events, comments);
         },
         contentType: "application/json",
         data: JSON.stringify(postMsg),
@@ -369,16 +304,16 @@ var ScriptServer = (function ScriptServerClosure() {
         type: "POST",
         url: server + "script/",
       });
-      console.log(req);
+      scriptLog.log(req);
     },
     getScript: function _getScript(name, controller) {
       var server = this.server;
       $.ajax({
         error: function(jqXHR, textStatus, errorThrown) {
-          console.log(data, jqXHR, textStatus);
+          scriptLog.log(jqXHR, textStatus, errorThrown);
         },
         success: function(data, textStatus, jqXHR) {
-          console.log(data, textStatus, jqXHR);
+          scriptLog.log(data, textStatus, jqXHR);
           var scripts = data;
           if (scripts.length != 0) {
             var script = scripts[0];
@@ -398,7 +333,11 @@ var ScriptServer = (function ScriptServerClosure() {
               var serverParams = e.parameters;
               var event = {}
               event.msg = {type: "event", value: {}};
+
               var msgValue = event.msg.value;
+              msgValue.snapshotBefore = JSON.parse(e.dom_pre_event_state);
+              msgValue.snapshotAfter = JSON.parse(e.dom_post_event_state);
+
               for (var j = 0, jj = serverParams.length; j < jj; ++j) {
                 var p = serverParams[j];
                 if (p.name.charAt(0) == '_') {
@@ -414,7 +353,6 @@ var ScriptServer = (function ScriptServerClosure() {
         },
         url: server + "script/" + name + "/?format=json",
         type: 'GET',
-//        contentType: "application/json",
         processData: false,
         accepts: 'application/json',
         dataType: 'json'
@@ -433,6 +371,12 @@ var Panel = (function PanelClosure() {
 
     this.loadParams();
     this.attachHandlers(controller);
+
+    var total = $('#top').height();
+    var header = $('#headerDiv').height();
+    var containerHeight = window.innerHeight - header - 16
+
+    $('#container').css('height',containerHeight+'px');
   }
 
   Panel.prototype = {
@@ -459,6 +403,10 @@ var Panel = (function PanelClosure() {
 
       $("#restart").click(function(eventObject) {
         controller.restart();
+      });
+
+      $("#skip").click(function(eventObject) {
+        controller.skip();
       });
       
       $("#paramsDiv").hide(1000);
@@ -593,6 +541,8 @@ var Panel = (function PanelClosure() {
 })();
 
 var Record = (function RecordClosure() {
+  var recordLog = getLog('record');
+
   function Record(ports) {
     this.ports = ports;
     this.events = [];
@@ -625,6 +575,8 @@ var Record = (function RecordClosure() {
              recordState == RecordState.REPLAYING;
     },
     startRecording: function _startRecording() {
+      recordLog.log('starting record');
+
       this.recordState = RecordState.RECORDING;
       this.panel.startRecording();
 
@@ -632,6 +584,8 @@ var Record = (function RecordClosure() {
       this.ports.sendToAll({type: "recording", value: this.isRecording()});
     },
     stopRecording: function _stopRecording() {
+      recordLog.log('stoping record');
+
       this.recordState = RecordState.STOPPED;
       this.panel.stopRecording();
 
@@ -658,6 +612,8 @@ var Record = (function RecordClosure() {
       comment.name = value.name;
       comment.value = value.value;
 
+      recordLog.log('added comment:', comment, portName);
+
       if (this.recordState == RecordState.RECORDING) {
         comment.execution_order = this.events.length + (0.01 * 
             (this.commentCounter + 1));
@@ -674,7 +630,7 @@ var Record = (function RecordClosure() {
       var tab = ports.getTab(portName);
       var portInfo = ports.getTabInfo(tab);
       var topURL = portInfo.top.URL;
-      
+
       // don't record this action if it's being generated by our simultaneous
       // replay
       var window = this.ports.getTabFromTabId(tab).windowId;
@@ -709,6 +665,8 @@ var Record = (function RecordClosure() {
       var eventRecord = {msg: eventRequest, port: portName, topURL: topURL,
           topFrame: topFrame, iframeIndex: iframeIndex, tab: tab,
           waitTime: waitTime};
+      
+      recordLog.log('added event:', eventRequest, portName, eventRecord);
       
       if (this.recordState == RecordState.RECORDING) {
         this.loadedScriptId = null;
@@ -768,6 +726,8 @@ var Record = (function RecordClosure() {
 })();
 
 var Replay = (function ReplayClosure() {
+  var replayLog = getLog('replay');
+
   function Replay(events, panel, ports, record, scriptServer) {
     this.panel = panel;
     this.events = events;
@@ -789,6 +749,7 @@ var Replay = (function ReplayClosure() {
 
   Replay.prototype = {
     replay: function _replay() {
+      replayLog.log('starting replay');
       this.record.startReplayRecording();
 
       var replay = this;
@@ -816,19 +777,19 @@ var Replay = (function ReplayClosure() {
       var timing = params.timing;
       var index = this.index;
       var events = this.events;
+      var waitTime = 0;
 
-      if (index == 0 || index == events.length)
-        return 0;
-
-      if (timing == 0) {
-        var waitTime = events[index].waitTime;
+      if (index == 0 || index == events.length) {
+        waitTime = 1000;
+      } else if (timing == 0) {
+        waitTime = events[index].waitTime;
         if (waitTime > 10000)
           waitTime = 10000;
-
-        return waitTime;
       } else {
-        return timing;
+        waitTime = timing;
       }
+      replayLog.log("wait time:", waitTime);
+      return waitTime;
     },
     pause: function _pause() {
       clearTimeout(this.timeoutHandle);
@@ -839,7 +800,12 @@ var Replay = (function ReplayClosure() {
         this.setNextEvent(0);
       }
     },
+    skip: function _skip() {
+      this.index++;
+      this.replayState = ReplayState.REPLAYING;
+    },
     finish: function _finish() {
+      replayLog.log('finishing replay');
       var record = this.record;
       var scriptServer = this.scriptServer;
       setTimeout(function() {
@@ -851,7 +817,7 @@ var Replay = (function ReplayClosure() {
 
         if (scriptId && replayEvents.length > 0) {
           scriptServer.saveReplay(replayEvents, comments, scriptId);
-          console.log(replayEvents);
+          replayLog.log('saving replay:', replayEvents);
         }
       }, 1000);
     },
@@ -861,13 +827,19 @@ var Replay = (function ReplayClosure() {
       var ports = this.ports;
       var newTabId = this.tabMapping[tab];
       var portInfo = ports.getTabInfo(newTabId);
+      replayLog.log("trying to find port in tab:", portInfo);     
+
       if (!portInfo) {
         return;
       }
       var newPort = null;
       if (topFrame) {
-        newPort = ports.getPort(portInfo.top.portName);
+        replayLog.log("assume port is top level page");
+        var topFrame = portInfo.top;
+        if (topFrame.URL == msg.value.URL)
+          newPort = ports.getPort(topFrame.portName);
       } else {
+        replayLog.log("try to find port in one of the iframes");
         var frames = portInfo.frames;
         var urlFrames = [];
         for (var i = 0, ii = frames.length; i < ii; i++) {
@@ -931,6 +903,7 @@ var Replay = (function ReplayClosure() {
           }
         }
       }
+      replayLog.log("found port:", newPort);
       return newPort;
     },
     guts: function _guts() {
@@ -958,13 +931,14 @@ var Replay = (function ReplayClosure() {
       $("#" + id).get(0).scrollIntoView();
       //$("#container").scrollTop($("#" + e.id).prop("offsetTop"));
 
-      console.log("background replay:", id, msg, port, tab);
+      replayLog.log("background replay:", id, msg, port, tab);
 
       // lets find the corresponding port
       var replayPort = null;
       // we have already seen this port, reuse existing mapping
       if (port in portMapping) {
         replayPort = portMapping[port];
+        replayLog.log('port already seen', replayPort);
 
       // we have already seen this tab, find equivalent port for tab
       // for now we will just choose the last port added from this tab
@@ -974,16 +948,20 @@ var Replay = (function ReplayClosure() {
         if (newPort) {
           portMapping[port] = newPort;
           replayPort = newPort;
+          replayLog.log('tab already seen, found port:', replayPort);
         } else {
           this.setNextEvent();
+          replayLog.log('tab already seen, no port found');
           return;
         }
 
       // need to open new tab
       } else {
         var replay = this;
+        replayLog.log('need to open new tab');
         chrome.tabs.create({url: url, active: true}, 
           function(newTab) {
+            replayLog.log('new tab opened:', newTab);
             var newTabId = newTab.id;
             replay.tabMapping[tab] = newTabId;
             replay.ports.tabIdToTab[newTabId] = newTab;
@@ -1001,18 +979,26 @@ var Replay = (function ReplayClosure() {
         var ackReturn = this.ports.getAck(this.ackVar);
         if (ackReturn != null && ackReturn == true) {
           this.replayState = ReplayState.REPLAYING;
-          this.setNextEvent(0); 
+          this.setNextEvent(0);
+
+          replayLog.log('found wait ack');
         } else {
           replayPort.postMessage(msg);
           this.setNextEvent(1000); 
+
+          replayLog.log('continue waiting for wait ack');
         }
       } else if (replayState == ReplayState.REPLAY_ACK) {
         var ackReturn = this.ports.getAck(this.ackVar);
         if (ackReturn != null && ackReturn == true) {
           this.replayState = ReplayState.REPLAYING;
           this.setNextEvent(0);
+
+          replayLog.log('found replay ack');
         } else {
-          this.setNextEvent(1000); 
+          this.setNextEvent(1000);
+
+          replayLog.log('continue waiting for replay ack');
         }
       } else if (replayState == ReplayState.REPLAYING) {
         this.ports.clearAck();
@@ -1021,14 +1007,21 @@ var Replay = (function ReplayClosure() {
           this.index++;
           this.replayState = ReplayState.WAIT_ACK;
           this.setNextEvent(0); 
+
+          replayLog.log('start waiting for wait ack');
         } else {
           // send message 
           try {
             replayPort.postMessage(msg);
+            replayLog.log('sent message', msg);
+
             this.index++;
             this.replayState = ReplayState.REPLAY_ACK;
+
+            replayLog.log('start waiting for replay ack');
           } catch(err) {
-            console.log("Error:", err.message);
+            replayLog.log(err.message, err);
+            throw err;
           }
           this.setNextEvent();
         }
@@ -1131,6 +1124,8 @@ var SimultaneousReplay = (function SimultaneousReplayClosure() {
 // Utility functions
 
 var Controller = (function ControllerClosure() {
+  var ctlLog = getLog("controllerLog");
+
   function Controller(record, scriptServer, ports) {
     this.record = record;
     this.scriptServer = scriptServer;
@@ -1140,11 +1135,11 @@ var Controller = (function ControllerClosure() {
   Controller.prototype = {
     setPanel: function(panel) {
       this.panel = panel;
-      console.log("setting the controller's panel");
+      ctlLog.log("setting the controller's panel");
     },
     // The user started recording
     start: function() {
-      console.log("start");
+      ctlLog.log("start");
       if (params.simultaneous){
         //make the window in which we will simulataneously replay events
         var panel = this.panel;
@@ -1173,7 +1168,7 @@ var Controller = (function ControllerClosure() {
       }
     },
     stop: function() {
-      console.log("stop");
+      ctlLog.log("stop");
       this.record.stopRecording();
     
       // Update the UI
@@ -1181,11 +1176,11 @@ var Controller = (function ControllerClosure() {
       chrome.browserAction.setBadgeText({text: "OFF"});
     },
     reset: function() {
-      console.log("reset");
+      ctlLog.log("reset");
       this.record.clearEvents();
     },    
     replayScript: function() {
-      console.log("replay");
+      ctlLog.log("replay");
       this.stop();
 
       var record = this.record;
@@ -1201,14 +1196,17 @@ var Controller = (function ControllerClosure() {
     restart: function() {
       this.replay.restart();
     },
+    skip: function() {
+      this.replay.skip();
+    },
     saveScript: function(name) {
-      console.log("saving script");
+      ctlLog.log("saving script");
       var events = this.record.getEvents();
       var comments = this.record.getComments();
       this.scriptServer.saveScript(name, events, comments); 
     },
     getScript: function(name) {
-      console.log("getting script");
+      ctlLog.log("getting script");
       var events = this.scriptServer.getScript(name, this);
     },
     setLoadedEvents: function(scriptId, events) {
@@ -1237,9 +1235,10 @@ record.setSimultaneousReplayer(simultaneousReplayer);
 
 // Add event handlers
 
+var bgLog = getLog('background');
 // The first message content scripts send is to get a unique id
 function handleIdMessage(request, sender, sendResponse) {
-  console.log("background receiving:", request, "from", sender);
+  bgLog.log("background receiving:", request, "from", sender);
   if (request.type == "getId") {
     var portName = ports.getNewId(request.value, sender)
     sendResponse({type: "id", value: portName});
@@ -1260,6 +1259,7 @@ var handleMessage = function(port, request) {
     ports.addSnapshot(port.name, request.value);
   } else if (request.type == "ack") {
     ports.setAck(request.value);
+    bgLog.log("got ack");
   }
 };
 

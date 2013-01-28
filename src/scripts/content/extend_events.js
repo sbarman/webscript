@@ -46,9 +46,10 @@ var extendEvents = {};
   }
   
   extendEvents = {
-    "change": {
+/*    "change": {
       record: changeRecord,
       replay: changeReplay
     }
+*/
   };
 })();

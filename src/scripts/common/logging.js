@@ -14,39 +14,59 @@ var LogLevel = {
 };
 
 (function() {
-
   var level = params.logging.level;
 
-  function log() {
-    if (level <= LogLevel.LOG)
-      console.log.apply(console, arguments);
-  }
-  
-  function info() {
-    if (level <= LogLevel.INFO)
-     console.log.apply(console, arguments);
-  }
-  
-  function debug() {
-    if (level <= LogLevel.DEBUG)
-      console.log.apply(console, arguments);
-  }
+  var Logger = (function LoggerClosure() {
+    function Logger(tags) {
+      this.tags = tags;
+    }
 
-  function warn() {
-    if (level <= LogLevel.WARN)
-      console.log.apply(console, arguments);
-  }
+    Logger.prototype = {
+      print: function() {
+        var args = ["[" + this.tags[0] + "]"];
+        for (var i = 0, ii = arguments.length; i < ii; ++i) {
+          args.push(arguments[i]);
+        }
+        console.log.apply(console, args);
+      },
+      log: function() {
+        if (level <= LogLevel.LOG)
+          this.print.apply(this, arguments);
+      },
+      info: function() {
+        if (level <= LogLevel.INFO)
+          this.print.apply(this, arguments);
+      },
+      debug: function() {
+        if (level <= LogLevel.DEBUG)
+          this.print.apply(this, arguments);
+      },
+      warn: function() {
+        if (level <= LogLevel.WARN)
+          this.print.apply(this, arguments);
+      }
+    };
 
-  function error() {
-    if (level <= LogLevel.ERROR)
-      console.log.apply(console, arguments);
-  }
-  
-  function noop() {
-  }
+    return Logger
+  })();
 
-  var logger = {log: log, info: info, debug: debug, warn: warn, error: error}
-  var noopLogger = {log: noop, info: noop, debug: noop, warn: noop, error: noop}
+  var NoopLogger = (function NoopLoggerClosure() {
+    function NoopLogger() {
+    }
+
+    NoopLogger.prototype = {
+      log: function() {
+      },
+      info: function() {
+      },
+      debug: function() {
+      },
+      warn: function() {
+      }
+    };
+
+    return NoopLogger
+  })();
 
   getLog = function() {
     var names = arguments;
@@ -58,9 +78,9 @@ var LogLevel = {
     for (var i = 0, ii = names.length; i < ii; ++i) {
       var name = names[i];
       if (enabledLogs.indexOf(name) != -1)
-        return logger;
+        return new Logger(names);
     }
 
-    return noopLogger;
+    return new NoopLogger();
   };
 })();

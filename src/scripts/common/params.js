@@ -44,7 +44,7 @@ var params = null;
       'keypress': true,
     },
     'TextEvent': {
-      'textInput': false,  // similar to input event, doesn trigger with cp/pst
+      'textInput': true,  // similar to input event, doesn trigger with cp/pst
     }
   };
   
@@ -93,29 +93,32 @@ var params = null;
       'timeStamp': 0
     }
   };
-
-  var synthesis = {
-	enabled: true,
-    omittedProps: ["innerHTML", "outerHTML", "innerText", "outerText",
-        "textContent", "className", "childElementCount", "scrollHeight",
-        "scrollWidth", "clientHeight", "clientWidth", "clientTop", "clientLeft",
-        "offsetHeight", "offsetWidth", "offsetTop", "offsetLeft"]
-  };
-
-  var logging = {
-    level: 1,
-    enabled: ["event"]
-  }
   
   params = {
-    simultaneous: true,
+    simultaneous: false,
     timing: 0,
     events: events,
-    logging: logging,
-    synthesis: synthesis,
-    //server: "http://webscriptdb.herokuapp.com/api/",
+    defaultProps: defaultProps,
+    logging: {
+      level: 1,
+      enabled: ["ports", "event", "record", "replay", "script", "background",
+                "content"]
+    },
+    synthesis: {
+	  enabled: true,
+      omittedProps: ["innerHTML", "outerHTML", "innerText", "outerText",
+          "textContent", "className", "childElementCount", "scrollHeight",
+          "scrollWidth", "clientHeight", "clientWidth", "clientTop",
+          "clientLeft", "offsetHeight", "offsetWidth", "offsetTop",
+          "offsetLeft"]
+    },
+    recording: {
+      allEventProps: true
+    },
+    replaying: {
+      enableAlerts: false
+    },
     server: "http://sbarman.webfactional.com/api/",
-    defaultProps: defaultProps
   };
 
 })();

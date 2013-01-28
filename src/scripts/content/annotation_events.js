@@ -25,7 +25,7 @@ var annotationEvents = {};
   }
   
   annotationEvents = {
-    "keypress": {
+/*    "keypress": {
       guard: function(eventData, eventMessage) {
         return eventMessage.type == "keypress";
       },
@@ -48,5 +48,6 @@ var annotationEvents = {};
       record: clickSelectRecord,
       replay: clickSelectReplay
     },
+*/
   };
 })();
