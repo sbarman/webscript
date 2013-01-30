@@ -428,7 +428,7 @@ var Panel = (function PanelClosure() {
       var panel = this;
       // when the form is submitted, the parameters should be dispatched to the
       // content scripts so that everything is kept insync
-      $("#params").submit(function(eventObject) {
+      $("#params").change(function(eventObject) {
         panel.updateParams();
         panel.ports.sendToAll({type: "params", value: params});
         return false;
@@ -467,7 +467,6 @@ var Panel = (function PanelClosure() {
 
       var form = $("#params");
       loadParamForm(form, params, "params");
-      form.append("<input type='submit' value='Update' name='Update'/>");
     },
     updateParams: function _updateParams() {
       var obj = {};
@@ -1020,8 +1019,7 @@ var Replay = (function ReplayClosure() {
 
             replayLog.log('start waiting for replay ack');
           } catch(err) {
-            replayLog.log(err.message, err);
-            throw err;
+            replayLog.log("ERROR:", err.message, err);
           }
           this.setNextEvent();
         }
