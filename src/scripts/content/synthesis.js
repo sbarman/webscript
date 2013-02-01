@@ -1387,16 +1387,17 @@ function recursiveVisit(obj1, obj2) {
         console.log('Scenario 11 divergence, we tried to match a couple of' +
                     " nodes that aren't nodeEqual.");
         console.log(obj1, obj2);
-        if (obj1.prop && obj2.prop) {
-          var props1 = _.omit(obj1.prop, params.synthesis.omittedProps);
-          var props2 = _.omit(obj2.prop, params.synthesis.omittedProps);
-          console.log(divergingProps({
-            'prop': props1
-          }, {
-            prop: props2
-          }));
-        }
       }
+      
+      var props1;
+      var props2;
+      obj1.prop ? props1 = _.omit(obj1.prop, params.synthesis.omittedProps) : [];
+      obj2.prop ? props2 = _.omit(obj2.prop, params.synthesis.omittedProps) : [];
+      
+      //This is the call to divergingProps that's giving us so many
+      //instances of diverging prop weirdness
+      //the problem is that we try to call divergingProps even on
+      //things without properties (like text or something labeled Hidden Fields?)
       divergences.push({
         'type': "We expect these nodes to be the same, but they're not.",
         'record': obj1,
@@ -1406,7 +1407,7 @@ function recursiveVisit(obj1, obj2) {
         'divergingProps': divergingProps({
           'prop': props1
         }, {
-          prop: props2
+          'prop': props2
         })
       });
     }
