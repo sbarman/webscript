@@ -24,7 +24,7 @@ var params = null;
       'scroll': false,
       'select': true,
       'submit': true,
-      'unload': false,
+      'unload': false
     },
     'MouseEvent': {
       'click': true,
@@ -34,20 +34,20 @@ var params = null;
       'mouseout': false,
       'mouseover': false,
       'mouseup': true,
-      'mousewheel': false,
+      'mousewheel': false
   //    'dragenter': false,
   //    'dragleave': false,
     },
     'KeyboardEvent': {
       'keydown': true,
       'keyup': true,
-      'keypress': true,
+      'keypress': true
     },
     'TextEvent': {
-      'textInput': true,  // similar to input event, doesn trigger with cp/pst
+      'textInput': true  // similar to input event, doesn trigger with cp/pst
     }
   };
-  
+
   var defaultProps = {
     'Event': {
       'type': true,
@@ -93,25 +93,25 @@ var params = null;
       'timeStamp': 0
     }
   };
-  
+
   params = {
-    user: "sbarman",
+    user: 'sbarman',
     simultaneous: false,
     timing: 0,
     events: events,
     defaultProps: defaultProps,
     logging: {
       level: 1,
-      enabled: ["ports", "event", "record", "replay", "script", "background",
-                "content", "synthesis"]
+      enabled: ['ports', 'event', 'record', 'replay', 'script', 'background',
+                'content', 'synthesis']
     },
     synthesis: {
-	  enabled: true,
-      omittedProps: ["innerHTML", "outerHTML", "innerText", "outerText",
-          "textContent", "className", "childElementCount", "scrollHeight",
-          "scrollWidth", "clientHeight", "clientWidth", "clientTop",
-          "clientLeft", "offsetHeight", "offsetWidth", "offsetTop",
-          "offsetLeft"]
+      enabled: true,
+      omittedProps: ['innerHTML', 'outerHTML', 'innerText', 'outerText',
+          'textContent', 'className', 'childElementCount', 'scrollHeight',
+          'scrollWidth', 'clientHeight', 'clientWidth', 'clientTop',
+          'clientLeft', 'offsetHeight', 'offsetWidth', 'offsetTop',
+          'offsetLeft']
     },
     recording: {
       allEventProps: true
@@ -119,7 +119,7 @@ var params = null;
     replaying: {
       enableAlerts: false
     },
-    server: "http://sbarman.webfactional.com/api/",
+    server: 'http://sbarman.webfactional.com/api/'
     //server: "http://127.0.0.1:8000/api/",
   };
 

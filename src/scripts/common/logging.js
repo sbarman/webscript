@@ -23,7 +23,7 @@ var LogLevel = {
 
     Logger.prototype = {
       print: function() {
-        var args = ["[" + this.tags[0] + "]"];
+        var args = ['[' + this.tags[0] + ']'];
         for (var i = 0, ii = arguments.length; i < ii; ++i) {
           args.push(arguments[i]);
         }
@@ -47,7 +47,7 @@ var LogLevel = {
       }
     };
 
-    return Logger
+    return Logger;
   })();
 
   var NoopLogger = (function NoopLoggerClosure() {
@@ -65,7 +65,7 @@ var LogLevel = {
       }
     };
 
-    return NoopLogger
+    return NoopLogger;
   })();
 
   getLog = function() {
