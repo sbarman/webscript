@@ -9,21 +9,22 @@ var annotationEvents = {};
   function clickOptionReplay(element, eventMessage) {
     element.selected = true;
   }
-  
+
   function clickSelectRecord(eventData, eventMessage) {
     eventMessage.value = eventData.target.value;
   }
-  
+
   function clickSelectReplay(element, eventMessage) {
     element.value = eventMessage.value;
   }
-  
+
   function keypressReplay(element, eventMessage) {
-    if ((typeof element.value) !== "undefined"){
-      element.value=element.value+String.fromCharCode(eventMessage.charCode);
+    if ((typeof element.value) !== 'undefined') {
+      element.value = element.value + String.fromCharCode(
+                      eventMessage.charCode);
     }
   }
-  
+
   annotationEvents = {
 /*    "keypress": {
       guard: function(eventData, eventMessage) {
