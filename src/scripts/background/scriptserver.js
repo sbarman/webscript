@@ -1,3 +1,5 @@
+/* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
 
 var ScriptServer = (function ScriptServerClosure() {
   var scriptLog = getLog('script');
@@ -10,12 +12,12 @@ var ScriptServer = (function ScriptServerClosure() {
     saveEvents: function _saveEvents(isScriptEvent, parentId, events,
                                      comments) {
       var server = this.server;
-      var eventUrl = isScriptEvent ? server + "event/" :
-                                     server + "replay_event/";
+      var eventUrl = isScriptEvent ? server + 'event/' :
+                                     server + 'replay_event/';
 
       function saveEvent(i) {
         if (i >= events.length) {
-          scriptLog.log("Done saving");
+          scriptLog.log('Done saving');
           return;
         }
 
@@ -25,60 +27,60 @@ var ScriptServer = (function ScriptServerClosure() {
 
         var e = events[i];
         var msgValue = e.msg.value;
-        evtMsg["dom_post_event_state"] = JSON.stringify(msgValue.snapshotAfter);
-        evtMsg["dom_pre_event_state"] = JSON.stringify(msgValue.snapshotBefore);
-        evtMsg["event_type"] = msgValue.type;
-        evtMsg["execution_order"] = i;
+        evtMsg['dom_post_event_state'] = JSON.stringify(msgValue.snapshotAfter);
+        evtMsg['dom_pre_event_state'] = JSON.stringify(msgValue.snapshotBefore);
+        evtMsg['event_type'] = msgValue.type;
+        evtMsg['execution_order'] = i;
 
         var parameters = [];
         prop: for (var prop in e) {
-          if (prop == "msg") {
+          if (prop == 'msg') {
             continue prop;
           }
           var propMsg = {};
           var val = e[prop];
-          propMsg["name"] = "_" + prop;
-          propMsg["value"] = JSON.stringify(val);
-          propMsg["data_type"] = typeof val; 
+          propMsg['name'] = '_' + prop;
+          propMsg['value'] = JSON.stringify(val);
+          propMsg['data_type'] = typeof val;
           parameters.push(propMsg);
         }
-        
+
         msgprop: for (var prop in msgValue) {
-          if (prop == "snapshotBefore" || prop == "snapshotAfter") {
+          if (prop == 'snapshotBefore' || prop == 'snapshotAfter') {
             continue msgprop;
           }
           var propMsg = {};
           var val = msgValue[prop];
-          propMsg["name"] = prop;
-          propMsg["value"] = JSON.stringify(val);
-          propMsg["data_type"] = typeof val; 
+          propMsg['name'] = prop;
+          propMsg['value'] = JSON.stringify(val);
+          propMsg['data_type'] = typeof val;
           parameters.push(propMsg);
         }
 
-        evtMsg["parameters"] = parameters;
-        
-        if (isScriptEvent) {
-          postMsg["script_id"] = parentId;
-        } else {
-          postMsg["replay_id"] = parentId;
-        }
-        postMsg["events"] = [evtMsg];
+        evtMsg['parameters'] = parameters;
 
-        scriptLog.log("saving event:", postMsg);
+        if (isScriptEvent) {
+          postMsg['script_id'] = parentId;
+        } else {
+          postMsg['replay_id'] = parentId;
+        }
+        postMsg['events'] = [evtMsg];
+
+        scriptLog.log('saving event:', postMsg);
         $.ajax({
           error: function(jqXHR, textStatus, errorThrown) {
-            scriptLog.log("error saving event", jqXHR, textStatus, errorThrown);
+            scriptLog.log('error saving event', jqXHR, textStatus, errorThrown);
           },
           success: function(data, textStatus, jqXHR) {
             scriptLog.log(data, jqXHR, textStatus);
             saveEvent(i + 1);
           },
-          contentType: "application/json",
+          contentType: 'application/json',
           data: JSON.stringify(postMsg),
-          dataType: "json",
+          dataType: 'json',
           processData: false,
-          type: "POST",
-          url: eventUrl,
+          type: 'POST',
+          url: eventUrl
         });
       }
 
@@ -91,33 +93,33 @@ var ScriptServer = (function ScriptServerClosure() {
         for (var i = 0, ii = comments.length; i < ii; ++i) {
           var comment = comments[i];
           if (isScriptEvent) {
-            comment["script_id"] = parentId;
+            comment['script_id'] = parentId;
           } else {
-            comment["replay_id"] = parentId;
+            comment['replay_id'] = parentId;
           }
           commentMsg.push(comment);
         }
 
-        postMsg["comments"] = commentMsg;
-        scriptLog.log("saving comments:", postMsg);
+        postMsg['comments'] = commentMsg;
+        scriptLog.log('saving comments:', postMsg);
         $.ajax({
           error: function(jqXHR, textStatus, errorThrown) {
-            scriptLog.log("error comments", jqXHR, textStatus, errorThrown);
+            scriptLog.log('error comments', jqXHR, textStatus, errorThrown);
           },
           success: function(data, textStatus, jqXHR) {
             scriptLog.log(data, jqXHR, textStatus);
           },
-          contentType: "application/json",
+          contentType: 'application/json',
           data: JSON.stringify(postMsg),
-          dataType: "json",
+          dataType: 'json',
           processData: false,
-          type: "POST",
-          url: server + "comment/",
+          type: 'POST',
+          url: server + 'comment/'
         });
       }
 
       saveEvent(0);
-      saveComments(); 
+      saveComments();
     },
     saveReplay: function _saveReplay(events, comments, origScriptId) {
       if (events.length == 0)
@@ -126,14 +128,14 @@ var ScriptServer = (function ScriptServerClosure() {
       var scriptServer = this;
       var server = this.server;
       var postMsg = {};
-      postMsg["script_id"] = origScriptId
-      postMsg["user"] = {username: params.user};
-      postMsg["events"] = [];
-      scriptLog.log("saving replay:", postMsg);
+      postMsg['script_id'] = origScriptId;
+      postMsg['user'] = {username: params.user};
+      postMsg['events'] = [];
+      scriptLog.log('saving replay:', postMsg);
 
       var req = $.ajax({
         error: function(jqXHR, textStatus, errorThrown) {
-          scriptLog.log("error saving replay:", jqXHR, textStatus, errorThrown);
+          scriptLog.log('error saving replay:', jqXHR, textStatus, errorThrown);
         },
         success: function(data, textStatus, jqXHR) {
           scriptLog.log(data, jqXHR, textStatus);
@@ -141,12 +143,12 @@ var ScriptServer = (function ScriptServerClosure() {
           var replayId = data.id;
           scriptServer.saveEvents(false, replayId, events, comments);
         },
-        contentType: "application/json",
+        contentType: 'application/json',
         data: JSON.stringify(postMsg),
-        dataType: "json",
+        dataType: 'json',
         processData: false,
-        type: "POST",
-        url: server + "replay/",
+        type: 'POST',
+        url: server + 'replay/'
       });
       scriptLog.log(req);
     },
@@ -157,14 +159,14 @@ var ScriptServer = (function ScriptServerClosure() {
       var scriptServer = this;
       var server = this.server;
       var postMsg = {};
-      postMsg["name"] = name;
-      postMsg["user"] = {username: params.user};
-      postMsg["events"] = [];
-      scriptLog.log("saving script:", postMsg);
+      postMsg['name'] = name;
+      postMsg['user'] = {username: params.user};
+      postMsg['events'] = [];
+      scriptLog.log('saving script:', postMsg);
 
       var req = $.ajax({
         error: function(jqXHR, textStatus, errorThrown) {
-          scriptLog.log("error saving script", jqXHR, textStatus, errorThrown);
+          scriptLog.log('error saving script', jqXHR, textStatus, errorThrown);
         },
         success: function(data, textStatus, jqXHR) {
           scriptLog.log(data, jqXHR, textStatus);
@@ -172,12 +174,12 @@ var ScriptServer = (function ScriptServerClosure() {
           var scriptId = data.id;
           scriptServer.saveEvents(true, scriptId, events, comments);
         },
-        contentType: "application/json",
+        contentType: 'application/json',
         data: JSON.stringify(postMsg),
-        dataType: "json",
+        dataType: 'json',
         processData: false,
-        type: "POST",
-        url: server + "script/",
+        type: 'POST',
+        url: server + 'script/'
       });
       scriptLog.log(req);
     },
@@ -187,7 +189,7 @@ var ScriptServer = (function ScriptServerClosure() {
 
       function getEvent(i, retrievedEvents) {
         if (i >= eventIds.length) {
-          scriptLog.log("Done getting");
+          scriptLog.log('Done getting');
           cont(retrievedEvents);
           return;
         }
@@ -203,12 +205,12 @@ var ScriptServer = (function ScriptServerClosure() {
             retrievedEvents.push(e);
             getEvent(i + 1, retrievedEvents);
           },
-          url: server + "event/" + eventIds[i].id + "/?format=json",
+          url: server + 'event/' + eventIds[i].id + '/?format=json',
           type: 'GET',
           processData: false,
           accepts: 'application/json',
           dataType: 'json'
-        })
+        });
       }
 
       getEvent(0, []);
@@ -234,15 +236,15 @@ var ScriptServer = (function ScriptServerClosure() {
             }
             var events = [];
             scriptServer.getEvents(script.events, function(scriptEvents) {
-              var serverEvents = scriptEvents.sort(function(a,b) {
+              var serverEvents = scriptEvents.sort(function(a, b) {
                 return a.execution_order - b.execution_order;
               });
 
               for (var i = 0, ii = serverEvents.length; i < ii; ++i) {
                 var e = serverEvents[i];
                 var serverParams = e.parameters;
-                var event = {}
-                event.msg = {type: "event", value: {}};
+                var event = {};
+                event.msg = {type: 'event', value: {}};
 
                 var msgValue = event.msg.value;
                 msgValue.snapshotBefore = JSON.parse(e.dom_pre_event_state);
@@ -262,12 +264,12 @@ var ScriptServer = (function ScriptServerClosure() {
             });
           }
         },
-        url: server + "script/" + name + "/?format=json",
+        url: server + 'script/' + name + '/?format=json',
         type: 'GET',
         processData: false,
         accepts: 'application/json',
         dataType: 'json'
-      })
+      });
       return [];
     }
   };
