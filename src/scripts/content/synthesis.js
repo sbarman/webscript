@@ -1,6 +1,8 @@
 /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
 
+var log = getLog("synthesis");
+
 var similarityThreshold = .9;
 var acceptTags = {"HTML":true, "BODY":true, "HEAD":true};
 var initialDivergences = false;
@@ -35,32 +37,34 @@ function Node(type, val, leftNode, rightNode, rightRightNode) {
 
 Node.prototype = {
   toString: function() {
-    if (this.type=="constant"){
+    switch (this.type) {
+    case "constant":
       return this.val;
-    }
-    else if (this.type=="messageProp"){
+      break;
+    case "messageProp":
       return "eventMessage["+this.val+"]";
-    }
-    else if (this.type=="elementProp"){
+      break;
+    case "elementProp":
       return "element["+this.val+"]";
-    }
-    else if (this.type=="concat"){
+      break;
+    case "concat":
       return this.leftNode.toString()+"+"+this.rightNode.toString();
-    }
-    else if (this.type=="function"){
+      break;
+    case "function":
       if (this.rightRightNode){
         return this.val+"("+this.leftNode.toString()+","+this.rightNode.toString()+","+this.rightRightNode.toString()+")";
-      }
-      if (this.rightNode){
+      } else if (this.rightNode){
         return this.val+"("+this.leftNode.toString()+","+this.rightNode.toString()+")";
+      } else {
+        return this.val+"("+this.leftNode.toString()+")";
       }
-      return this.val+"("+this.leftNode.toString()+")";
-    }
-    else if (this.type=="mirror"){
+      break;
+    case "mirror":
       return "eventMessage["+this.val+"_value]";
-    }
-    else if (this.type=="mirrorRecord"){
+      break;
+    case "mirrorRecord":
       return "element["+this.val+"]";
+      break;
     }
   }
 }
@@ -74,16 +78,11 @@ TopNode.prototype = {
   toString: function() {
     if (this.node.type == "mirrorRecord"){
       return "eventMessage["+this.targetProp+"_value] = "+this.node.toString();
-    }
-    else {
+    } else {
       return "element["+this.targetProp+"] = "+this.node.toString();
     }
   }
 }
-
-function withoutArray(arr1,arr2){
-  return _.without.apply(_, [arr1].concat(arr2));
-};
 
 function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomBefore,replayDomAfter, oEvent){
   var element = prevEvent.element;
@@ -93,26 +92,14 @@ function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomB
 
   var recordDeltas = checkDomDivergence(recordDomBefore,recordDomAfter);
   if (synthesisVerbose){
-    console.log("RECORD DELTAS");
-    console.log(recordDeltas);
-  }
-  for (var i=0;i<recordDeltas.length;i++){
-    var replayDelta = recordDeltas[i];
-    if (synthesisVerbose){
-      console.log(replayDelta.type);
-    }
+    log.log("RECORD DELTAS");
+    log.log(recordDeltas);
   }
   
   var replayDeltas = checkDomDivergence(replayDomBefore,replayDomAfter);
   if (synthesisVerbose){
-    console.log("REPLAY DELTAS");
-    console.log(replayDeltas);
-  }
-  for (var i=0;i<replayDeltas.length;i++){
-    var replayDelta = replayDeltas[i];
-    if (synthesisVerbose){
-      console.log(replayDelta.type);
-    }
+    log.log("REPLAY DELTAS");
+    log.log(replayDeltas);
   }
   
   //effects of events that were found in record browser but not replay browser
@@ -121,13 +108,13 @@ function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomB
   var replayDeltasNotMatched = filterDivergences(replayDeltas, recordDeltas);
   
   if(synthesisVerbose){
-    console.log("recordDeltasNotMatched ", recordDeltasNotMatched);
-    console.log("replayDeltasNotMatched ", replayDeltasNotMatched);
+    log.log("recordDeltasNotMatched ", recordDeltasNotMatched);
+    log.log("replayDeltasNotMatched ", replayDeltasNotMatched);
   }
   
   //the thing below is the stuff that's doing divergence synthesis
   
-  for (var i=0;i<recordDeltasNotMatched.length;i++){
+  for (var i=0, ii = recordDeltasNotMatched.length; i < ii; i++){
     var delta = recordDeltasNotMatched[i];
     addComment("delta", JSON.stringify(recordDeltasNotMatched))
     if(delta.type == "We expect these nodes to be the same, but they're not."){
@@ -189,9 +176,7 @@ function visualizeDivergence(prevEvent,recordDomBefore,recordDomAfter,replayDomB
   //console.log("dispatching event", oEvent);
   //element.dispatchEvent(oEvent);
   }
-  */
-  
-  /*
+
   for (var i=0;i<replayDeltasNotMatched.length;i++){
     var delta = replayDeltasNotMatched[i];
     if(delta.type == "We expect these nodes to be the same, but they're not."){

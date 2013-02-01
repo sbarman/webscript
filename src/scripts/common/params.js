@@ -103,7 +103,7 @@ var params = null;
     logging: {
       level: 1,
       enabled: ["ports", "event", "record", "replay", "script", "background",
-                "content"]
+                "content", "synthesis"]
     },
     synthesis: {
 	  enabled: true,
