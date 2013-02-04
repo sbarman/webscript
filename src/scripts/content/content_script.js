@@ -117,7 +117,8 @@ function processEvent(eventData) {
     //console.log("taking new record snapshot");
     prevSnapshotRecord = curSnapshotRecord;
     curSnapshotRecord = snapshot();
-    eventMessage['snapshotBefore'] = curSnapshotRecord;
+    //eventMessage['snapshotBefore'] = curSnapshotRecord;
+    eventMessage["prevEventDivergence"] = checkDomDivergence(prevSnapshotRecord, curSnapshotRecord);
 
     for (var prop in properties) {
       if (prop in eventData) {
@@ -291,11 +292,15 @@ function simulate(request) {
     curSnapshotReplay = snapshot();
   }
   else {
-    var recordDomBefore = prevEvent.eventData.snapshotBefore;
-    var recordDomAfter = eventData.snapshotBefore;
+    //var recordDomBefore = prevEvent.eventData.snapshotBefore;
+    //var recordDomAfter = eventData.snapshotBefore;
+    var recordDomDivergence = eventData.prevEventDivergence;
+    
     var replayDomBefore = curSnapshotReplay;
     curSnapshotReplay = snapshot();
     var replayDomAfter = curSnapshotReplay;
+    
+    var replayDomDivergence = checkDomDivergence(replayDomBefore, replayDomAfter);
 
     if (synthesisVerbose) {
       log.log('EVENT for checking DIVERGENCE', prevEvent.eventData.type,
@@ -306,8 +311,7 @@ function simulate(request) {
     //let's try seeing divergence for the last event, now that we have a
     //new more recent snapshot of the record DOM
     if (params.synthesis.enabled) {
-      synthesize(prevEvent, recordDomBefore, recordDomAfter,
-                          replayDomBefore, replayDomAfter, oEvent);
+      synthesize(prevEvent, recordDomDivergence, replayDomDivergence, oEvent);
     }
   }
   //this does the actual event simulation

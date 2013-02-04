@@ -104,20 +104,17 @@ TopNode.prototype = {
   }
 };
 
-function visualizeDivergence(prevEvent, recordDomBefore, recordDomAfter,
-                             replayDomBefore, replayDomAfter, oEvent) {
+function synthesize(prevEvent, recordDeltas, replayDeltas, oEvent) {
   var element = prevEvent.element;
   var eventData = prevEvent.eventData;
 
   //console.log(recordDomBefore, recordDomAfter);
 
-  var recordDeltas = checkDomDivergence(recordDomBefore, recordDomAfter);
   if (synthesisVerbose) {
     log.log('RECORD DELTAS');
     log.log(recordDeltas);
   }
 
-  var replayDeltas = checkDomDivergence(replayDomBefore, replayDomAfter);
   if (synthesisVerbose) {
     log.log('REPLAY DELTAS');
     log.log(replayDeltas);
