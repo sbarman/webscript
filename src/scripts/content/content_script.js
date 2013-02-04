@@ -12,6 +12,8 @@ var recording = false;
 var id = 'setme';
 var curSnapshotRecord;
 var curSnapshotReplay;
+var prevSnapshotRecord;
+var inReplayTab = false;
 /*
 var similarityThreshold = .9;
 var acceptTags = {"HTML":true, "BODY":true, "HEAD":true};
@@ -97,7 +99,7 @@ function getEventProps(type) {
 
 // create an event record given the data from the event handler
 function processEvent(eventData) {
-  if (recording) {
+  if (recording && !inReplayTab) {
     var type = eventData.type;
     var dispatchType = getEventType(type);
     var properties = getEventProps(type);
@@ -112,6 +114,8 @@ function processEvent(eventData) {
     eventMessage['dispatchType'] = dispatchType;
     eventMessage['nodeName'] = nodeName;
 
+    //console.log("taking new record snapshot");
+    prevSnapshotRecord = curSnapshotRecord;
     curSnapshotRecord = snapshot();
     eventMessage['snapshotBefore'] = curSnapshotRecord;
 
@@ -196,6 +200,11 @@ function updateParams(newParams) {
 }
 
 function simulate(request) {
+  //we're in simulate, so we must be in a tab that's doing replay
+  //we don't want to have to snapshot every time as though we're
+  //recording.  so let's set inReplayTab to true
+  inReplayTab = true;
+	
   //console.log("extension event", request, request.value.type)
   var eventData = request.value;
   var eventName = eventData.type;
@@ -297,7 +306,7 @@ function simulate(request) {
     //let's try seeing divergence for the last event, now that we have a
     //new more recent snapshot of the record DOM
     if (params.synthesis.enabled) {
-      visualizeDivergence(prevEvent, recordDomBefore, recordDomAfter,
+      synthesize(prevEvent, recordDomBefore, recordDomAfter,
                           replayDomBefore, replayDomAfter, oEvent);
     }
   }
