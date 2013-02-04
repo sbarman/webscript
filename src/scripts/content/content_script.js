@@ -14,6 +14,7 @@ var curSnapshotRecord;
 var curSnapshotReplay;
 var prevSnapshotRecord;
 var inReplayTab = false;
+var curReplayDivergence;
 /*
 var similarityThreshold = .9;
 var acceptTags = {"HTML":true, "BODY":true, "HEAD":true};
@@ -99,7 +100,7 @@ function getEventProps(type) {
 
 // create an event record given the data from the event handler
 function processEvent(eventData) {
-  if (recording && !inReplayTab) {
+  if (recording) {
     var type = eventData.type;
     var dispatchType = getEventType(type);
     var properties = getEventProps(type);
@@ -113,12 +114,17 @@ function processEvent(eventData) {
     eventMessage['URL'] = document.URL;
     eventMessage['dispatchType'] = dispatchType;
     eventMessage['nodeName'] = nodeName;
-
-    //console.log("taking new record snapshot");
-    prevSnapshotRecord = curSnapshotRecord;
-    curSnapshotRecord = snapshot();
-    //eventMessage['snapshotBefore'] = curSnapshotRecord;
-    eventMessage["prevEventDivergence"] = checkDomDivergence(prevSnapshotRecord, curSnapshotRecord);
+    
+    if (inReplayTab){
+      //if we're in the replay tab, we've already found the divergence
+      //because we used it to do synthesis
+      eventMessage["prevEventDivergence"] = curReplayDivergence;
+    }
+    else{
+      prevSnapshotRecord = curSnapshotRecord;
+      curSnapshotRecord = snapshot();
+      eventMessage["prevEventDivergence"] = checkDomDivergence(prevSnapshotRecord, curSnapshotRecord);
+    }
 
     for (var prop in properties) {
       if (prop in eventData) {
@@ -301,6 +307,7 @@ function simulate(request) {
     var replayDomAfter = curSnapshotReplay;
     
     var replayDomDivergence = checkDomDivergence(replayDomBefore, replayDomAfter);
+    curReplayDivergence = replayDomDivergence;
 
     if (synthesisVerbose) {
       log.log('EVENT for checking DIVERGENCE', prevEvent.eventData.type,
