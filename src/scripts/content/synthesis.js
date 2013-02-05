@@ -12,7 +12,7 @@ var acceptTags = {
 var initialDivergences = false;
 var verbose = false;
 var scenarioVerbose = false;
-var synthesisVerbose = true;
+var synthesisVerbose = false;
 
 var oneArgFuncs = {};
 var twoArgFuncs = {
@@ -104,117 +104,6 @@ TopNode.prototype = {
   }
 };
 
-function synthesize(prevEvent, recordDeltas, replayDeltas, oEvent) {
-  var element = prevEvent.element;
-  var eventData = prevEvent.eventData;
-
-  //console.log(recordDomBefore, recordDomAfter);
-
-  if (synthesisVerbose) {
-    log.log('RECORD DELTAS');
-    log.log(recordDeltas);
-  }
-
-  if (synthesisVerbose) {
-    log.log('REPLAY DELTAS');
-    log.log(replayDeltas);
-  }
-
-  //effects of events that were found in record browser but not replay browser
-  var recordDeltasNotMatched = filterDivergences(recordDeltas, replayDeltas);
-  //effects of events that were found in replay browser but not record browser
-  var replayDeltasNotMatched = filterDivergences(replayDeltas, recordDeltas);
-
-  if (synthesisVerbose) {
-    log.log('recordDeltasNotMatched ', recordDeltasNotMatched);
-    log.log('replayDeltasNotMatched ', replayDeltasNotMatched);
-  }
-
-  //the thing below is the stuff that's doing divergence synthesis
-
-  for (var i = 0, ii = recordDeltasNotMatched.length; i < ii; i++) {
-    var delta = recordDeltasNotMatched[i];
-    addComment('delta', JSON.stringify(recordDeltasNotMatched));
-    if (delta.type == "We expect these nodes to be the same, but they're " +
-                      'not.') {
-      generateMismatchedValueCompensationEvent(element, eventData, delta,
-                                               true);
-    }
-  }
-
-  /*
-  //let's replace synthesis with just copying over the state of all mismatched items
-  for (var index in recordDeltasNotMatched){
-	  var delta = recordDeltasNotMatched[index];
-    if (delta.type=="We expect these nodes to be the same, but they're not." && _.omit(delta.divergingProps, params.synthesis.omittedProps)){
-      if(delta.record.prop.id == delta.replay.prop.id && delta.record.prop.id!=""){
-        //console.log("***************")
-        //console.log("we can make the xpath with id");
-        //console.log(delta.record,delta.replay);
-        var xpath = "//*[@id='"+delta.record.prop.id+"']";
-        var nodes = xPathToNodes(xpath);
-        //console.log("nodes ", nodes);
-        //console.log(delta.record.prop.id, delta.replay.prop.id);
-        var elem = nodes[0];
-        console.log("elem ", elem);
-        var props = _.without(divergingProps(delta.record,delta.replay), "text");
-        var recordProps = delta.record.prop;
-        //console.log(recordProps);
-        for (var index in props){
-          var prop = props[index];
-          console.log("what the element says prop ", prop, " is: ", elem[prop]);
-          console.log("setting prop ", prop," from", elem[prop], " to ", delta.replay.prop[prop], ".");
-          elem[prop] = delta.replay.prop[prop];
-        }
-      }
-      else{
-        xpath = delta.replay.prop.xpath;
-        var nodes = xPathToNodes(xpath);
-        console.log("**********");
-        console.log("xpath ", xpath);
-        console.log("xpath ", delta.record.prop.xpath);
-        console.log("nodes ", nodes);
-        var elem = nodes[0];
-        console.log("elem ", elem);
-        var props = _.without(divergingProps(delta.record,delta.replay), "text");
-        console.log(props);
-        var recordProps = delta.record.prop;
-        for (var index in props){
-          var prop = props[index];
-          console.log("xpath case");
-          console.log("what the element says prop ", prop, " is: ", elem[prop]);
-          console.log("record time transition was ", prop," from", delta.record.prop[prop], " to ", delta.replay.prop[prop], ".");
-          console.log("setting prop ", prop," from", elem[prop], " to ", delta.replay.prop[prop], ".");
-          console.log("what the element says prop ", prop, " is: ", elem[prop]);
-          elem[prop] = delta.replay.prop[prop];
-        }
-      }
-
-    }
-
-  //this does the actual event simulation
-  //console.log("dispatching event", oEvent);
-  //element.dispatchEvent(oEvent);
-  }
-
-  for (var i=0;i<replayDeltasNotMatched.length;i++){
-    var delta = replayDeltasNotMatched[i];
-    if(delta.type == "We expect these nodes to be the same, but they're not."){
-      console.log("here we'd generate annotation events, delta shouldn't happen");
-      generateMismatchedValueCompensationEvent(element,eventData,delta,false);
-    }
-  }
-  */
-
-  //generateMismatchedValueCompensationEvent will change the state of the DOM to be what it
-  //should have been, if the proper compensation events were in place
-  //but we don't want to associate these changes with the next event
-  //so let's snapshot the DOM again
-  if (recordDeltasNotMatched.length > 0 || replayDeltasNotMatched.length > 0) {
-    curSnapshotReplay = snapshot();
-  }
-}
-
 function xPathToNodes(xpath) {
   var q = document.evaluate(xpath, document, null, XPathResult.ANY_TYPE, null);
   var results = [];
@@ -229,8 +118,8 @@ function xPathToNodes(xpath) {
 
 //generate annotation events for the case where we just have different
 //values for properties of matched nodes
-function generateMismatchedValueCompensationEvent(element, eventData, delta,
-                                                  thisDeltaShouldHappen) {
+function generateMismatchedValueCompensationEvent(element, eventMessage,
+                                              delta, thisDeltaShouldHappen) {
   //console.log(element, eventData, delta);
   //first ensure that this element is actually the element on which we have diverged
 
@@ -238,7 +127,7 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta,
   //but this may not be the same xpath to the corresponding element that was used
   //during record time.  So we have to make sure that the xpath of the correct divergence
   //was matched with the xpath of the element
-  if (eventData.nodeName != delta.record.prop.nodeName.toLowerCase()) {
+  if (eventMessage.nodeName != delta.record.prop.nodeName.toLowerCase()) {
     return;
   }
   if (delta.record.prop.type && delta.replay.prop.type &&
@@ -253,22 +142,28 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta,
   }
 
   if (thisDeltaShouldHappen) {
+    if (synthesisVerbose){
+      log.log("delta", delta);
+    }
 
-    var typeOfNode = eventData.nodeName;
-    var typeOfEvent = eventData.type;
+    var typeOfNode = eventMessage.nodeName;
+    var typeOfEvent = eventMessage.type;
     var name = typeOfEvent + '_' + typeOfNode;
 
-
     //let's get the examples associated with this type of compensation event
-    var examples = [];
+    var examplesForAnnotation = [];
     if (annotationEvents[name]) {
-      examples = annotationEvents[name].examples;
+      examplesForAnnotation = annotationEvents[name].examples;
+    }
+    else {
+      annotationEvents[name] = {};
+      annotationEvents[name].examples = examplesForAnnotation;
     }
 
     //for the event message, associated properties with their values
-    var messagePropMap = createMessagePropMap(eventData);
+    var messagePropMap = createMessagePropMap(eventMessage);
     //make nodes for all the message properties
-    var messagePropNodes = createMessagePropNodes(eventData);
+    var messagePropNodes = createMessagePropNodes(eventMessage);
     //make nodes for all the element properties
     var elementPropNodes = createElementPropNodes(delta.record.prop);
     //let's add the current instance to our list of examples
@@ -279,15 +174,16 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta,
       'messagePropNodes': messagePropNodes,
       'elementPropNodes': elementPropNodes
     };
-    examples.push(newExample);
+    examplesForAnnotation.push(newExample);
 
     if (synthesisVerbose) {
-      console.log('EXAMPLES', examples);
+      log.log('EXAMPLES', examplesForAnnotation);
     }
 
+    /*
     var propsToChange = [];
-    for (var i = 0; i < examples.length; i++) {
-      var example = examples[i];
+    for (var i = 0; i < examplesForAnnotation.length; i++) {
+      var example = examplesForAnnotation[i];
       var props = divergingProps({
         'prop': example.elementPropsBefore
       }, {
@@ -300,10 +196,12 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta,
         }
       }
     }
+    */
+    var propsToChange = delta.divergingProps;
     propsToChange = _.without(propsToChange, params.synthesis.omittedProps);
 
     if (synthesisVerbose) {
-      console.log(name, ': propsToChange ', propsToChange);
+      log.log(name, ': propsToChange ', propsToChange);
     }
 
     var replayNodes = [];
@@ -316,19 +214,19 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta,
       //(becuase it might involve a record action)
       element[prop] = delta.replay.prop[prop];
       if (synthesisVerbose) {
-        console.log('setting prop ', prop, ' to ', delta.replay.prop[prop]);
+        log.log('setting prop ', prop, ' to ', delta.replay.prop[prop]);
       }
 
-      var newNode = findSatisfyingExpressionWithOptimizationLevel(examples,
+      var newNode = findSatisfyingExpressionWithOptimizationLevel(examplesForAnnotation,
                                                                   prop, 2, 2);
 
       if (newNode) {
         replayNodes.push(new TopNode(prop, newNode));
       } else {
         //else, use the value of valueAtRecordAfter
-        eventData[prop + '_value'] = delta.record.prop[prop];
+        eventMessage[prop + '_value'] = delta.replay.prop[prop];
         if (synthesisVerbose) {
-          console.log('NEW ANNOTATION: going to use the value of the ' +
+          log.log('NEW ANNOTATION: going to use the value of the ' +
                       'record prop', prop);
         }
         newNode = new Node('mirror', prop);
@@ -337,12 +235,14 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta,
         recordNodes.push(new TopNode(prop, newRecordNode));
       }
 
-      console.log('NEW ANNOTATION STATEMENT', name, prop, newNode.toString());
+      log.log('NEW ANNOTATION STATEMENT', name, prop, newNode.toString());
       sendAlertRight(name + ' ' + prop + '<br>' + newNode.toString());
-      for (var j in examples) {
-        var example = examples[j];
-        console.log('prop', prop, 'before', example.elementPropsBefore[prop],
-                    'after', example.elementPropsAfter[prop]);
+      for (var j in examplesForAnnotation) {
+        var example = examplesForAnnotation[j];
+        if (synthesisVerbose){
+          log.log('prop', prop, 'before', example.elementPropsBefore[prop],
+                      'after', example.elementPropsAfter[prop]);
+        }
       }
     }
 
@@ -350,9 +250,10 @@ function generateMismatchedValueCompensationEvent(element, eventData, delta,
     //diverging prop
     var compensationEvent = addCompensationEvent(name, typeOfNode,
         typeOfEvent, replayNodes, recordNodes, newExample);
-    //if (compensationEvent){compensationEvent.replay(element,eventData);}
+    //the line below actually runs the compensation event
+    //if (compensationEvent){compensationEvent.replay(element,eventMessage);}
     if (synthesisVerbose) {
-      console.log('annotation events after addition ', annotationEvents);
+      log.log('annotation events after addition ', annotationEvents);
     }
   }
 }
@@ -565,7 +466,7 @@ function findSatisfyingExpressionOptimized(examples, prop, depth) {
     }
   }
 
-  console.log(values);
+  //console.log(values);
 
   var deepNode = deepMatchingValueOptimized(examples, prop, values, depth);
   return deepNode;
@@ -1001,27 +902,32 @@ function functionsFromNodes(nodes) {
     var targetProp = topNode.targetProp;
     var node = topNode.node;
     var RHSFunction = functionFromNode(node);
-    var wholeFunction;
-    if (node.type == 'mirrorRecord') {
+    var wholeFunction = makeFunction(topNode,targetProp,node,RHSFunction);
+    functions.push(wholeFunction);
+  }
+  return functions;
+}
+
+function makeFunction(topNode,targetProp,node,RHSFunction){
+  var wholeFunction;
+  if (node.type == 'mirrorRecord') {
       wholeFunction = function(eventMessage, element) {
         if ((typeof element[targetProp]) !== 'undefined') {
-          eventMessage[targetprop + '_value'] = RHSFunction(eventMessage,
+          eventMessage[targetProp + '_value'] = RHSFunction(eventMessage,
                                                             element);
         }
       };
     } else {
       wholeFunction = function(eventMessage, element) {
         if ((typeof element[targetProp]) !== 'undefined') {
-          console.log('changing element[' + targetProp + '] to ' +
-                      RHSFunction(eventMessage, element));
           element[targetProp] = RHSFunction(eventMessage, element);
+          console.log("element[",targetProp,"]: ", element[targetProp]);
         }
       };
     }
-    functions.push(wholeFunction);
-  }
-  return functions;
+  return wholeFunction;
 }
+
 
 function functionFromNode(node) {
   if (node.type == 'constant') {
@@ -1169,11 +1075,8 @@ function addCompensationEvent(name, typeOfNode, typeOfEvent, replayNodes,
   }
 
   //let's get the examples associated with this type of compensation event
-  var examples = [];
-  if (annotationEvents[name]) {
-    examples = annotationEvents[name].examples;
-  }
-  examples.push(example);
+  var examples = annotationEvents[name].examples;
+  //recall we've already appended the new example to the annotaiton examples
   annotationEvents[name] = {
     'guard': guard,
     'record': record,
@@ -1201,7 +1104,7 @@ function sendAlert(msg) {
     font-size:10px');
   replayStatusDiv.innerHTML = msg;
   document.body.appendChild(replayStatusDiv);
-  console.log('appended child', replayStatusDiv.innerHTML);
+  log.log('appended child', replayStatusDiv.innerHTML);
 }
 
 function sendAlertRight(msg) {
@@ -1217,7 +1120,7 @@ function sendAlertRight(msg) {
     font-size:13px');
   replayStatusDiv.innerHTML = msg;
   document.body.appendChild(replayStatusDiv);
-  console.log('appended child', replayStatusDiv.innerHTML);
+  log.log('appended child', replayStatusDiv.innerHTML);
 }
 
 function checkDomDivergence(recordDom, replayDom) {

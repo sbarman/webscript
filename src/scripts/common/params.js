@@ -111,7 +111,7 @@ var params = null;
           'textContent', 'className', 'childElementCount', 'scrollHeight',
           'scrollWidth', 'clientHeight', 'clientWidth', 'clientTop',
           'clientLeft', 'offsetHeight', 'offsetWidth', 'offsetTop',
-          'offsetLeft']
+          'offsetLeft', "text", "valueAsNumber"]
     },
     recording: {
       allEventProps: true
