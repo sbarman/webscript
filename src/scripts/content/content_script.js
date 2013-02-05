@@ -145,6 +145,18 @@ function processEvent(eventData) {
     recordLog.log('[' + id + '] event message:', eventMessage);
     port.postMessage({type: 'event', value: eventMessage});
   }
+  if (inReplayTab){
+    for (var i in annotationEvents) {
+      var annotation = annotationEvents[i];
+      if (annotation.replay && annotation.guard(target, eventMessage)) {
+        if (synthesisVerbose){
+          log.log("annotation event being used", i, annotation.recordNodes,
+                      annotation.replayNodes);
+        }
+        annotation.replay(target, eventMessage);
+      }
+    }
+  }
   if (inReplayTab && params.synthesis.enabled && mostRecentEventMessage != null) {
     if (eventAlignmentVerbose){
       console.log("TYPE OF EVENT", eventMessage.type, mostRecentEventMessage.type);
