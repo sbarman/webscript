@@ -14,7 +14,7 @@ var params = null;
       'change': true,  // change event occurs before focus is lost (blur)
       'copy': true,
       'cut': true,
-      'error': true,
+      'error': false,
       'focus': true,
       'input': true,  // input event occurs on every keystroke (or cut / paste)
       'load': false,

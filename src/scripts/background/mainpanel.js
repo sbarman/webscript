@@ -169,6 +169,10 @@ var Panel = (function PanelClosure() {
         controller.skip();
       });
 
+      $('#resend').click(function(eventObject) {
+        controller.resend();
+      });
+
       $('#paramsDiv').hide(1000);
 
       $('#paramsHide').click(function(eventObject) {
@@ -509,6 +513,7 @@ var Replay = (function ReplayClosure() {
   Replay.prototype = {
     replay: function _replay() {
       replayLog.log('starting replay');
+      this.pause();
       this.record.startReplayRecording();
 
       var replay = this;
@@ -551,8 +556,11 @@ var Replay = (function ReplayClosure() {
       return waitTime;
     },
     pause: function _pause() {
-      clearTimeout(this.timeoutHandle);
-      this.timeoutHandle = null;
+      var handle = this.timeoutHandle;
+      if (handle) {
+        clearTimeout(handle);
+        this.timeoutHandle = null;
+      }
     },
     restart: function _restart() {
       if (this.timeoutHandle == null) {
@@ -562,6 +570,11 @@ var Replay = (function ReplayClosure() {
     skip: function _skip() {
       this.index++;
       this.replayState = ReplayState.REPLAYING;
+    },
+    resend: function _resend() {
+      if (this.replayState == ReplayState.REPLAY_ACK) {
+        this.replayState = ReplayState.REPLAYING;
+      }
     },
     finish: function _finish() {
       replayLog.log('finishing replay');
@@ -957,6 +970,9 @@ var Controller = (function ControllerClosure() {
     },
     skip: function() {
       this.replay.skip();
+    },
+    resend: function() {
+      this.replay.resend();
     },
     saveScript: function(name) {
       ctlLog.log('saving script');
