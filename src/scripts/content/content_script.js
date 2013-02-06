@@ -11,10 +11,9 @@ var port;
 var recording = false;
 var id = 'setme';
 var curSnapshotRecord;
-var curSnapshotReplay;
 var prevSnapshotRecord;
 var inReplayTab = false;
-var curReplayDivergence;
+var mostRecentEventMessage;
 /*
 var similarityThreshold = .9;
 var acceptTags = {"HTML":true, "BODY":true, "HEAD":true};
@@ -23,8 +22,9 @@ var verbose = false;
 var scenarioVerbose = false;
 var synthesisVerbose = true;
 */
-var synthesisVerbose = true;
-var verbose = true;
+var synthesisVerbose = false;
+var verbose = false;
+var eventAlignmentVerbose = false;
 
 var prevEvent;
 var seenEvent = false;
@@ -36,7 +36,6 @@ var replayLog = getLog('replay');
 // Utility functions
 
 curSnapshotRecord = snapshot();
-curSnapshotReplay = curSnapshotRecord;
 
 
 function addComment(name, value) {
@@ -100,6 +99,7 @@ function getEventProps(type) {
 
 // create an event record given the data from the event handler
 function processEvent(eventData) {
+  var eventMessage;
   if (recording) {
     var type = eventData.type;
     var dispatchType = getEventType(type);
@@ -109,22 +109,15 @@ function processEvent(eventData) {
     var target = eventData.target;
     var nodeName = target.nodeName.toLowerCase();
 
-    var eventMessage = {};
+    eventMessage = {};
     eventMessage['target'] = getPathTo(target);
     eventMessage['URL'] = document.URL;
     eventMessage['dispatchType'] = dispatchType;
     eventMessage['nodeName'] = nodeName;
     
-    if (inReplayTab){
-      //if we're in the replay tab, we've already found the divergence
-      //because we used it to do synthesis
-      eventMessage["prevEventDivergence"] = curReplayDivergence;
-    }
-    else{
-      prevSnapshotRecord = curSnapshotRecord;
-      curSnapshotRecord = snapshot();
-      eventMessage["prevEventDivergence"] = checkDomDivergence(prevSnapshotRecord, curSnapshotRecord);
-    }
+    prevSnapshotRecord = curSnapshotRecord;
+    curSnapshotRecord = snapshot();
+    eventMessage["divergence"] = checkDomDivergence(prevSnapshotRecord, curSnapshotRecord);
 
     for (var prop in properties) {
       if (prop in eventData) {
@@ -148,23 +141,29 @@ function processEvent(eventData) {
       eventMessage['char'] = String.fromCharCode(eventMessage['charCode']);
     }
 
-/*
-    var extension = extendEvents[type];
-    if (extension) {
-      extension.record(eventData, eventMessage);
-    }
-
-    for (var i in annotationEvents) {
-      var annotation = annotationEvents[i];
-      if (annotation.record && annotation.guard(eventData, eventMessage)) {
-        annotation.record(eventData, eventMessage);
-      }
-    }
-*/
-
    // console.log("extension sending:", eventMessage);
     recordLog.log('[' + id + '] event message:', eventMessage);
     port.postMessage({type: 'event', value: eventMessage});
+  }
+  if (inReplayTab){
+    for (var i in annotationEvents) {
+      var annotation = annotationEvents[i];
+      if (annotation.replay && annotation.guard(target, eventMessage)) {
+        if (synthesisVerbose){
+          log.log("annotation event being used", i, annotation.recordNodes,
+                      annotation.replayNodes);
+        }
+        annotation.replay(target, eventMessage);
+      }
+    }
+  }
+  if (inReplayTab && params.synthesis.enabled && mostRecentEventMessage != null) {
+    if (eventAlignmentVerbose){
+      console.log("TYPE OF EVENT", eventMessage.type, mostRecentEventMessage.type);
+    }
+    var mrev = mostRecentEventMessage;
+    mostRecentEventMessage = null;
+    synthesize(mrev,eventMessage,target);
   }
   return true;
 };
@@ -293,34 +292,12 @@ function simulate(request) {
   port.postMessage({type: 'ack', value: true});
   replayLog.log('[' + id + '] sent ack');
 
-  if (!seenEvent) {
-    seenEvent = true;
-    curSnapshotReplay = snapshot();
+  //we're going to use this for synthesis, if synthesis is on
+  mostRecentEventMessage = eventData;
+  if (eventAlignmentVerbose){
+    log.log("DISPATCHING EVENT OF TYPE", mostRecentEventMessage.type);
   }
-  else {
-    //var recordDomBefore = prevEvent.eventData.snapshotBefore;
-    //var recordDomAfter = eventData.snapshotBefore;
-    var recordDomDivergence = eventData.prevEventDivergence;
-    
-    var replayDomBefore = curSnapshotReplay;
-    curSnapshotReplay = snapshot();
-    var replayDomAfter = curSnapshotReplay;
-    
-    var replayDomDivergence = checkDomDivergence(replayDomBefore, replayDomAfter);
-    curReplayDivergence = replayDomDivergence;
-
-    if (synthesisVerbose) {
-      log.log('EVENT for checking DIVERGENCE', prevEvent.eventData.type,
-               prevEvent.eventData.nodeName);
-      log.log('EVENT about to DISPATCH', eventData.type, eventData.nodeName);
-    }
-
-    //let's try seeing divergence for the last event, now that we have a
-    //new more recent snapshot of the record DOM
-    if (params.synthesis.enabled) {
-      synthesize(prevEvent, recordDomDivergence, replayDomDivergence, oEvent);
-    }
-  }
+  
   //this does the actual event simulation
   element.dispatchEvent(oEvent);
 
@@ -349,6 +326,56 @@ function simulate(request) {
 
   //now we need to store the current element and eventData into nextDivergence
   prevEvent = {'element': element, 'eventData': eventData};
+}
+
+function synthesize(recordEventMessage,replayEventMessage,target) {
+  //console.log(recordEventMessage, replayEventMessage);
+  //console.log("Annotation events", annotationEvents);
+  var element = recordEventMessage.nodeName;
+  var eventData = replayEventMessage;
+  var recordDeltas = recordEventMessage.divergence;
+  var replayDeltas = replayEventMessage.divergence;
+
+  if (synthesisVerbose) {
+    log.log('RECORD DELTAS');
+    log.log(recordDeltas);
+  }
+
+  if (synthesisVerbose) {
+    log.log('REPLAY DELTAS');
+    log.log(replayDeltas);
+  }
+
+  //effects of events that were found in record browser but not replay browser
+  var recordDeltasNotMatched = filterDivergences(recordDeltas, replayDeltas);
+  //effects of events that were found in replay browser but not record browser
+  var replayDeltasNotMatched = filterDivergences(replayDeltas, recordDeltas);
+
+  if (synthesisVerbose) {
+    log.log('recordDeltasNotMatched ', recordDeltasNotMatched);
+    log.log('replayDeltasNotMatched ', replayDeltasNotMatched);
+  }
+
+  //the thing below is the stuff that's doing divergence synthesis
+
+  for (var i = 0, ii = recordDeltasNotMatched.length; i < ii; i++) {
+    var delta = recordDeltasNotMatched[i];
+    //addComment('delta', JSON.stringify(recordDeltasNotMatched));
+    if (delta.type == "We expect these nodes to be the same, but they're " +
+                      'not.') {
+      generateMismatchedValueCompensationEvent(target, recordEventMessage, delta, true);
+    }
+  }
+
+  //generateMismatchedValueCompensationEvent will change the state of the DOM to be what it
+  //should have been, if the proper compensation events were in place
+  //but we don't want to associate these changes with the next event
+  //so let's snapshot the DOM again
+  if (recordDeltasNotMatched.length > 0 || replayDeltasNotMatched.length > 0) {
+    //curSnapshotReplay = snapshot();
+    prevSnapshotRecord = curSnapshotRecord;
+    curSnapshotRecord = snapshot();
+  }
 }
 
 function checkWait(eventData) {
