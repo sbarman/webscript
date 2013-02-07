@@ -588,7 +588,7 @@ var Replay = (function ReplayClosure() {
         record.stopReplayRecording();
 
         if (scriptId && replayEvents.length > 0) {
-          scriptServer.saveReplay(replayEvents, comments, scriptId);
+          scriptServer.saveScript("replay", replayEvents, comments, scriptId);
           replayLog.log('saving replay:', replayEvents);
         }
       }, 1000);
