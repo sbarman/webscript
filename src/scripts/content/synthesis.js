@@ -118,7 +118,7 @@ function xPathToNodes(xpath) {
 
 //generate annotation events for the case where we just have different
 //values for properties of matched nodes
-function generateMismatchedValueCompensationEvent(element, eventMessage,
+function generateCompensationEvent(element, eventMessage,
                                               delta, thisDeltaShouldHappen) {
   //console.log(element, eventData, delta);
   //first ensure that this element is actually the element on which we have diverged
@@ -217,8 +217,10 @@ function generateMismatchedValueCompensationEvent(element, eventMessage,
         log.log('setting prop ', prop, ' to ', delta.replay.prop[prop]);
       }
 
-      var newNode = findSatisfyingExpressionWithOptimizationLevel(examplesForAnnotation,
-                                                                  prop, 2, 2);
+      var depth = params.synthesis.depth;
+      var optimization = params.synthesis.optimization;
+      var newNode = findExpression(examplesForAnnotation, prop, depth,
+                                   optimization);
 
       if (newNode) {
         replayNodes.push(new TopNode(prop, newNode));
@@ -400,8 +402,7 @@ function concatMatchingValue(examples, targetProp) {
   }
 }
 
-function findSatisfyingExpressionWithOptimizationLevel(examples, prop, depth,
-                                                       optimizationLevel) {
+function findExpression(examples, prop, depth, optimizationLevel) {
   var functions = [findSatisfyingExpression,
                    findSatisfyingExpressionOptimized,
                    findSatisfyingExpressionOptimized2];
@@ -1123,7 +1124,8 @@ function sendAlertRight(msg) {
   log.log('appended child', replayStatusDiv.innerHTML);
 }
 
-function checkDomDivergence(recordDom, replayDom) {
+/* takes in two DOMs, traversing and lining up. main divergence code */
+function getDomDivergence(recordDom, replayDom) {
   var body1 = findBody(recordDom);
   var body2 = findBody(replayDom);
   var divergences = recursiveVisit(body1, body2);
@@ -1239,7 +1241,7 @@ function divergenceEquals(div1, div2) {
   */
 }
 
-//descend to BODY node in the document
+//descend to BODY node in the document, ignore head and scripts
 function findBody(dom) {
   if (dom) {
     if (dom.prop && dom.prop.tagName &&
@@ -1259,6 +1261,7 @@ function findBody(dom) {
   }
 }
 
+/* tries to line up DOM nodes, descends through DOM */
 function recursiveVisit(obj1, obj2) {
 
   if (verbose) {
@@ -1682,6 +1685,7 @@ function recursiveVisitMismatchedChildren(obj1, obj2) {
   return divergences;
 }
 
+/* toString for DOM nodes */
 function similarityString(obj1) {
   if (obj1 && obj1.children) {
 
@@ -1799,7 +1803,8 @@ function tagMatchesAndTotalTags(obj1, obj2, depth) {
 }
 
 
-
+/* checks if two nodes have the same properties, all properties must be the 
+   same */
 function nodeEquals(node1, node2) {
   if (node1 && node2 && node1.prop && node2.prop) {
     /*

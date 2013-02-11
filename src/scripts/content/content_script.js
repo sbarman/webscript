@@ -8,35 +8,29 @@ var port;
 (function() {
 
 // Global variables
-var recording = false;
+var recording = RecordState.STOPPED;
 var id = 'setme';
-var curSnapshotRecord;
+
+// synthesis variabes
+var curSnapshotRecord = snapshot();
 var prevSnapshotRecord;
 var inReplayTab = false;
 var mostRecentEventMessage;
-/*
-var similarityThreshold = .9;
-var acceptTags = {"HTML":true, "BODY":true, "HEAD":true};
-var initialDivergences = false;
-var verbose = false;
-var scenarioVerbose = false;
-var synthesisVerbose = true;
-*/
-var synthesisVerbose = false;
-var verbose = false;
-var eventAlignmentVerbose = false;
+
+//var synthesisVerbose = false;
+//var verbose = false;
+//var eventAlignmentVerbose = false;
 
 var prevEvent;
 var seenEvent = false;
 
+// loggers
 var log = getLog('content');
 var recordLog = getLog('record');
 var replayLog = getLog('replay');
+var synthesisLog = getLog('synthesis');
 
 // Utility functions
-
-curSnapshotRecord = snapshot();
-
 
 function addComment(name, value) {
   log.log('comment added:', name, value);
@@ -45,7 +39,7 @@ function addComment(name, value) {
 
 // taken from http://stackoverflow.com/questions/2631820/im-storing-click-coor
 // dinates-in-my-db-and-then-reloading-them-later-and-showing/2631931#2631931
-function getPathTo(element) {
+function nodeToXPath(element) {
 //  if (element.id !== '')
 //    return 'id("' + element.id + '")';
   if (element.tagName.toLowerCase() === 'html')
@@ -56,7 +50,7 @@ function getPathTo(element) {
   for (var i = 0, ii = siblings.length; i < ii; i++) {
     var sibling = siblings[i];
     if (sibling === element)
-      return getPathTo(element.parentNode) + '/' + element.tagName +
+      return nodeToXPath(element.parentNode) + '/' + element.tagName +
              '[' + (ix + 1) + ']';
     if (sibling.nodeType === 1 && sibling.tagName === element.tagName)
       ix++;
@@ -76,10 +70,7 @@ function xPathToNodes(xpath) {
   return results;
 };
 
-// Functions to handle events
-// Mouse click, Select text, Input form, Back / forward button, Copy / Paste
-// Page load
-
+// return the type of an event, which is used to init and dispatch it
 function getEventType(type) {
   for (var eventType in params.events) {
     var eventTypes = params.events[eventType];
@@ -92,6 +83,7 @@ function getEventType(type) {
   return null;
 };
 
+// return the default event properties for an event
 function getEventProps(type) {
   var eventType = getEventType(type);
   return params.defaultProps[eventType];
@@ -100,7 +92,7 @@ function getEventProps(type) {
 // create an event record given the data from the event handler
 function processEvent(eventData) {
   var eventMessage;
-  if (recording) {
+  if (recording != RecordState.STOPPED) {
     var type = eventData.type;
     var dispatchType = getEventType(type);
     var properties = getEventProps(type);
@@ -110,15 +102,11 @@ function processEvent(eventData) {
     var nodeName = target.nodeName.toLowerCase();
 
     eventMessage = {};
-    eventMessage['target'] = getPathTo(target);
+    eventMessage['target'] = nodeToXPath(target);
     eventMessage['URL'] = document.URL;
     eventMessage['dispatchType'] = dispatchType;
     eventMessage['nodeName'] = nodeName;
     
-    prevSnapshotRecord = curSnapshotRecord;
-    curSnapshotRecord = snapshot();
-    eventMessage["divergence"] = checkDomDivergence(prevSnapshotRecord, curSnapshotRecord);
-
     for (var prop in properties) {
       if (prop in eventData) {
         eventMessage[prop] = eventData[prop];
@@ -141,10 +129,15 @@ function processEvent(eventData) {
       eventMessage['char'] = String.fromCharCode(eventMessage['charCode']);
     }
 
-   // console.log("extension sending:", eventMessage);
     recordLog.log('[' + id + '] event message:', eventMessage);
     port.postMessage({type: 'event', value: eventMessage});
+
+    prevSnapshotRecord = curSnapshotRecord;
+    curSnapshotRecord = snapshot();
+    eventMessage["divergence"] = getDomDivergence(prevSnapshotRecord, curSnapshotRecord);
+
   }
+  /*
   if (inReplayTab){
     for (var i in annotationEvents) {
       var annotation = annotationEvents[i];
@@ -165,6 +158,7 @@ function processEvent(eventData) {
     mostRecentEventMessage = null;
     synthesize(mrev,eventMessage,target);
   }
+  */
   return true;
 };
 
@@ -205,6 +199,7 @@ function updateParams(newParams) {
   }
 }
 
+// replay an event from an event message
 function simulate(request) {
   //we're in simulate, so we must be in a tab that's doing replay
   //we don't want to have to snapshot every time as though we're

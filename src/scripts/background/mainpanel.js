@@ -319,12 +319,6 @@ var Record = (function RecordClosure() {
     this.loadedScriptId = null;
   }
 
-  var RecordState = {
-    RECORDING: 0,
-    STOPPED: 1,
-    REPLAYING: 2
-  };
-
   Record.prototype = {
     setPanel: function _setPanel(panel) {
       this.panel = panel;
@@ -332,10 +326,9 @@ var Record = (function RecordClosure() {
     setSimultaneousReplayer: function(simultaneousReplayer) {
       this.simultaneousReplayer = simultaneousReplayer;
     },
-    isRecording: function _isRecording() {
+    getStatus: function _getStatus() {
       var recordState = this.recordState;
-      return recordState == RecordState.RECORDING ||
-             recordState == RecordState.REPLAYING;
+      return RecordState.RECORDING;
     },
     startRecording: function _startRecording() {
       recordLog.log('starting record');
@@ -344,7 +337,7 @@ var Record = (function RecordClosure() {
       this.panel.startRecording();
 
       // Tell the content scripts to begin recording
-      this.ports.sendToAll({type: 'recording', value: this.isRecording()});
+      this.ports.sendToAll({type: 'recording', value: this.getStatus()});
     },
     stopRecording: function _stopRecording() {
       recordLog.log('stoping record');
@@ -353,7 +346,7 @@ var Record = (function RecordClosure() {
       this.panel.stopRecording();
 
       // Tell the content scripts to stop recording
-      this.ports.sendToAll({type: 'recording', value: this.isRecording()});
+      this.ports.sendToAll({type: 'recording', value: this.getStatus()});
     },
     startReplayRecording: function _startReplayRecording() {
       if (this.loadedScriptId != null) {
@@ -364,7 +357,7 @@ var Record = (function RecordClosure() {
       this.replayEvents = [];
       this.replayComments = [];
       this.commentCounter = 0;
-      this.ports.sendToAll({type: 'recording', value: this.isRecording()});
+      this.ports.sendToAll({type: 'recording', value: this.getStatus()});
     },
     stopReplayRecording: function _stopReplayRecording() {
       this.stopRecording();
@@ -1031,7 +1024,7 @@ var handleMessage = function(port, request) {
   } else if (request.type == 'comment') {
     record.addComment(request, port.name);
   } else if (request.type == 'getRecording') {
-    port.postMessage({type: 'recording', value: record.isRecording()});
+    port.postMessage({type: 'recording', value: record.getStatus()});
   } else if (request.type == 'getParams') {
     port.postMessage({type: 'params', value: params});
   } else if (request.type == 'snapshot') {
