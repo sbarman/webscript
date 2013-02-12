@@ -327,8 +327,7 @@ var Record = (function RecordClosure() {
       this.simultaneousReplayer = simultaneousReplayer;
     },
     getStatus: function _getStatus() {
-      var recordState = this.recordState;
-      return RecordState.RECORDING;
+      return this.recordState;
     },
     startRecording: function _startRecording() {
       recordLog.log('starting record');
@@ -347,6 +346,7 @@ var Record = (function RecordClosure() {
 
       // Tell the content scripts to stop recording
       this.ports.sendToAll({type: 'recording', value: this.getStatus()});
+      this.ports.sendToAll({type: 'deltas', value: null});
     },
     startReplayRecording: function _startReplayRecording() {
       if (this.loadedScriptId != null) {
@@ -443,11 +443,29 @@ var Record = (function RecordClosure() {
       }
       this.commentCounter = 0;
     },
+    updateEvent: function _updateEvent(eventRequest, portName) {
+      var events = this.events;
+      var updates = eventRequest.value;
+      var pageEventId = updates.pageEventId;
+
+      for (var i = events.length - 1; i >= 0; --i) {
+        var e = events[i];
+        var msgValue = e.msg.value;
+        if (e.port == portName && msgValue.pageEventId == pageEventId) {
+          for (key in updates) {
+            msgValue[key] = updates[key];
+          }
+          break;
+        }
+      }
+    },
     clearEvents: function _clearEvents() {
       this.loadedScriptId = null;
       this.events = [];
       this.comments = [];
       this.panel.clearEvents();
+
+      this.ports.sendToAll({type: 'reset', value: null});
     },
     getEvents: function _getEvents() {
       return this.events.slice(0);
@@ -1021,6 +1039,8 @@ function handleIdMessage(request, sender, sendResponse) {
 var handleMessage = function(port, request) {
   if (request.type == 'event') {
     record.addEvent(request, port.name);
+  } else if (request.type == 'updateEvent') {
+    record.updateEvent(request, port.name);
   } else if (request.type == 'comment') {
     record.addComment(request, port.name);
   } else if (request.type == 'getRecording') {

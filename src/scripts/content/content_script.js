@@ -12,16 +12,19 @@ var recording = RecordState.STOPPED;
 var id = 'setme';
 
 // synthesis variabes
-var curSnapshotRecord = snapshot();
-var prevSnapshotRecord;
+var curRecordSnapshot = snapshot();
+var prevRecordSnapshot;
 var inReplayTab = false;
 var mostRecentEventMessage;
 
-//var synthesisVerbose = false;
-//var verbose = false;
-//var eventAlignmentVerbose = false;
+// record variables
+var lastRecordEvent = null;
+var eventId = 0;
 
-var prevEvent;
+// replay variables
+var lastReplayEvent = null;
+
+var prevEvent = null;
 var seenEvent = false;
 
 // loggers
@@ -89,10 +92,14 @@ function getEventProps(type) {
   return params.defaultProps[eventType];
 }
 
+function reset() {
+  lastRecordEvent = null;
+}
+
 // create an event record given the data from the event handler
 function processEvent(eventData) {
   var eventMessage;
-  if (recording != RecordState.STOPPED) {
+  if (recording == RecordState.REPLAYING) {
     var type = eventData.type;
     var dispatchType = getEventType(type);
     var properties = getEventProps(type);
@@ -106,6 +113,7 @@ function processEvent(eventData) {
     eventMessage['URL'] = document.URL;
     eventMessage['dispatchType'] = dispatchType;
     eventMessage['nodeName'] = nodeName;
+    eventMessage['pageEventId'] =  eventId++;
     
     for (var prop in properties) {
       if (prop in eventData) {
@@ -132,35 +140,24 @@ function processEvent(eventData) {
     recordLog.log('[' + id + '] event message:', eventMessage);
     port.postMessage({type: 'event', value: eventMessage});
 
-    prevSnapshotRecord = curSnapshotRecord;
-    curSnapshotRecord = snapshot();
-    eventMessage["divergence"] = getDomDivergence(prevSnapshotRecord, curSnapshotRecord);
+    prevRecordSnapshot = curRecordSnapshot;
+    curRecordSnapshot = snapshot();
+
+    updateRecordDeltas();
+    lastRecordEvent = eventMessage;
 
   }
-  /*
-  if (inReplayTab){
-    for (var i in annotationEvents) {
-      var annotation = annotationEvents[i];
-      if (annotation.replay && annotation.guard(target, eventMessage)) {
-        if (synthesisVerbose){
-          log.log("annotation event being used", i, annotation.recordNodes,
-                      annotation.replayNodes);
-        }
-        annotation.replay(target, eventMessage);
-      }
-    }
-  }
-  if (inReplayTab && params.synthesis.enabled && mostRecentEventMessage != null) {
-    if (eventAlignmentVerbose){
-      console.log("TYPE OF EVENT", eventMessage.type, mostRecentEventMessage.type);
-    }
-    var mrev = mostRecentEventMessage;
-    mostRecentEventMessage = null;
-    synthesize(mrev,eventMessage,target);
-  }
-  */
   return true;
 };
+
+function updateRecordDeltas() {
+  if (lastRecordEvent) {
+    var deltas = getDomDivergence(prevRecordSnapshot, curRecordSnapshot);
+    var update = {type: 'updateEvent', value: {'deltas': deltas,
+                  'pageEventId': lastRecordEvent.pageEventId}};
+    port.postMessage(update);
+  }
+}
 
 // event handler for messages coming from the background page
 function handleMessage(request) {
@@ -173,6 +170,10 @@ function handleMessage(request) {
     simulate(request);
   } else if (request.type == 'snapshot') {
     port.postMessage({type: 'snapshot', value: snapshotDom(document)});
+  } else if (request.type == 'deltas') {
+    updateRecordDeltas();
+  } else if (request.type == 'reset') {
+    reset();
   }
 }
 
@@ -199,14 +200,52 @@ function updateParams(newParams) {
   }
 }
 
+function compensateLastEvent() {
+  if (inReplayTab){
+    for (var i in annotationEvents) {
+      var annotation = annotationEvents[i];
+      if (annotation.replay && annotation.guard(target, eventMessage)) {
+        if (synthesisVerbose){
+          log.log("annotation event being used", i, annotation.recordNodes,
+                      annotation.replayNodes);
+        }
+        annotation.replay(target, eventMessage);
+      }
+    }
+  }
+  if (inReplayTab && params.synthesis.enabled && mostRecentEventMessage != null) {
+    if (eventAlignmentVerbose){
+      console.log("TYPE OF EVENT", eventMessage.type, mostRecentEventMessage.type);
+    }
+    var mrev = mostRecentEventMessage;
+    mostRecentEventMessage = null;
+    synthesize(mrev,eventMessage,target);
+  }
+
+
+}
+
 // replay an event from an event message
 function simulate(request) {
+
+  // calculate the deltas between the last simulated event and this one
+
+  // check if these deltas match the deltas from the last simulated event
+  // if same -> continue
+  // else theres some differences
+  // we need to run a compensation action
+  // check if the previous compensation action will work
+  // if not generate a new compensation action and run it
+  lastSnapshotReplay
+
+  compensateLastEvent();
+
+
   //we're in simulate, so we must be in a tab that's doing replay
   //we don't want to have to snapshot every time as though we're
   //recording.  so let's set inReplayTab to true
   inReplayTab = true;
 	
-  //console.log("extension event", request, request.value.type)
   var eventData = request.value;
   var eventName = eventData.type;
 
@@ -215,7 +254,7 @@ function simulate(request) {
     return;
   }
 
-  replayLog.log('simulating: ', eventData);
+  replayLog.log('simulating: ', eventName, eventData);
 
   var nodes = xPathToNodes(eventData.target);
   //if we don't successfully find nodes, let's alert
@@ -295,26 +334,6 @@ function simulate(request) {
   
   //this does the actual event simulation
   element.dispatchEvent(oEvent);
-
-/*
-  // handle any quirks with the event type
-  var extension = extendEvents[eventName];
-  if (extension) {
-    extension.replay(element, eventData);
-  }
-
-  // handle any more quirks with a specific version of the event type
-  for (var i in annotationEvents) {
-    var annotation = annotationEvents[i];
-    if (annotation.replay && annotation.guard(element, eventData)) {
-      if (synthesisVerbose){
-        console.log("annotation event being used", i, annotation.recordNodes,
-                    annotation.replayNodes);
-      }
-      annotation.replay(element, eventData);
-    }
-  }
-*/
 
   //let's update a div letting us know what event we just got
   sendAlert('Received Event: ' + eventData.type);

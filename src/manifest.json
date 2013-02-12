@@ -17,6 +17,7 @@
              "scripts/common/underscore.js",
              "scripts/common/params.js",
              "scripts/common/logging.js",
+             "scripts/common/common.js",
              "scripts/content/dom_to_json.js", 
              "scripts/content/synthesis.js",
              "scripts/content/content_script.js"],
