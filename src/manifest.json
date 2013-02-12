@@ -18,8 +18,6 @@
              "scripts/common/params.js",
              "scripts/common/logging.js",
              "scripts/content/dom_to_json.js", 
-             "scripts/content/extend_events.js", 
-             "scripts/content/annotation_events.js",
              "scripts/content/synthesis.js",
              "scripts/content/content_script.js"],
       "run_at": "document_start",

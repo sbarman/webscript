@@ -5,6 +5,8 @@
 
 var port;
 
+var annotationEvents = {};
+
 (function() {
 
 // Global variables
