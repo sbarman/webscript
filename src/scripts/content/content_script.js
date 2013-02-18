@@ -4,6 +4,7 @@
 'use strict';
 
 var port;
+var annotationEvents = {};
 
 (function() {
 
@@ -12,20 +13,19 @@ var recording = RecordState.STOPPED;
 var id = 'setme';
 
 // synthesis variabes
-var curRecordSnapshot = snapshot();
-var prevRecordSnapshot;
 var inReplayTab = false;
 var mostRecentEventMessage;
 
 // record variables
+var curRecordSnapshot = snapshot();
+var prevRecordSnapshot;
 var lastRecordEvent = null;
 var eventId = 0;
 
 // replay variables
+var curReplaySnapshot = snapshot();
+var prevReplaySnapshot;
 var lastReplayEvent = null;
-
-var prevEvent = null;
-var seenEvent = false;
 
 // loggers
 var log = getLog('content');
@@ -62,15 +62,49 @@ function nodeToXPath(element) {
 
 // convert an xpath expression to an array of DOM nodes
 function xPathToNodes(xpath) {
-  var q = document.evaluate(xpath, document, null, XPathResult.ANY_TYPE, null);
-  var results = [];
+  // contains an node with a namspace (maybe?)
+  if (xpath.indexOf(':') > 0) {
+    var currentNode = document.documentElement;
+    var paths = xpath.split('/');
+    // assume first path is "HTML"
+    paths: for (var i = 1, ii = paths.length; i < ii; ++i) {
+      var children = currentNode.children;
+      var path = paths[i];
+      var splits = path.split(/\[|\]/)
 
-  var next = q.iterateNext();
-  while (next) {
-    results.push(next);
-    next = q.iterateNext();
+      var tag = splits[0];
+      if (splits.length > 1) {
+        var index = parseInt(splits[1]);
+      } else {
+        var index = 1;
+      }
+
+      var seen = 0;
+      children: for (var j = 0, jj = children.length; j < jj; ++j) {
+        var c = children[j];
+        if (c.tagName == tag) {
+          seen++;
+          if (seen == index) {
+            currentNode = c;
+            continue paths;
+          }
+        }
+      }
+      throw "Cannot find child"; 
+    }
+    return [currentNode];
+  } else {
+    var q = document.evaluate(xpath, document, null, XPathResult.ANY_TYPE,
+                              null);
+    var results = [];
+  
+    var next = q.iterateNext();
+    while (next) {
+      results.push(next);
+      next = q.iterateNext();
+    }
+    return results;
   }
-  return results;
 };
 
 // return the type of an event, which is used to init and dispatch it
@@ -99,7 +133,8 @@ function reset() {
 // create an event record given the data from the event handler
 function processEvent(eventData) {
   var eventMessage;
-  if (recording == RecordState.REPLAYING) {
+  if (recording == RecordState.RECORDING || 
+      recording == RecordState.REPLAYING) {
     var type = eventData.type;
     var dispatchType = getEventType(type);
     var properties = getEventProps(type);
@@ -140,12 +175,13 @@ function processEvent(eventData) {
     recordLog.log('[' + id + '] event message:', eventMessage);
     port.postMessage({type: 'event', value: eventMessage});
 
-    prevRecordSnapshot = curRecordSnapshot;
-    curRecordSnapshot = snapshot();
+    if (recording == RecordState.RECORDING) {
+      prevRecordSnapshot = curRecordSnapshot;
+      curRecordSnapshot = snapshot();
 
-    updateRecordDeltas();
-    lastRecordEvent = eventMessage;
-
+      updateRecordDeltas();
+      lastRecordEvent = eventMessage;
+    }
   }
   return true;
 };
@@ -174,6 +210,8 @@ function handleMessage(request) {
     updateRecordDeltas();
   } else if (request.type == 'reset') {
     reset();
+  } else if (request.type == 'url') {
+    port.postMessage({type: 'url', value: document.URL});
   }
 }
 
@@ -200,61 +238,29 @@ function updateParams(newParams) {
   }
 }
 
-function compensateLastEvent() {
-  if (inReplayTab){
-    for (var i in annotationEvents) {
-      var annotation = annotationEvents[i];
-      if (annotation.replay && annotation.guard(target, eventMessage)) {
-        if (synthesisVerbose){
-          log.log("annotation event being used", i, annotation.recordNodes,
-                      annotation.replayNodes);
-        }
-        annotation.replay(target, eventMessage);
-      }
-    }
-  }
-  if (inReplayTab && params.synthesis.enabled && mostRecentEventMessage != null) {
-    if (eventAlignmentVerbose){
-      console.log("TYPE OF EVENT", eventMessage.type, mostRecentEventMessage.type);
-    }
-    var mrev = mostRecentEventMessage;
-    mostRecentEventMessage = null;
-    synthesize(mrev,eventMessage,target);
-  }
-
-
-}
-
 // replay an event from an event message
 function simulate(request) {
 
-  // calculate the deltas between the last simulated event and this one
+  var eventData = request.value;
+  var eventName = eventData.type;
 
-  // check if these deltas match the deltas from the last simulated event
-  // if same -> continue
-  // else theres some differences
-  // we need to run a compensation action
-  // check if the previous compensation action will work
-  // if not generate a new compensation action and run it
-  lastSnapshotReplay
-
-  compensateLastEvent();
-
+  replayLog.log('simulating: ', eventName, eventData);
 
   //we're in simulate, so we must be in a tab that's doing replay
   //we don't want to have to snapshot every time as though we're
   //recording.  so let's set inReplayTab to true
   inReplayTab = true;
-	
-  var eventData = request.value;
-  var eventName = eventData.type;
 
   if (eventName == 'wait') {
     checkWait(eventData);
     return;
   }
 
-  replayLog.log('simulating: ', eventName, eventData);
+  if (eventName == 'custom') {
+    var script = eval(eventData.script);
+    script(element, eventData);
+    return;
+  }
 
   var nodes = xPathToNodes(eventData.target);
   //if we don't successfully find nodes, let's alert
@@ -262,14 +268,49 @@ function simulate(request) {
     sendAlert("Couldn't find the DOM node we needed.");
     return;
   }
+  var target = nodes[0];
 
-  var element = nodes[0];
+  if (params.synthesis.enabled && lastReplayEvent) {
+    // make sure the deltas from the last event actually happened
+    var recordDeltas = lastReplayEvent.deltas || [];
 
-  if (eventName == 'custom') {
-    var script = eval(eventData.script);
-    script(element, eventData);
-    return;
+    // run the old compensation events
+    for (var i in annotationEvents) {
+      var annotation = annotationEvents[i];
+      if (annotation.replay && annotation.guard(target, lastReplayEvent)) {
+        if (synthesisVerbose){
+          log.log("annotation event being used", i, annotation.recordNodes,
+                      annotation.replayNodes);
+        }
+        annotation.replay(target, lastReplayEvent);
+      }
+    }
+
+    // calculate the deltas between the last simulated event and this one
+    prevReplaySnapshot = curReplaySnapshot;
+    curReplaySnapshot = snapshot();
+    var replayDeltas = getDomDivergence(prevReplaySnapshot, curReplaySnapshot);
+
+    // check if these deltas match the deltas from the last simulated event
+    // and synthesize appropriate compensation events for unmatched deltas
+    synthesize(recordDeltas, replayDeltas, target, lastReplayEvent);
+
+    // run the new compensation events
+    for (var i in annotationEvents) {
+      var annotation = annotationEvents[i];
+      if (annotation.replay && annotation.guard(target, lastReplayEvent)) {
+        if (synthesisVerbose){
+          log.log("annotation event being used", i, annotation.recordNodes,
+                      annotation.replayNodes);
+        }
+        annotation.replay(target, lastReplayEvent);
+      }
+    }
+
+    curReplaySnapshot = snapshot();
   }
+
+  lastReplayEvent = eventData
 
   var eventType = getEventType(eventName);
   var defaultProperties = getEventProps(eventName);
@@ -295,7 +336,7 @@ function simulate(request) {
         document.defaultView, options.detail, options.screenX,
         options.screenY, options.clientX, options.clientY,
         options.ctrlKey, options.altKey, options.shiftKey, options.metaKey,
-        options.button, element);
+        options.button, target);
   } else if (eventType == 'KeyboardEvent') {
     oEvent.initKeyboardEvent(eventName, options.bubbles, options.cancelable,
         document.defaultView, options.ctrlKey, options.altKey,
@@ -328,47 +369,27 @@ function simulate(request) {
 
   //we're going to use this for synthesis, if synthesis is on
   mostRecentEventMessage = eventData;
-  if (eventAlignmentVerbose){
-    log.log("DISPATCHING EVENT OF TYPE", mostRecentEventMessage.type);
-  }
+  log.log("DISPATCHING EVENT OF TYPE", mostRecentEventMessage.type);
   
   //this does the actual event simulation
-  element.dispatchEvent(oEvent);
+  target.dispatchEvent(oEvent);
 
   //let's update a div letting us know what event we just got
   sendAlert('Received Event: ' + eventData.type);
-
-  //now we need to store the current element and eventData into nextDivergence
-  prevEvent = {'element': element, 'eventData': eventData};
 }
 
-function synthesize(recordEventMessage,replayEventMessage,target) {
-  //console.log(recordEventMessage, replayEventMessage);
-  //console.log("Annotation events", annotationEvents);
-  var element = recordEventMessage.nodeName;
-  var eventData = replayEventMessage;
-  var recordDeltas = recordEventMessage.divergence;
-  var replayDeltas = replayEventMessage.divergence;
+function synthesize(recordDeltas, replayDeltas, target, recordEventMessage) {
 
-  if (synthesisVerbose) {
-    log.log('RECORD DELTAS');
-    log.log(recordDeltas);
-  }
-
-  if (synthesisVerbose) {
-    log.log('REPLAY DELTAS');
-    log.log(replayDeltas);
-  }
+  log.log('RECORD DELTAS', recordDeltas);
+  log.log('REPLAY DELTAS', replayDeltas);
 
   //effects of events that were found in record browser but not replay browser
   var recordDeltasNotMatched = filterDivergences(recordDeltas, replayDeltas);
   //effects of events that were found in replay browser but not record browser
   var replayDeltasNotMatched = filterDivergences(replayDeltas, recordDeltas);
 
-  if (synthesisVerbose) {
-    log.log('recordDeltasNotMatched ', recordDeltasNotMatched);
-    log.log('replayDeltasNotMatched ', replayDeltasNotMatched);
-  }
+  log.log('recordDeltasNotMatched', recordDeltasNotMatched);
+  log.log('replayDeltasNotMatched', replayDeltasNotMatched);
 
   //the thing below is the stuff that's doing divergence synthesis
 
@@ -377,19 +398,22 @@ function synthesize(recordEventMessage,replayEventMessage,target) {
     //addComment('delta', JSON.stringify(recordDeltasNotMatched));
     if (delta.type == "We expect these nodes to be the same, but they're " +
                       'not.') {
-      generateMismatchedValueCompensationEvent(target, recordEventMessage, delta, true);
+      generateCompensationEvent(target, recordEventMessage, 
+                                delta, true);
     }
   }
 
-  //generateMismatchedValueCompensationEvent will change the state of the DOM to be what it
+  // not currently true
+  //generateCompensationEvent will change the state of the DOM to be what it
   //should have been, if the proper compensation events were in place
   //but we don't want to associate these changes with the next event
   //so let's snapshot the DOM again
-  if (recordDeltasNotMatched.length > 0 || replayDeltasNotMatched.length > 0) {
+  /*if (recordDeltasNotMatched.length > 0 || replayDeltasNotMatched.length > 0) {
     //curSnapshotReplay = snapshot();
     prevSnapshotRecord = curSnapshotRecord;
     curSnapshotRecord = snapshot();
   }
+*/
 }
 
 function checkWait(eventData) {
@@ -432,4 +456,12 @@ chrome.extension.sendMessage({type: 'getId', value: value}, function(resp) {
   port.postMessage({type: 'getParams', value: null});
 });
 
+var pollUrlId = window.setInterval(function() {
+  if (value.URL != document.URL) {
+    port.postMessage({type: 'url', value: document.URL});
+    value.URL = document.URL;
+  }
+}, 1000);
+
 })();
+

@@ -10,6 +10,7 @@ var PortManager = (function PortManagerClosure() {
     this.numPorts = 0;
     this.ports = {};
     this.portNameToTabId = {};
+    this.portNameToPortInfo = {};
     this.tabIdToPortNames = {};
     this.tabIdToCurrentPortInfo = {};
     this.portToSnapshot = {};
@@ -43,6 +44,9 @@ var PortManager = (function PortManagerClosure() {
     addSnapshot: function(name, snapshot) {
       this.portToSnapshot[name] = snapshot;
     },
+    updateUrl: function(port, url) {
+      this.portNameToPortInfo[port.name].URL = url;
+    },
     getNewId: function(value, sender) {
       this.numPorts++;
       var portName = '' + this.numPorts;
@@ -54,6 +58,7 @@ var PortManager = (function PortManagerClosure() {
 
       this.tabIdToTab[tabId] = sender.tab;
       this.portNameToTabId[portName] = tabId;
+      this.portNameToPortInfo[portName] = value;
 
       var tabIdToPortNames = this.tabIdToPortNames;
       if (!(tabId in tabIdToPortNames)) {
@@ -1052,6 +1057,8 @@ var handleMessage = function(port, request) {
   } else if (request.type == 'ack') {
     ports.setAck(request.value);
     bgLog.log('got ack');
+  } else if (request.type == 'url') {
+    ports.updateUrl(port, request.value);
   }
 };
 

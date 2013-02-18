@@ -119,7 +119,7 @@ function xPathToNodes(xpath) {
 //generate annotation events for the case where we just have different
 //values for properties of matched nodes
 function generateCompensationEvent(element, eventMessage,
-                                              delta, thisDeltaShouldHappen) {
+                                   delta, thisDeltaShouldHappen) {
   //console.log(element, eventData, delta);
   //first ensure that this element is actually the element on which we have diverged
 
