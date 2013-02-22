@@ -354,11 +354,8 @@ var Record = (function RecordClosure() {
       this.ports.sendToAll({type: 'deltas', value: null});
     },
     startReplayRecording: function _startReplayRecording() {
-      if (this.loadedScriptId != null) {
-        this.recordState = RecordState.REPLAYING;
-      } else {
-        this.recordState = RecordState.STOPPED;
-      }
+      this.recordState = RecordState.REPLAYING;
+
       this.replayEvents = [];
       this.replayComments = [];
       this.commentCounter = 0;
@@ -624,7 +621,10 @@ var Replay = (function ReplayClosure() {
       if (topFrame) {
         replayLog.log('assume port is top level page');
         var topFrame = portInfo.top;
-        if (topFrame.URL == msg.value.URL)
+        var commonUrl = lcs(topFrame.URL, msg.value.URL);
+
+        var commonRatio = commonUrl.length / msg.value.URL.length;
+        if (commonRatio > .8)
           newPort = ports.getPort(topFrame.portName);
       } else {
         replayLog.log('try to find port in one of the iframes');
@@ -753,7 +753,7 @@ var Replay = (function ReplayClosure() {
             var newTabId = newTab.id;
             replay.tabMapping[tab] = newTabId;
             replay.ports.tabIdToTab[newTabId] = newTab;
-            replay.setNextEvent(1000);
+            replay.setNextEvent(4000);
           }
         );
         return;
