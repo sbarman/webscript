@@ -175,7 +175,9 @@ function processEvent(eventData) {
     }
 
     recordLog.log('[' + id + '] event message:', eventMessage);
-    port.postMessage({type: 'event', value: eventMessage});
+    if (!params.simulataneous) {
+      port.postMessage({type: 'event', value: eventMessage});
+    }
 
     if (recording == RecordState.RECORDING) {
       prevRecordSnapshot = curRecordSnapshot;
@@ -191,9 +193,14 @@ function processEvent(eventData) {
 function updateRecordDeltas() {
   if (lastRecordEvent) {
     var deltas = getDomDivergence(prevRecordSnapshot, curRecordSnapshot);
-    var update = {type: 'updateEvent', value: {'deltas': deltas,
-                  'pageEventId': lastRecordEvent.pageEventId}};
-    port.postMessage(update);
+    if (!params.simultaneous) {
+      var update = {type: 'updateEvent', value: {'deltas': deltas,
+                    'pageEventId': lastRecordEvent.pageEventId}};
+      port.postMessage(update);
+    } else {
+      lastRecordEvent.deltas = deltas;
+      port.postMessage({type: 'event', value: lastRecordEvent});
+    }
   }
 }
 
