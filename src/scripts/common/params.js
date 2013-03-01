@@ -119,10 +119,14 @@ var params = null;
       allEventProps: true
     },
     replaying: {
+      saveReplay: false,
       enableAlerts: false
     },
     server: 'http://sbarman.webfactional.com/api/'
     //server: "http://127.0.0.1:8000/api/",
+    benchmarking: {
+      timeout: 120,
+    },
   };
 
 })();

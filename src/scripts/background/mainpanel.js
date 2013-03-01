@@ -100,14 +100,18 @@ var PortManager = (function PortManagerClosure() {
         var tabId = portManager.portNameToTabId[portName];
         var portInfo = portManager.tabIdToCurrentPortInfo[tabId];
 
-        if (portInfo.top.portName == portName) {
-          delete tabIdToCurrentPortInfo[tabId];
-        } else {
-          var frames = portInfo.frames;
-          for (var i = 0, ii = frames.length; i < ii; ++i) {
-            if (frames[i].portName == portName) {
-              frames.splice(i, 1);
-              break;
+        // the top level port might have already been disconnected which means
+        // portInfo will be null
+        if (portInfo != undefined) {
+          if (portInfo.top.portName == portName) {
+            delete tabIdToCurrentPortInfo[tabId];
+          } else {
+            var frames = portInfo.frames;
+            for (var i = 0, ii = frames.length; i < ii; ++i) {
+              if (frames[i].portName == portName) {
+                frames.splice(i, 1);
+                break;
+              }
             }
           }
         }
@@ -520,12 +524,14 @@ var Replay = (function ReplayClosure() {
   var ReplayState = {
     REPLAYING: 1,
     REPLAY_ACK: 2,
-    WAIT_ACK: 3
+    WAIT_ACK: 3,
+    FINISHED: 4,
   };
 
   Replay.prototype = {
-    replay: function _replay() {
+    replay: function _replay(cont) {
       replayLog.log('starting replay');
+      this.cont = cont;
       this.pause();
       this.record.startReplayRecording();
 
@@ -591,6 +597,15 @@ var Replay = (function ReplayClosure() {
     },
     finish: function _finish() {
       replayLog.log('finishing replay');
+
+      if (this.replayState == ReplayState.FINISHED)
+        return;
+
+      this.replayState = ReplayState.FINISHED
+      this.pause();
+      if (this.cont)
+        this.cont(this);
+
       var record = this.record;
       var scriptServer = this.scriptServer;
       setTimeout(function() {
@@ -600,7 +615,8 @@ var Replay = (function ReplayClosure() {
 
         record.stopReplayRecording();
 
-        if (scriptId && replayEvents.length > 0) {
+        if (params.replaying.saveReplay && scriptId && 
+            replayEvents.length > 0) {
           scriptServer.saveScript("replay", replayEvents, comments, scriptId);
           replayLog.log('saving replay:', replayEvents);
         }
@@ -717,7 +733,6 @@ var Replay = (function ReplayClosure() {
 
       $('#status').text('Replay ' + index);
       $('#' + id).get(0).scrollIntoView();
-      //$("#container").scrollTop($("#" + e.id).prop("offsetTop"));
 
       replayLog.log('background replay:', id, msg, port, tab);
 

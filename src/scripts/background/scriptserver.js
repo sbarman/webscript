@@ -116,6 +116,10 @@ var ScriptServer = (function ScriptServerClosure() {
       if (events.length == 0)
         return;
 
+      // make a copy of the array
+      events = events.slice(0);
+      comments = comments.slice(0);
+
       var scriptServer = this;
       var server = this.server;
       var postMsg = {};
@@ -260,6 +264,55 @@ var ScriptServer = (function ScriptServerClosure() {
         processData: false,
         accepts: 'application/json',
         dataType: 'json'
+      });
+      return null;
+    },
+    getBenchmarks: function _getBenchmarks(cont) {
+      var scriptServer = this;
+      var server = this.server;
+
+      $.ajax({
+        error: function(jqXHR, textStatus, errorThrown) {
+          scriptLog.log(jqXHR, textStatus, errorThrown);
+        },
+        success: function(data, textStatus, jqXHR) {
+          scriptLog.log(data, textStatus, jqXHR);
+          var benchmarks = data;
+          cont(benchmarks);
+        },
+        url: server + 'benchmark/?format=json',
+        type: 'GET',
+        processData: false,
+        accepts: 'application/json',
+        dataType: 'json'
+      });
+      return null;
+    },
+    saveBenchmarkRun: function _saveBenchmarkRun(benchmarkRun) {
+      var scriptServer = this;
+      var server = this.server;
+
+      var postMsg = {};
+      postMsg['benchmark'] = benchmarkRun.benchmark.id;
+      postMsg['successful'] = benchmarkRun.successful;
+      postMsg['events_executed'] = benchmarkRun.events_executed;
+      
+      if (benchmarkRun.errors)
+        postMsg['errror'] = benchmarkRun.errors;
+
+      $.ajax({
+        error: function(jqXHR, textStatus, errorThrown) {
+          scriptLog.log(jqXHR, textStatus, errorThrown);
+        },
+        success: function(data, textStatus, jqXHR) {
+          scriptLog.log(data, textStatus, jqXHR);
+        },
+        contentType: 'application/json',
+        data: JSON.stringify(postMsg),
+        dataType: 'json',
+        processData: false,
+        type: 'POST',
+        url: server + 'benchmark_run/',
       });
       return null;
     }
