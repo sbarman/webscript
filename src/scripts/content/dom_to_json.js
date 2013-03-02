@@ -15,6 +15,7 @@ var snapshotNode = null;
     returnVal.prop['nodeName'] = nodeName;
     returnVal.prop['xpath'] = xpath;
 
+/*
     if (node.hasChildNodes()) {
       var childNodes = node.childNodes;
       var children = returnVal.children;
@@ -33,19 +34,12 @@ var snapshotNode = null;
         else {
           childrenTags[childNodeName] += 1;
         }
-/*
-        if (oChild.nodeType === 4) {
-          var value = oChild.nodeValue;
-          if (value)
-            children.push(value); // nodeType is "CDATASection" (4)
-        } else
-*/
         if (nodeType === 3) {
           var value = child.nodeValue.trim();
           if (value)
             children.push(value); // nodeType is "Text" (3)
         } else if (nodeType === 1) {
-          /*&& !oChild.prefix &&*/
+          //&& !oChild.prefix &&
           if (!(childNodeName in ignoreTags) &&
               !child.classList.contains('replayStatus')) {
             // nodeType is "Element" (1)
@@ -57,6 +51,7 @@ var snapshotNode = null;
         }
       }
     }
+    */
 
     // possible failure due to cross-domain browser restrictions
     if (nodeName != 'iframe') {
