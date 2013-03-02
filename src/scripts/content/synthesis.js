@@ -12,7 +12,7 @@ var acceptTags = {
 var initialDivergences = false;
 var verbose = false;
 var scenarioVerbose = false;
-var synthesisVerbose = false;
+var synthesisVerbose = true;
 
 var oneArgFuncs = {};
 var twoArgFuncs = {
@@ -212,16 +212,18 @@ function generateCompensationEvent(element, eventMessage,
       //correct the diverging value so we don't diverge, since
       //our annotation event won't be able to fire till next time
       //(becuase it might involve a record action)
-      element[prop] = delta.replay.prop[prop];
+      element[prop] = delta.record.prop[prop];
+      
       if (synthesisVerbose) {
-        log.log('setting prop ', prop, ' to ', delta.replay.prop[prop]);
+        log.log('setting prop ', prop, ' to ', element[prop]);
       }
+      
 
       var depth = params.synthesis.depth;
       var optimization = params.synthesis.optimization;
       var newNode = findExpression(examplesForAnnotation, prop, depth,
                                    optimization);
-
+      
       if (newNode) {
         replayNodes.push(new TopNode(prop, newNode));
       } else {
@@ -1126,9 +1128,7 @@ function sendAlertRight(msg) {
 
 /* takes in two DOMs, traversing and lining up. main divergence code */
 function getDomDivergence(recordDom, replayDom) {
-  var body1 = findBody(recordDom);
-  var body2 = findBody(replayDom);
-  var divergences = recursiveVisit(body1, body2);
+  var divergences = recursiveVisit(recordDom, replayDom);
   return divergences;
 }
 

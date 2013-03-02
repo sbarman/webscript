@@ -8,6 +8,8 @@ var annotationEvents = {};
 
 var annotationEvents = {};
 
+var nodeToXPath = null;
+
 (function() {
 
 // Global variables
@@ -19,15 +21,23 @@ var inReplayTab = false;
 var mostRecentEventMessage;
 
 // record variables
-var curRecordSnapshot = snapshot();
+//var curRecordSnapshot = snapshot();
 var prevRecordSnapshot;
 var lastRecordEvent = null;
 var eventId = 0;
+var beforeRecordSnapshot;
+var afterRecordSnapshot;
+var beforeRecordSnapshotCurrEvent;
+var currEventTargetRecord;
 
 // replay variables
-var curReplaySnapshot = snapshot();
+//var curReplaySnapshot = snapshot();
 var prevReplaySnapshot;
 var lastReplayEvent = null;
+var beforeReplaySnapshot;
+var afterReplaySnapshot;
+var beforeReplaySnapshotCurrEvent;
+var currEventTargetReplay;
 
 // loggers
 var log = getLog('content');
@@ -44,7 +54,7 @@ function addComment(name, value) {
 
 // taken from http://stackoverflow.com/questions/2631820/im-storing-click-coor
 // dinates-in-my-db-and-then-reloading-them-later-and-showing/2631931#2631931
-function nodeToXPath(element) {
+nodeToXPath = function(element) {
 //  if (element.id !== '')
 //    return 'id("' + element.id + '")';
   if (element.tagName.toLowerCase() === 'html')
@@ -180,10 +190,18 @@ function processEvent(eventData) {
     }
 
     if (recording == RecordState.RECORDING) {
-      prevRecordSnapshot = curRecordSnapshot;
-      curRecordSnapshot = snapshot();
+      //prevRecordSnapshot = curRecordSnapshot;
+      //curRecordSnapshot = snapshot();
+      
+      if (currEventTargetRecord) {
+        beforeRecordSnapshot = beforeRecordSnapshotCurrEvent;
+        afterRecordSnapshot = snapshotNode(currEventTargetRecord);
+        //console.log("before, after", beforeRecordSnapshot, afterRecordSnapshot);
+        updateRecordDeltas();
+      }
+      beforeRecordSnapshotCurrEvent = snapshotNode(target);
+      currEventTargetRecord = target;
 
-      updateRecordDeltas();
       lastRecordEvent = eventMessage;
     }
   }
@@ -192,7 +210,7 @@ function processEvent(eventData) {
 
 function updateRecordDeltas() {
   if (lastRecordEvent) {
-    var deltas = getDomDivergence(prevRecordSnapshot, curRecordSnapshot);
+    var deltas = getDomDivergence(beforeRecordSnapshot, afterRecordSnapshot);
     if (!params.simultaneous) {
       var update = {type: 'updateEvent', value: {'deltas': deltas,
                     'pageEventId': lastRecordEvent.pageEventId}};
@@ -296,15 +314,25 @@ function simulate(request) {
     }
 
     // calculate the deltas between the last simulated event and this one
-    prevReplaySnapshot = curReplaySnapshot;
-    curReplaySnapshot = snapshot();
-    var replayDeltas = getDomDivergence(prevReplaySnapshot, curReplaySnapshot);
+    //prevReplaySnapshot = curReplaySnapshot;
+    //curReplaySnapshot = snapshot();
+    
+    if (currEventTargetReplay){
+      beforeReplaySnapshot = beforeReplaySnapshotCurrEvent;
+      afterReplaySnapshot = snapshotNode(currEventTargetReplay);
+      //console.log("before, after", beforeReplaySnapshot, afterReplaySnapshot);
+      var replayDeltas = getDomDivergence(beforeReplaySnapshot, afterReplaySnapshot);
+      
+      // check if these deltas match the deltas from the last simulated event
+      // and synthesize appropriate compensation events for unmatched deltas
+      synthesize(recordDeltas, replayDeltas, target, lastReplayEvent);
+    }
+    beforeReplaySnapshotCurrEvent = snapshotNode(target);
+    currEventTargetReplay = target;
 
-    // check if these deltas match the deltas from the last simulated event
-    // and synthesize appropriate compensation events for unmatched deltas
-    synthesize(recordDeltas, replayDeltas, target, lastReplayEvent);
 
     // run the new compensation events
+    
     for (var i in annotationEvents) {
       var annotation = annotationEvents[i];
       if (annotation.replay && annotation.guard(target, lastReplayEvent)) {
@@ -315,8 +343,9 @@ function simulate(request) {
         annotation.replay(target, lastReplayEvent);
       }
     }
+    
 
-    curReplaySnapshot = snapshot();
+    //curReplaySnapshot = snapshot();
   }
 
   lastReplayEvent = eventData

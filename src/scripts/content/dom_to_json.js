@@ -5,6 +5,7 @@
 
 var snapshotDom = null;
 var snapshot = null;
+var snapshotNode = null;
 
 (function() {
   var ignoreTags = {'script': true, 'style': true};
@@ -102,6 +103,12 @@ var snapshot = null;
   snapshotDom = descendToBody;
   snapshot = function() {
     return snapshotDom(document);
+  };
+  
+  snapshotNode = function(node) {
+	  var objTree = createObjTree(node, node.nodeName, nodeToXPath(node));
+	  console.log("objTree", objTree);
+	  return objTree;
   };
 
 })();
