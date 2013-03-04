@@ -97,6 +97,7 @@ var params = null;
   params = {
     user: 'sbarman',
     simultaneous: false,
+    localSnapshot: false,
     timing: 0,
     events: events,
     defaultProps: defaultProps,

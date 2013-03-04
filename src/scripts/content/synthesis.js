@@ -12,7 +12,7 @@ var acceptTags = {
 var initialDivergences = false;
 var verbose = false;
 var scenarioVerbose = false;
-var synthesisVerbose = true;
+var synthesisVerbose = false;
 
 var oneArgFuncs = {};
 var twoArgFuncs = {
@@ -212,7 +212,7 @@ function generateCompensationEvent(element, eventMessage,
       //correct the diverging value so we don't diverge, since
       //our annotation event won't be able to fire till next time
       //(becuase it might involve a record action)
-      element[prop] = delta.record.prop[prop];
+      element[prop] = delta.replay.prop[prop];
       
       if (synthesisVerbose) {
         log.log('setting prop ', prop, ' to ', element[prop]);
