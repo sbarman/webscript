@@ -16,44 +16,6 @@ var snapshotNode = null;
     returnVal.prop['nodeName'] = nodeName;
     returnVal.prop['xpath'] = xpath;
 
-/*
-    if (node.hasChildNodes()) {
-      var childNodes = node.childNodes;
-      var children = returnVal.children;
-
-      var childrenTags = {};
-      for (var i = 0, ii = childNodes.length; i < ii; ++i) {
-        var child = childNodes.item(i);
-        var nodeType = child.nodeType;
-
-        //let's track the number of tags of this kind we've seen in the
-        //children so far, to build the xpath
-        var childNodeName = child.nodeName.toLowerCase();
-        if (!(childNodeName in childrenTags)) {
-          childrenTags[childNodeName] = 1;
-        }
-        else {
-          childrenTags[childNodeName] += 1;
-        }
-        if (nodeType === 3) {
-          var value = child.nodeValue.trim();
-          if (value)
-            children.push(value); // nodeType is "Text" (3)
-        } else if (nodeType === 1) {
-          //&& !oChild.prefix &&
-          if (!(childNodeName in ignoreTags) &&
-              !child.classList.contains('replayStatus')) {
-            // nodeType is "Element" (1)
-            var newPath = xpath + '/' + childNodeName + '[' +
-                          childrenTags[childNodeName] + ']';
-            var child = createObjTree(child, childNodeName, newPath);
-            children.push(child);
-          }
-        }
-      }
-    }
-    */
-
     // possible failure due to cross-domain browser restrictions
     if (nodeName != 'iframe') {
       var propList = returnVal.prop;
@@ -76,7 +38,7 @@ var snapshotNode = null;
     return returnVal;
   }
 
-  function createObjTree(node, nodeName, xpath) {
+  function cloneSubtree(node, nodeName, xpath) {
     var returnVal = {children: [], prop: {}};
     returnVal.prop['nodeName'] = nodeName;
     returnVal.prop['xpath'] = xpath;
@@ -110,7 +72,7 @@ var snapshotNode = null;
             // nodeType is "Element" (1)
             var newPath = xpath + '/' + childNodeName + '[' +
                           childrenTags[childNodeName] + ']';
-            var child = createObjTree(child, childNodeName, newPath);
+            var child = cloneSubtree(child, childNodeName, newPath);
             children.push(child);
           }
         }
@@ -142,7 +104,7 @@ var snapshotNode = null;
   function descendToBody(node) {
     var nodeName = node.nodeName.toLowerCase();
     if (nodeName == 'body') {
-      var objTree = createObjTree(node, nodeName, 'html/body[1]');
+      var objTree = cloneSubtree(node, nodeName, 'html/body[1]');
       //console.log(objTree);
       return objTree;
     }

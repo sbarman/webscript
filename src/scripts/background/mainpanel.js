@@ -182,6 +182,10 @@ var Panel = (function PanelClosure() {
         controller.resend();
       });
 
+      $('#replayOne').click(function(eventObject) {
+        controller.replayOne();
+      });
+
       $('#paramsDiv').hide(1000);
 
       $('#paramsHide').click(function(eventObject) {
@@ -523,9 +527,11 @@ var Replay = (function ReplayClosure() {
 
   var ReplayState = {
     REPLAYING: 1,
-    REPLAY_ACK: 2,
-    WAIT_ACK: 3,
-    FINISHED: 4,
+    REPLAY_ONE: 2,
+    REPLAY_ACK: 3,
+    REPLAY_ONE_ACK: 4,
+    WAIT_ACK: 5,
+    FINISHED: 6,
   };
 
   Replay.prototype = {
@@ -534,6 +540,8 @@ var Replay = (function ReplayClosure() {
       this.cont = cont;
       this.pause();
       this.record.startReplayRecording();
+
+      this.ports.sendToAll({type: 'resetCompensation', value: null});
 
       var replay = this;
       this.timeoutHandle = setTimeout(function() {
@@ -585,6 +593,10 @@ var Replay = (function ReplayClosure() {
       if (this.timeoutHandle == null) {
         this.setNextEvent(0);
       }
+    },
+    replayOne: function _replayOne() {
+      this.replayState = ReplayState.REPLAY_ONE;
+      this.restart();
     },
     skip: function _skip() {
       this.index++;
@@ -711,6 +723,39 @@ var Replay = (function ReplayClosure() {
       return newPort;
     },
     guts: function _guts() {
+      var replayState = this.replayState;
+
+      // check for acks
+      if (replayState == ReplayState.WAIT_ACK) {
+        var ackReturn = this.ports.getAck(this.ackVar);
+        if (ackReturn != null && ackReturn == true) {
+          this.replayState = ReplayState.REPLAYING;
+          this.index++;
+          this.setNextEvent(0);
+
+          replayLog.log('found wait ack');
+          return;
+        }
+      } else if (replayState == ReplayState.REPLAY_ACK ||
+                 replayState == ReplayState.REPLAY_ONE_ACK) {
+        var ackReturn = this.ports.getAck(this.ackVar);
+        if (ackReturn != null && ackReturn == true) {
+          this.replayState = ReplayState.REPLAYING;
+          this.index++;
+          if (replayState == ReplayState.REPLAY_ACK)
+            this.setNextEvent(0);
+          else
+            this.pause();
+
+          replayLog.log('found replay ack');
+        } else {
+          this.setNextEvent(1000);
+
+          replayLog.log('continue waiting for replay ack');
+        }
+        return;
+      }
+
       var events = this.events;
       var index = this.index;
       var portMapping = this.portMapping;
@@ -776,38 +821,20 @@ var Replay = (function ReplayClosure() {
 
       // we have hopefully found a matching port, lets dispatch to that port
       var type = msg.value.type;
-      var replayState = this.replayState;
 
       if (replayState == ReplayState.WAIT_ACK) {
         var ackReturn = this.ports.getAck(this.ackVar);
-        if (ackReturn != null && ackReturn == true) {
-          this.replayState = ReplayState.REPLAYING;
-          this.setNextEvent(0);
-
-          replayLog.log('found wait ack');
-        } else {
+        if (ackReturn == null || ackReturn != true) {
           replayPort.postMessage(msg);
           this.setNextEvent(1000);
 
           replayLog.log('continue waiting for wait ack');
         }
-      } else if (replayState == ReplayState.REPLAY_ACK) {
-        var ackReturn = this.ports.getAck(this.ackVar);
-        if (ackReturn != null && ackReturn == true) {
-          this.replayState = ReplayState.REPLAYING;
-          this.setNextEvent(0);
-
-          replayLog.log('found replay ack');
-        } else {
-          this.setNextEvent(1000);
-
-          replayLog.log('continue waiting for replay ack');
-        }
-      } else if (replayState == ReplayState.REPLAYING) {
+      } else if (replayState == ReplayState.REPLAYING ||
+                 replayState == ReplayState.REPLAY_ONE) {
         this.ports.clearAck();
         if (type == 'wait') {
           replayPort.postMessage(msg);
-          this.index++;
           this.replayState = ReplayState.WAIT_ACK;
           this.setNextEvent(0);
 
@@ -817,9 +844,10 @@ var Replay = (function ReplayClosure() {
           try {
             replayPort.postMessage(msg);
             replayLog.log('sent message', msg);
-
-            this.index++;
-            this.replayState = ReplayState.REPLAY_ACK;
+            if (replayState == ReplayState.REPLAYING)
+              this.replayState = ReplayState.REPLAY_ACK;
+            else
+              this.replayState = ReplayState.REPLAY_ONE_ACK;
 
             replayLog.log('start waiting for replay ack');
           } catch (err) {
@@ -1004,6 +1032,9 @@ var Controller = (function ControllerClosure() {
     },
     resend: function() {
       this.replay.resend();
+    },
+    replayOne: function() {
+      this.replay.replayOne();
     },
     saveScript: function(name) {
       ctlLog.log('saving script');

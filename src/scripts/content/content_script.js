@@ -5,9 +5,6 @@
 
 var port;
 var annotationEvents = {};
-
-var annotationEvents = {};
-
 var nodeToXPath = null;
 
 (function() {
@@ -17,47 +14,42 @@ var recording = RecordState.STOPPED;
 var id = 'setme';
 
 // synthesis variabes
-var inReplayTab = false;
 var mostRecentEventMessage;
 
 // record variables
-//var curRecordSnapshot = snapshot();
-var prevRecordSnapshot;
-var lastRecordEvent = null;
-var eventId = 0;
-var beforeRecordSnapshot;
-var afterRecordSnapshot;
-var beforeRecordSnapshotCurrEvent;
-var currEventTargetRecord;
+var lastRecordEvent = null; // last event recorded
+var eventId = 0; // counter to give each event a unique id
+var lastRecordSnapshot; // snapshot (before and after) for last event
+var curRecordSnapshot; // snapshot (before and after) the current event
 
 // replay variables
-//var curReplaySnapshot = snapshot();
-var prevReplaySnapshot;
-var lastReplayEvent = null;
-var beforeReplaySnapshot;
-var afterReplaySnapshot;
-var beforeReplaySnapshotCurrEvent;
-var currEventTargetReplay;
+var lastReplayEvent = null; // last event replayed
+var lastReplaySnapshot; // snapshop taken before the event is replayed
+var curReplaySnapshot; // snapshot taken before the next event is replayed
+//var beforeReplaySnapshotCurrEvent;
+//var currEventTargetReplay;
 
 // loggers
 var log = getLog('content');
 var recordLog = getLog('record');
 var replayLog = getLog('replay');
-var synthesisLog = getLog('synthesis');
 
 //Snapshot functions, switched according to whether we're using local
 var snapshotReplay = null;
 var snapshotRecord = null;
-var reSnapshot = null;
-if (params.localSnapshot){
+var resnapshotBefore = null;
+var resnapshotAfter = null;
+
+if (params.localSnapshot) {
   snapshotReplay = localSnapshotReplay;
   snapshotRecord = localSnapshotRecord;
-  reSnapshot = localReSnapshot;
-}
-else{
+  resnapshotBefore = localResnapshotBefore;
+  resnapshotAfter = localResnapshotAfter;
+} else {
   snapshotReplay = globalSnapshotReplay;
   snapshotRecord = globalSnapshotRecord;
-  reSnapshot = globalReSnapshot;
+  resnapshotBefore = globalResnapshotBefore;
+  resnapshotAfter = globalResnapshotAfter;
 }
 
 // Utility functions
@@ -165,7 +157,8 @@ function processEvent(eventData) {
     var type = eventData.type;
     var dispatchType = getEventType(type);
     var properties = getEventProps(type);
-    recordLog.log('[' + id + '] process event:', type, dispatchType, eventData);
+    recordLog.log('[' + id + '] process event:', type, dispatchType,
+                  eventData);
 
     var target = eventData.target;
     var nodeName = target.nodeName.toLowerCase();
@@ -206,58 +199,43 @@ function processEvent(eventData) {
 
     if (recording == RecordState.RECORDING) {
       snapshotRecord(target);
-      if (beforeRecordSnapshot){
+      if (lastRecordSnapshot){
         updateRecordDeltas();
       }
       
-      //snapshotRecord(target);
       lastRecordEvent = eventMessage;
     }
   }
   return true;
 };
 
-function globalSnapshotRecord(target){
-  beforeRecordSnapshot = afterRecordSnapshot;
-  afterRecordSnapshot = snapshot();
+function globalSnapshotRecord(target) {
+  var curSnapshot = snapshot();
+
+  lastRecordSnapshot = curRecordSnapshot;
+  if (lastRecordSnapshot)
+    lastRecordSnapshot.after = curSnapshot;
+
+  curRecordSnapshot = {before: curSnapshot};
 }
 
-/*
-function globalSnapshotRecord(target){
-  beforeRecordSnapshot = curRecordSnapshot;
-  afterRecordSnapshot = snapshot();
-  updateRecordDeltas();
-}
-* */
+function localSnapshotRecord(target) {
+  lastRecordSnapshot = curRecordSnapshot;
+  if (lastRecordSnapshot)
+    lastRecordSnapshot.after = snapshotNode(lastRecordSnapshot.target);
 
-function localSnapshotRecord(target){
-  beforeRecordSnapshot = beforeRecordSnapshotCurrEvent;
-  if (currEventTargetRecord){
-    afterRecordSnapshot = snapshotNode(currEventTargetRecord);
-  }
-  beforeRecordSnapshotCurrEvent = snapshotNode(target);
-  currEventTargetRecord = target;
+  curRecordSnapshot = {before: snapshotNode(target), target: target};
 }
-/*
-function localSnapshotRecord(target){
-  if (currEventTargetRecord) {
-    beforeRecordSnapshot = beforeRecordSnapshotCurrEvent;
-    afterRecordSnapshot = snapshotNode(currEventTargetRecord);
-    //console.log("before, after", beforeRecordSnapshot, afterRecordSnapshot);
-    updateRecordDeltas();
-  }
-  beforeRecordSnapshotCurrEvent = snapshotNode(target);
-  currEventTargetRecord = target;
-}
-* */
 
 function updateRecordDeltas() {
   if (lastRecordEvent) {
-    var deltas = getDomDivergence(beforeRecordSnapshot, afterRecordSnapshot);
+    var deltas = getDomDivergence(lastRecordSnapshot.before, 
+                                  lastRecordSnapshot.after);
     if (!params.simultaneous) {
       var update = {type: 'updateEvent', value: {'deltas': deltas,
                     'pageEventId': lastRecordEvent.pageEventId}};
       port.postMessage(update);
+      recordLog.log('updated deltas:', update);
     } else {
       lastRecordEvent.deltas = deltas;
       port.postMessage({type: 'event', value: lastRecordEvent});
@@ -280,6 +258,8 @@ function handleMessage(request) {
     updateRecordDeltas();
   } else if (request.type == 'reset') {
     reset();
+  } else if (request.type == 'resetCompensaton') {
+    annotationEvents = {};
   } else if (request.type == 'url') {
     port.postMessage({type: 'url', value: document.URL});
   }
@@ -316,11 +296,6 @@ function simulate(request) {
 
   replayLog.log('simulating: ', eventName, eventData);
 
-  //we're in simulate, so we must be in a tab that's doing replay
-  //we don't want to have to snapshot every time as though we're
-  //recording.  so let's set inReplayTab to true
-  inReplayTab = true;
-
   if (eventName == 'wait') {
     checkWait(eventData);
     return;
@@ -344,6 +319,10 @@ function simulate(request) {
     // make sure the deltas from the last event actually happened
     var recordDeltas = lastReplayEvent.deltas || [];
 
+/*    resnapshotAfter();
+    if (curReplaySnapshot)
+      var beforeAnnotation = curReplaySnapshot.after;
+*/
     // run the old compensation events
     for (var i in annotationEvents) {
       var annotation = annotationEvents[i];
@@ -356,14 +335,15 @@ function simulate(request) {
       }
     }
 
-    // calculate the deltas between the last simulated event and this one
-    //prevReplaySnapshot = curReplaySnapshot;
-    //curReplaySnapshot = snapshot();
-    
     snapshotReplay(target);
-    if (beforeReplaySnapshot){
-      var replayDeltas = getDomDivergence(beforeReplaySnapshot, afterReplaySnapshot);
-      // check if these deltas match the deltas from the last simulated event
+    if (lastReplaySnapshot){
+      var replayDeltas = getDomDivergence(lastReplaySnapshot.before,
+                                          lastReplaySnapshot.after);
+      //var replayDeltas = getDomDivergence(lastReplaySnapshot.after,
+      //                                    lastReplaySnapshot.before);
+/*      var actualDeltas = getDomDivergence(lastReplaySnapshot.before,
+                                           beforeAnnotation);
+*/      // check if these deltas match the deltas from the last simulated event
       // and synthesize appropriate compensation events for unmatched deltas
       synthesize(recordDeltas, replayDeltas, target, lastReplayEvent);
     }
@@ -387,7 +367,7 @@ function simulate(request) {
     //annotation events may have changed the effects of the last event
     //have to make sure that anything associated with this event isn't
     //from annotation events of last event
-    reSnapshot(target);
+    resnapshotBefore(target);
   }
 
   lastReplayEvent = eventData
@@ -429,13 +409,6 @@ function simulate(request) {
       var prop = propsToSet[i];
       setEventProp(oEvent, prop, options[prop]);
     }
-    /*
-    for (var p in options) {
-      if (p != "nodeName" && p != "dispatchType" && p != "URL" &&
-          p != "timeStamp")
-        setEventProp(oEvent, p, options[p]);
-    }
-    */
   } else if (eventType == 'TextEvent') {
     oEvent.initTextEvent(eventName, options.bubbles, options.cancelable,
         document.defaultView, options.data, options.inputMethod,
@@ -459,25 +432,39 @@ function simulate(request) {
 }
 
 function globalSnapshotReplay(target){
-  beforeReplaySnapshot = afterReplaySnapshot;
-  afterReplaySnapshot = snapshot();
+  var curSnapshot = snapshot();
+
+  lastReplaySnapshot = curReplaySnapshot;
+  if (lastReplaySnapshot)
+    lastReplaySnapshot.after = curSnapshot;
+
+  curReplaySnapshot = {before: curSnapshot};
 }
 
 function localSnapshotReplay(target){
-  beforeReplaySnapshot = beforeReplaySnapshotCurrEvent;
-  if (currEventTargetReplay){
-    afterReplaySnapshot = snapshotNode(currEventTargetReplay);
-  }
-  beforeReplaySnapshotCurrEvent = snapshotNode(target);
-  currEventTargetReplay = target;
+  lastReplaySnapshot = curReplaySnapshot;
+  if (lastReplaySnapshot)
+    lastReplaySnapshot.after = snapshotNode(lastReplaySnapshot.target);
+
+  curReplaySnapshot = {before: snapshotNode(target), target: target};
 }
 
-function globalReSnapshot(target){
-  afterReplaySnapshot = snapshot();
+function globalResnapshotBefore(target){
+  curReplaySnapshot.before = snapshot();
 }
 
-function localReSnapshot(target){
-  beforeReplaySnapshotCurrEvent = snapshotNode(target);
+function localResnapshotBefore(target){
+  curReplaySnapshot.before = snapshotNode(target);
+}
+
+function globalResnapshotAfter() {
+  if (curReplaySnapshot)
+    curReplaySnapshot.after = snapshot();
+}
+
+function localResnapshotAfter() {
+  if (curReplaySnapshot)
+    curReplaySnapshot.after = snapshotNode(curReplaySnapshot.target);
 }
 
 function synthesize(recordDeltas, replayDeltas, target, recordEventMessage) {
@@ -504,18 +491,6 @@ function synthesize(recordDeltas, replayDeltas, target, recordEventMessage) {
                                 delta, true);
     }
   }
-
-  // not currently true
-  //generateCompensationEvent will change the state of the DOM to be what it
-  //should have been, if the proper compensation events were in place
-  //but we don't want to associate these changes with the next event
-  //so let's snapshot the DOM again
-  /*if (recordDeltasNotMatched.length > 0 || replayDeltasNotMatched.length > 0) {
-    //curSnapshotReplay = snapshot();
-    prevSnapshotRecord = curSnapshotRecord;
-    curSnapshotRecord = snapshot();
-  }
-*/
 }
 
 function checkWait(eventData) {

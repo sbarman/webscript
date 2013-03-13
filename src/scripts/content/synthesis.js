@@ -120,32 +120,25 @@ function xPathToNodes(xpath) {
 //values for properties of matched nodes
 function generateCompensationEvent(element, eventMessage,
                                    delta, thisDeltaShouldHappen) {
-  //console.log(element, eventData, delta);
+  log.log("Generating compensation event:", element, eventMessage, delta);
   //first ensure that this element is actually the element on which we have diverged
 
   //we know that our element will have the same xpath as the eventData specified
   //but this may not be the same xpath to the corresponding element that was used
   //during record time.  So we have to make sure that the xpath of the correct divergence
   //was matched with the xpath of the element
-  if (eventMessage.nodeName != delta.record.prop.nodeName.toLowerCase()) {
+  if (eventMessage.nodeName != delta.record.prop.nodeName.toLowerCase())
     return;
-  }
+
   if (delta.record.prop.type && delta.replay.prop.type &&
-      delta.record.prop.type == 'hidden' &&
-      delta.replay.prop.type == 'hidden') {
+      delta.record.prop.type == 'hidden' && delta.replay.prop.type == 'hidden')
     return;
-  }
+
   if (delta.record.prop.hidden && delta.replay.prop.hidden &&
-      delta.record.prop.hidden == 'true' &&
-      delta.replay.prop.hidden == 'true') {
+      delta.record.prop.hidden == 'true' && delta.replay.prop.hidden == 'true')
     return;
-  }
 
   if (thisDeltaShouldHappen) {
-    if (synthesisVerbose){
-      log.log("delta", delta);
-    }
-
     var typeOfNode = eventMessage.nodeName;
     var typeOfEvent = eventMessage.type;
     var name = typeOfEvent + '_' + typeOfNode;
@@ -154,8 +147,7 @@ function generateCompensationEvent(element, eventMessage,
     var examplesForAnnotation = [];
     if (annotationEvents[name]) {
       examplesForAnnotation = annotationEvents[name].examples;
-    }
-    else {
+    } else {
       annotationEvents[name] = {};
       annotationEvents[name].examples = examplesForAnnotation;
     }
@@ -176,33 +168,13 @@ function generateCompensationEvent(element, eventMessage,
     };
     examplesForAnnotation.push(newExample);
 
-    if (synthesisVerbose) {
-      log.log('EXAMPLES', examplesForAnnotation);
-    }
+    log.log('annotation examples:', examplesForAnnotation,
+            examplesForAnnotation.length);
 
-    /*
-    var propsToChange = [];
-    for (var i = 0; i < examplesForAnnotation.length; i++) {
-      var example = examplesForAnnotation[i];
-      var props = divergingProps({
-        'prop': example.elementPropsBefore
-      }, {
-        'prop': example.elementPropsAfter
-      });
-      for (var j = 0; j < props.length; j++) {
-        var prop = props[j];
-        if (!_.contains(propsToChange, prop)) {
-          propsToChange.push(prop);
-        }
-      }
-    }
-    */
     var propsToChange = delta.divergingProps;
     propsToChange = _.without(propsToChange, params.synthesis.omittedProps);
 
-    if (synthesisVerbose) {
-      log.log(name, ': propsToChange ', propsToChange);
-    }
+    log.log('props to change:', propsToChange);
 
     var replayNodes = [];
     var recordNodes = [];
@@ -212,12 +184,9 @@ function generateCompensationEvent(element, eventMessage,
       //correct the diverging value so we don't diverge, since
       //our annotation event won't be able to fire till next time
       //(becuase it might involve a record action)
+      log.log('Setting prop ', prop, ' from ', element[prop], ' to ',
+              delta.replay.prop[prop]);
       element[prop] = delta.replay.prop[prop];
-      
-      if (synthesisVerbose) {
-        log.log('setting prop ', prop, ' to ', element[prop]);
-      }
-      
 
       var depth = params.synthesis.depth;
       var optimization = params.synthesis.optimization;
@@ -228,25 +197,21 @@ function generateCompensationEvent(element, eventMessage,
         replayNodes.push(new TopNode(prop, newNode));
       } else {
         //else, use the value of valueAtRecordAfter
-        eventMessage[prop + '_value'] = delta.replay.prop[prop];
-        if (synthesisVerbose) {
-          log.log('NEW ANNOTATION: going to use the value of the ' +
-                      'record prop', prop);
-        }
+        //eventMessage[prop + '_value'] = delta.replay.prop[prop];
+        log.log('NEW ANNOTATION: going to use the value of the ' +
+                'record prop', prop);
         newNode = new Node('mirror', prop);
         replayNodes.push(new TopNode(prop, newNode));
-        var newRecordNode = new Node('mirrorRecord', prop);
-        recordNodes.push(new TopNode(prop, newRecordNode));
+        recordNodes.push(new TopNode(prop, new Node('mirrorRecord', prop)));
       }
 
-      log.log('NEW ANNOTATION STATEMENT', name, prop, newNode.toString());
+      log.log('new annotation event:', name, prop, newNode.toString());
       sendAlertRight(name + ' ' + prop + '<br>' + newNode.toString());
       for (var j in examplesForAnnotation) {
         var example = examplesForAnnotation[j];
-        if (synthesisVerbose){
-          log.log('prop', prop, 'before', example.elementPropsBefore[prop],
-                      'after', example.elementPropsAfter[prop]);
-        }
+        log.log('annotation event for prop:', prop, ', before:',
+                example.elementPropsBefore[prop],
+                ', after:', example.elementPropsAfter[prop]);
       }
     }
 
@@ -256,9 +221,7 @@ function generateCompensationEvent(element, eventMessage,
         typeOfEvent, replayNodes, recordNodes, newExample);
     //the line below actually runs the compensation event
     //if (compensationEvent){compensationEvent.replay(element,eventMessage);}
-    if (synthesisVerbose) {
-      log.log('annotation events after addition ', annotationEvents);
-    }
+    log.log('annotation events after addition ', annotationEvents);
   }
 }
 
@@ -469,8 +432,6 @@ function findSatisfyingExpressionOptimized(examples, prop, depth) {
     }
   }
 
-  //console.log(values);
-
   var deepNode = deepMatchingValueOptimized(examples, prop, values, depth);
   return deepNode;
 }
@@ -574,7 +535,7 @@ function deepMatchingValue(examples, targetProp, nodesToTest, componentNodes,
 }
 
 function deepMatchingValueOptimized(examples, targetProp, values, depth) {
-  console.log(examples, targetProp, values, depth);
+  // console.log(examples, targetProp, values, depth);
   var valuesForLater = _.clone(values);
   var examplesLength = examples.length;
 
@@ -612,7 +573,7 @@ function deepMatchingValueOptimized(examples, targetProp, values, depth) {
   }
 
   for (var tuple1 in values) {
-    var tuple1vals = values[tuple1][0];
+    var tupl// e1vals = values[tuple1][0];
     var node1 = values[tuple1][1];
     for (var tuple2 in values) {
       var tuple2vals = values[tuple2][0];
@@ -923,8 +884,9 @@ function makeFunction(topNode,targetProp,node,RHSFunction){
     } else {
       wholeFunction = function(eventMessage, element) {
         if ((typeof element[targetProp]) !== 'undefined') {
+          log.log("before compensation:", element[targetProp]);
           element[targetProp] = RHSFunction(eventMessage, element);
-          console.log("element[",targetProp,"]: ", element[targetProp]);
+          log.log("after compensation:", element[targetProp]);
         }
       };
     }
@@ -1107,7 +1069,6 @@ function sendAlert(msg) {
     font-size:10px');
   replayStatusDiv.innerHTML = msg;
   document.body.appendChild(replayStatusDiv);
-  log.log('appended child', replayStatusDiv.innerHTML);
 }
 
 function sendAlertRight(msg) {
@@ -1123,7 +1084,6 @@ function sendAlertRight(msg) {
     font-size:13px');
   replayStatusDiv.innerHTML = msg;
   document.body.appendChild(replayStatusDiv);
-  log.log('appended child', replayStatusDiv.innerHTML);
 }
 
 /* takes in two DOMs, traversing and lining up. main divergence code */
@@ -1263,17 +1223,25 @@ function findBody(dom) {
 
 /* tries to line up DOM nodes, descends through DOM */
 function recursiveVisit(obj1, obj2) {
+/*  if (!obj1.prop) {
+    console.log("asdasd");
+  } else {
+    if (obj1.prop.id == "gbqfq")
+      console.log("gahhh");
+  }
+*/
+
+  if (!obj1 && !obj2)
+    throw "both nodes doesn't actually exist";
 
   if (verbose) {
-    console.log('recursiveVisit', obj1, obj2);
-    console.log(similarityString(obj1));
-    console.log(similarityString(obj2));
+    log.log('recursiveVisit', obj1, obj2);
+    log.log(nodeToString(obj1));
+    log.log(nodeToString(obj2));
   }
 
+  // both nodes have children
   if (obj1 && obj2 && obj1.children && obj2.children) {
-    if (verbose) {
-      console.log('children');
-    }
     var divergences = [];
     var children1 = obj1.children;
     var children2 = obj2.children;
@@ -1286,49 +1254,38 @@ function recursiveVisit(obj1, obj2) {
     //among its children, so let's just add this divergence and continue
     //descending
     if (!nodeEquals(obj1, obj2)) {
-      if (verbose || scenarioVerbose) {
-        console.log('Scenario 11 divergence, we tried to match a couple of' +
-                    " nodes that aren't nodeEqual.");
-        console.log(obj1, obj2);
+      if (verbose) {
+        log.log("We tried to match a couple of nodes that aren't nodeEqual.");
+        log.log(obj1, obj2);
       }
       
-      var props1;
-      var props2;
-      obj1.prop ? props1 = _.omit(obj1.prop, params.synthesis.omittedProps) : [];
-      obj2.prop ? props2 = _.omit(obj2.prop, params.synthesis.omittedProps) : [];
+      var props1 = obj1.prop || [];
+      var props2 = obj2.prop || [];
+      props1 = _.omit(props1, params.synthesis.omittedProps);
+      props2 = _.omit(props2, params.synthesis.omittedProps);
       
-      //This is the call to divergingProps that's giving us so many
-      //instances of diverging prop weirdness
-      //the problem is that we try to call divergingProps even on
-      //things without properties (like text or something labeled Hidden Fields?)
       divergences.push({
         'type': "We expect these nodes to be the same, but they're not.",
         'record': obj1,
         'replay': obj2,
         'relevantChildren': [],
         'relevantChildrenXPaths': [xpathFromAbstractNode(obj2)],
-        'divergingProps': divergingProps({
-          'prop': props1
-        }, {
-          'prop': props2
-        })
+        'divergingProps': divergingProps({'prop': props1}, {'prop': props2})
       });
     }
 
-    //if a different number of children, definitely want to assumerecursiveVisit
     //these objects have messy children that need matching
     if (numChildren1 != numChildren2) {
       if (verbose) {
-        console.log('numchildren is different');
+        log.log('numchildren is different');
       }
       divergences = divergences.concat(
           recursiveVisitMismatchedChildren(obj1, obj2));
       return divergences;
     }
 
-    if (verbose) {
-      console.log('about to try going through the children');
-    }
+    if (verbose)
+      log.log('about to try going through the children');
 
     //proceed on the assumption that we can just index into these
     //children without difficulty, only change our mind if we find
@@ -1342,8 +1299,8 @@ function recursiveVisit(obj1, obj2) {
     }
 
     if (verbose) {
-      console.log('we found that the matched children were nodeEqual.' +
-                  "  we're going to recurse normally");
+      log.log('we found that the matched children were nodeEqual. ' +
+              "we're going to recurse normally");
     }
 
     //if we're here, we didn't have to do mismatched children at this step
@@ -1355,9 +1312,10 @@ function recursiveVisit(obj1, obj2) {
 
     return divergences;
   } else {
-    if (verbose) {
-      console.log("don't have children of both objects");
-    }
+    // at least one node doesn't have children
+    if (verbose)
+      log.log("don't have children of both objects");
+
     //we hit this if only one of obj1 and obj2 has children
     //or if only one of obj1 and obj2
     //this is bad stuff.  we matched all the parents, but things went
@@ -1365,13 +1323,10 @@ function recursiveVisit(obj1, obj2) {
     //seems like probably a dom node was added to or removed from
     //obj1 or obj2
     if (!obj1) {
-      if (!(obj2 && obj2.prop && obj2.prop.innerText)) {
-        return [];
-      }
       if (verbose || scenarioVerbose) {
-        console.log('Scenario 6 divergence, For some reason, we called' +
-                    ' recursiveVisit without an obj1');
-        console.log(obj1, obj2);
+        log.log('For some reason, we called ' +
+                'recursiveVisit without an obj1');
+        log.log(obj1, obj2);
       }
       return [{
         'type': 'A node is present that was not present in the original page.',
@@ -1381,13 +1336,10 @@ function recursiveVisit(obj1, obj2) {
         'relevantChildrenXPaths': [xpathFromAbstractNode(obj2)]
       }];
     } else if (!obj2) {
-      if (!(obj1 && obj1.prop && obj1.prop.innerText)) {
-        return [];
-      }
       if (verbose || scenarioVerbose) {
-        console.log('Scenario 7 divergence, for some reason we called' +
-                    ' recursiveVisit without an obj2');
-        console.log(obj1, obj2);
+        log.log('For some reason we called ' +
+                    'recursiveVisit without an obj2');
+        log.log(obj1, obj2);
       }
       return [{
         'type': 'A node is missing that was present in the original page.',
@@ -1397,21 +1349,9 @@ function recursiveVisit(obj1, obj2) {
         'relevantChildrenXPaths': [xpathFromAbstractNode(obj2)]
       }];
     } else if (obj1.children) {
-
-      var text = '';
-      for (var i = 0; i < obj1.children.length; i++) {
-        var child = obj1.children[i];
-        if (child.prop && child.prop.innerText) {
-          text += child.prop.innerText;
-        }
-      }
-      if (text == '') {
-        return [];
-      }
-
       if (verbose || scenarioVerbose) {
-        console.log('Scenario 8 divergence, obj2 lacks children');
-        console.log(obj1, obj2);
+        log.log('obj2 lacks children');
+        log.log(obj1, obj2);
       }
       return [{
         'type': 'A node or nodes is missing that was present in the ' +
@@ -1422,21 +1362,9 @@ function recursiveVisit(obj1, obj2) {
         'relevantChildrenXPaths': [xpathFromAbstractNode(obj2)]
       }];
     } else if (obj2.children) {
-
-      var text = '';
-      for (var i = 0; i < obj2.children.length; i++) {
-        var child = obj2.children[i];
-        if (child.prop && child.prop.innerText) {
-          text += child.prop.innerText;
-        }
-      }
-      if (text == '') {
-        return [];
-      }
-
       if (verbose || scenarioVerbose) {
-        console.log('Scenario 9 divergence, obj1 lacks children');
-        console.log(obj1, obj2);
+        log.log('obj1 lacks children');
+        log.log(obj1, obj2);
       }
       return [{
         'type': 'A node or nodes is present that was not present in the ' +
@@ -1446,20 +1374,17 @@ function recursiveVisit(obj1, obj2) {
         'relevantChildren': obj2.children,
         'relevantChildrenXPaths': [xpathFromAbstractNode(obj2)]
       }];
-    }
     //we also hit this if neither node has children.
-    //then we've hit leaves, and the leaves must diverge, or we
-    //wouldn't have called this method on them
-    else {
+    } else {
       //neither has children
       if (nodeEquals(obj1, obj2)) {
         //Yay!  We descended all the way, and the nodes are the same
         return [];
       }
-      if (verbose || scenarioVerbose) {
-        console.log('Scenario 10 divergence, descended all the way, and ' +
+      if (verbose) {
+        log.log('Descended all the way, and ' +
                     "the nodes aren't the same");
-        console.log(obj1, obj2);
+        log.log(obj1, obj2);
       }
       //sad, we descended all the way and the nodes aren't the same
       return [{
@@ -1489,8 +1414,8 @@ function recursiveVisitMismatchedChildren(obj1, obj2) {
 
   if (verbose) {
     console.log('recursive visit mismatched children', obj1, obj2);
-    console.log(similarityString(obj1));
-    console.log(similarityString(obj2));
+    console.log(nodeToString(obj1));
+    console.log(nodeToString(obj2));
   }
 
   for (var i = 0; i < numChildren1; i++) {
@@ -1507,31 +1432,30 @@ function recursiveVisitMismatchedChildren(obj1, obj2) {
 
   for (var i = 0; i < numChildren2; i++) {
     var child2 = children2[i];
+    var child1 = children1[i];
     //first let's see if the corresponding child actually does work
     if (i < numChildren1 && (
-    sameId(child2, children2[i]) || sameTagAndTagSufficient(child2,
-           children1[i]) || nodeEquals(child2, children1[i]) ||
-           similarity(child2, children1[i]) > similarityThreshold)) {
+        sameId(child2, child1) || sameTagAndTagSufficient(child2,
+        child1) || nodeEquals(child2, child1) ||
+        similarity(child2, child1) > similarityThreshold)) {
       children2MatchedWith[i] = i;
       children1MatchedWith[i] = i;
       children1NumMatches[i]++;
-    }
     //otherwise let's do our matching based just on similarity
-    else {
-
+    } else {
       if (verbose) {
-        console.log("didn't match i", child2, children1[i]);
-        console.log(similarityString(child2));
-        console.log(similarityString(children1[i]));
-        console.log('nodeEquals', nodeEquals(child2, children1[i]));
-        if (child2 && children1[i] && child2.prop && children1[i].prop &&
-            child2.prop.tagName && children1[i].prop.tagName) {
+        console.log("didn't match i", child2, child1);
+        console.log(nodeToString(child2));
+        console.log(nodeToString(child1));
+        console.log('nodeEquals', nodeEquals(child2, child1));
+        if (child2 && child1 && child2.prop && child1.prop &&
+            child2.prop.tagName && child1.prop.tagName) {
           console.log('tagName ', child2.prop.tagName ==
-                      children1[i].prop.tagName,
+                      child1.prop.tagName,
                       (child2.prop.tagName in acceptTags));
         }
-        console.log('similarity', similarity(child2, children1[i]),
-                    similarity(child2, children1[i]) > similarityThreshold);
+        console.log('similarity', similarity(child2, child1),
+                    similarity(child2, child1) > similarityThreshold);
       }
 
       var maxSimilarityScore = 0;
@@ -1565,14 +1489,10 @@ function recursiveVisitMismatchedChildren(obj1, obj2) {
         children2MatchedWith[i] = maxSimilarityScoreIndex;
         children1MatchedWith[maxSimilarityScoreIndex] = i;
         children1NumMatches[maxSimilarityScoreIndex]++;
-      }
       //otherwise, let's assume we haven't found a match for child2
       //and it was added to obj2's page
-      else if (children2MatchedWith[i] == -1) {
-        if (!(child2 && child2.prop && child2.prop.innerText)) {
-          return [];
-        }
-        if (verbose || scenarioVerbose) {
+      } else if (children2MatchedWith[i] == -1) {
+        if (verbose) {
           console.log("Scenario 1 divergence, couldn't find a match for " +
                       'child2', child2, 'in the original page');
           console.log(obj1, obj2);
@@ -1671,7 +1591,7 @@ function recursiveVisitMismatchedChildren(obj1, obj2) {
         console.log(obj1, obj2);
       }
       if (!(children1[i].prop && children1[i].prop.innerText)) {
-        return [];
+        continue;
       }
       divergences.push({
         'type': 'A node is missing that was present in the original page.',
@@ -1686,7 +1606,7 @@ function recursiveVisitMismatchedChildren(obj1, obj2) {
 }
 
 /* toString for DOM nodes */
-function similarityString(obj1) {
+function nodeToString(obj1) {
   if (obj1 && obj1.children) {
 
     var obj1String = obj1.prop.tagName;
@@ -1725,7 +1645,7 @@ function similarity(obj1, obj2) {
   //maybe just put down tags.  that'd be nice I think
   //we'll check to depth 4
   var ret = tagMatchesAndTotalTags(obj1, obj2, 1);
-  //console.log("similarity of ", similarityString(obj1), " and ", similarityString(obj2), "is", ret.tagMatches/ret.totalTags);
+  //console.log("similarity of ", nodeToString(obj1), " and ", nodeToString(obj2), "is", ret.tagMatches/ret.totalTags);
   var score = ret.tagMatches / ret.totalTags;
   return score;
 }
