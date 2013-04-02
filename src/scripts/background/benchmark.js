@@ -48,6 +48,8 @@ var Benchmarker = (function BenchmarkerClosure() {
     runBenchmark: function _runBenchmark(events, success_condition, cont) {
       var replay = new Replay(events, this.panel, this.ports, 
                               this.record, this.scriptServer);
+      controller.replay = replay;
+
       // kill script after timeout period
       var timeoutId = setTimeout(function() {
         replay.finish();

@@ -3,6 +3,13 @@
 
 'use strict';
 
+
+/*chrome.webRequest.onBeforeRequest.addListener(
+  function(info) {
+    console.log("Cat intercepted: ", info);
+  }, {urls: ["<all_urls>"]}
+);*/
+
 (function() {
   var panelWindow = undefined;
 
