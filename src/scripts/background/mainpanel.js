@@ -453,22 +453,6 @@ var Record = (function RecordClosure() {
       }
       this.commentCounter = 0;
     },
-    updateEvent: function _updateEvent(eventRequest, portName) {
-      var events = this.events;
-      var updates = eventRequest.value;
-      var pageEventId = updates.pageEventId;
-
-      for (var i = events.length - 1; i >= 0; --i) {
-        var e = events[i];
-        var msgValue = e.msg.value;
-        if (e.port == portName && msgValue.pageEventId == pageEventId) {
-          for (key in updates) {
-            msgValue[key] = updates[key];
-          }
-          break;
-        }
-      }
-    },
     clearEvents: function _clearEvents() {
       this.loadedScriptId = null;
       this.events = [];
@@ -629,7 +613,8 @@ var Replay = (function ReplayClosure() {
 
         if (params.replaying.saveReplay && scriptId && 
             replayEvents.length > 0) {
-          scriptServer.saveScript("replay", replayEvents, comments, scriptId);
+          scriptServer.saveScript("replay " + scriptId, replayEvents, comments,
+                                  scriptId);
           replayLog.log('saving replay:', replayEvents);
         }
       }, 1000);
@@ -852,6 +837,14 @@ var Replay = (function ReplayClosure() {
             replayLog.log('start waiting for replay ack');
           } catch (err) {
             replayLog.log('ERROR:', err.message, err);
+            if (err.message == "Attempting to use a disconnected port object") {
+              // we probably navigated away from the page so lets skip all
+              // events that use this same port
+              while (events[index].port == port) {
+                ++index;
+              }
+              this.index = index;
+            }
           }
           this.setNextEvent();
         }
@@ -1090,8 +1083,6 @@ function handleIdMessage(request, sender, sendResponse) {
 var handleMessage = function(port, request) {
   if (request.type == 'event') {
     record.addEvent(request, port.name);
-  } else if (request.type == 'updateEvent') {
-    record.updateEvent(request, port.name);
   } else if (request.type == 'comment') {
     record.addComment(request, port.name);
   } else if (request.type == 'getRecording') {

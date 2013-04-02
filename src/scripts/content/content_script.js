@@ -193,17 +193,24 @@ function processEvent(eventData) {
     }
 
     recordLog.log('[' + id + '] event message:', eventMessage);
-    if (!params.simulataneous) {
-      port.postMessage({type: 'event', value: eventMessage});
-    }
 
-    if (recording == RecordState.RECORDING) {
+    if (recording == RecordState.RECORDING || 
+        (recording == RecordState.REPLAYING && params.replaying.recordDeltas)) {
       snapshotRecord(target);
       if (lastRecordSnapshot){
         updateRecordDeltas();
       }
       
       lastRecordEvent = eventMessage;
+    }
+
+    if (recording == RecordState.RECORDING && params.recording.delayEvents) {
+      var curTime = new Date().getTime();
+      var endTime = curTime + params.recording.delay;
+      // just spin for some number of seconds
+      while (curTime < endTime) {
+        curTime = new Date().getTime();
+      }
     }
   }
   return true;
@@ -231,15 +238,8 @@ function updateRecordDeltas() {
   if (lastRecordEvent) {
     var deltas = getDomDivergence(lastRecordSnapshot.before, 
                                   lastRecordSnapshot.after);
-    if (!params.simultaneous) {
-      var update = {type: 'updateEvent', value: {'deltas': deltas,
-                    'pageEventId': lastRecordEvent.pageEventId}};
-      port.postMessage(update);
-      recordLog.log('updated deltas:', update);
-    } else {
-      lastRecordEvent.deltas = deltas;
-      port.postMessage({type: 'event', value: lastRecordEvent});
-    }
+    lastRecordEvent.deltas = deltas;
+    port.postMessage({type: 'event', value: lastRecordEvent});
   }
 }
 
@@ -319,10 +319,6 @@ function simulate(request) {
     // make sure the deltas from the last event actually happened
     var recordDeltas = lastReplayEvent.deltas || [];
 
-/*    resnapshotAfter();
-    if (curReplaySnapshot)
-      var beforeAnnotation = curReplaySnapshot.after;
-*/
     // run the old compensation events
     for (var i in annotationEvents) {
       var annotation = annotationEvents[i];
@@ -345,25 +341,10 @@ function simulate(request) {
                                            beforeAnnotation);
 */      // check if these deltas match the deltas from the last simulated event
       // and synthesize appropriate compensation events for unmatched deltas
-      synthesize(recordDeltas, replayDeltas, target, lastReplayEvent);
+      synthesize(recordDeltas, replayDeltas, target, lastReplayEvent,
+                 lastReplaySnapshot.after);
     }
 
-    //run the new compensation events
-    //no.  if we've added any new compensation events, we already ran them
-    //in generatecompensationevent
-    /*
-    for (var i in annotationEvents) {
-      var annotation = annotationEvents[i];
-      if (annotation.replay && annotation.guard(target, lastReplayEvent)) {
-        if (synthesisVerbose){
-          log.log("annotation event being used", i, annotation.recordNodes,
-                      annotation.replayNodes);
-        }
-        annotation.replay(target, lastReplayEvent);
-      }
-    }
-    * */
-    
     //annotation events may have changed the effects of the last event
     //have to make sure that anything associated with this event isn't
     //from annotation events of last event
@@ -424,6 +405,8 @@ function simulate(request) {
   mostRecentEventMessage = eventData;
   log.log("DISPATCHING EVENT OF TYPE", mostRecentEventMessage.type);
   
+  oEvent.extensionGenerated = true;
+
   //this does the actual event simulation
   target.dispatchEvent(oEvent);
 
@@ -467,10 +450,38 @@ function localResnapshotAfter() {
     curReplaySnapshot.after = snapshotNode(curReplaySnapshot.target);
 }
 
-function synthesize(recordDeltas, replayDeltas, target, recordEventMessage) {
+function synthesize(recordDeltas, replayDeltas, target, recordEventMessage,
+                    snapshot) {
 
   log.log('RECORD DELTAS', recordDeltas);
   log.log('REPLAY DELTAS', replayDeltas);
+
+  function splitDelta(delta) {
+    var divProps = delta.divergingProps;
+    if (divProps && divProps.length > 1) {
+      var deltas = [];
+      for (var i = 0, ii = divProps.length; i < ii; ++i) {
+        var clone = jQuery.extend({}, delta);
+        clone.divergingProps = [divProps[i]];
+        deltas.push(clone);
+      }
+      return deltas;
+    } else {
+      return [delta];
+    }
+  }
+
+  var newRecordDeltas = [];
+  for (var i = 0, ii = recordDeltas.length; i < ii; ++i) {
+    newRecordDeltas = newRecordDeltas.concat(splitDelta(recordDeltas[i]));
+  }
+  recordDeltas = newRecordDeltas;
+
+  var newReplayDeltas = [];
+  for (var i = 0, ii = replayDeltas.length; i < ii; ++i) {
+    newReplayDeltas = newReplayDeltas.concat(splitDelta(replayDeltas[i]));
+  }
+  replayDeltas = newReplayDeltas;
 
   //effects of events that were found in record browser but not replay browser
   var recordDeltasNotMatched = filterDivergences(recordDeltas, replayDeltas);

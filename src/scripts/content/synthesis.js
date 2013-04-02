@@ -1087,15 +1087,15 @@ function sendAlertRight(msg) {
 }
 
 /* takes in two DOMs, traversing and lining up. main divergence code */
-function getDomDivergence(recordDom, replayDom) {
-  var divergences = recursiveVisit(recordDom, replayDom);
-  return divergences;
+function getDomDivergence(origDom, changedDom) {
+  return recursiveCompare(origDom, changedDom);
 }
 
 //we're going to return the list of divergences, taking out any divergences
 //that also appear in divergencesToRemove
 //if we call this on recordDeltas, replayDeltas, we'll return the list of
 //recordDeltas that did not also appear during replay time
+// TODO: removed partial divergences, check if node has the correct value
 function filterDivergences(divergences, divergencesToRemove) {
   var finalDivergences = [];
   for (var i in divergences) {
@@ -1107,7 +1107,7 @@ function filterDivergences(divergences, divergencesToRemove) {
       //now let's check if every property changed by divergence
       //is also changed in the same way by divergenceToRemove
       //in which case we can go ahead and say that divergence is matched
-      if (divergence2IncludesDivergence1(divergence, divergenceToRemove)) {
+      if (unmatchedDivergences(divergence, divergenceToRemove)) {
         divMatched = true;
         continue;
       }
@@ -1119,17 +1119,18 @@ function filterDivergences(divergences, divergencesToRemove) {
   return finalDivergences;
 }
 
-//returns true if div2 changes all the props that div1 changes
-function divergence2IncludesDivergence1(div1, div2) {
+// returns true if div2 changes all the props that div1 changes or div2 leaves
+// the property unchanged and value is correct
+function unmatchedDivergences(div1, div2) {
   var div1Before = div1.record;
   var div1After = div1.replay;
   var div2Before = div2.record;
   var div2After = div2.replay;
 
   //which properties are different after the event (in browser 1)?
-  var divergingProps1 = divergingProps(div1Before, div1After);
+  var divergingProps1 = divergingProps(div1Before.prop, div1After.prop);
   //which properties are different after the event (in browser 2)?
-  var divergingProps2 = divergingProps(div2Before, div2After);
+  var divergingProps2 = divergingProps(div2Before.prop, div2After.prop);
 
   //we have to make sure that any properties that were different
   //in div1 are also different in div2
@@ -1155,13 +1156,14 @@ function divergence2IncludesDivergence1(div1, div2) {
 
 //returns a list of the properties for which two objects have different
 //values
-function divergingProps(obj1, obj2) {
-  if (!(obj1 && obj2 && obj1.prop && obj2.prop)) {
-    console.log('DIVERGING PROP WEIRDNESS ', obj1, obj2);
-    return [];
+function divergingProps(obj1props, obj2props) {
+  if (!(obj1props && obj2props)) {
+    throw "divergingProps called with bad arguements";
+    //console.log('DIVERGING PROP WEIRDNESS ', obj1, obj2);
+    //return [];
   }
-  var obj1props = _.omit(obj1.prop, params.synthesis.omittedProps);
-  var obj2props = _.omit(obj2.prop, params.synthesis.omittedProps);
+  var obj1props = _.omit(obj1props, params.synthesis.omittedProps);
+  var obj2props = _.omit(obj2props, params.synthesis.omittedProps);
 
   var divergingProps = [];
   for (var prop in obj1props) {
@@ -1222,20 +1224,12 @@ function findBody(dom) {
 }
 
 /* tries to line up DOM nodes, descends through DOM */
-function recursiveVisit(obj1, obj2) {
-/*  if (!obj1.prop) {
-    console.log("asdasd");
-  } else {
-    if (obj1.prop.id == "gbqfq")
-      console.log("gahhh");
-  }
-*/
-
+function recursiveCompare(obj1, obj2) {
   if (!obj1 && !obj2)
     throw "both nodes doesn't actually exist";
 
   if (verbose) {
-    log.log('recursiveVisit', obj1, obj2);
+    log.log('recursiveCompare', obj1, obj2);
     log.log(nodeToString(obj1));
     log.log(nodeToString(obj2));
   }
@@ -1263,15 +1257,18 @@ function recursiveVisit(obj1, obj2) {
       var props2 = obj2.prop || [];
       props1 = _.omit(props1, params.synthesis.omittedProps);
       props2 = _.omit(props2, params.synthesis.omittedProps);
-      
-      divergences.push({
-        'type': "We expect these nodes to be the same, but they're not.",
-        'record': obj1,
-        'replay': obj2,
-        'relevantChildren': [],
-        'relevantChildrenXPaths': [xpathFromAbstractNode(obj2)],
-        'divergingProps': divergingProps({'prop': props1}, {'prop': props2})
-      });
+     
+      var divProps = divergingProps(props1, props2);
+      for (var i = 0, ii = divProps.length; i < ii; ++i) {
+        divergences.push({
+          'type': "We expect these nodes to be the same, but they're not.",
+          'record': obj1,
+          'replay': obj2,
+          'relevantChildren': [],
+          'relevantChildrenXPaths': [xpathFromAbstractNode(obj2)],
+          'divergingProps': [divProps[i]]
+        });
+      }
     }
 
     //these objects have messy children that need matching
@@ -1306,7 +1303,7 @@ function recursiveVisit(obj1, obj2) {
     //if we're here, we didn't have to do mismatched children at this step
     //recurse normally
     for (var i = 0; i < numChildren1; i++) {
-      var newDivergences = recursiveVisit(children1[i], children2[i]);
+      var newDivergences = recursiveCompare(children1[i], children2[i]);
       divergences = divergences.concat(newDivergences);
     }
 
@@ -1325,7 +1322,7 @@ function recursiveVisit(obj1, obj2) {
     if (!obj1) {
       if (verbose || scenarioVerbose) {
         log.log('For some reason, we called ' +
-                'recursiveVisit without an obj1');
+                'recursiveCompare without an obj1');
         log.log(obj1, obj2);
       }
       return [{
@@ -1338,7 +1335,7 @@ function recursiveVisit(obj1, obj2) {
     } else if (!obj2) {
       if (verbose || scenarioVerbose) {
         log.log('For some reason we called ' +
-                    'recursiveVisit without an obj2');
+                'recursiveCompare without an obj2');
         log.log(obj1, obj2);
       }
       return [{
@@ -1572,7 +1569,7 @@ function recursiveVisitMismatchedChildren(obj1, obj2) {
         if (verbose) {
           console.log('going to recurse with i', i);
         }
-        divergences = divergences.concat(recursiveVisit(children1[i],
+        divergences = divergences.concat(recursiveCompare(children1[i],
                                          children2[children1MatchedWith[i]]));
       }
     }
