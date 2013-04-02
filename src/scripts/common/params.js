@@ -117,16 +117,20 @@ var params = null;
       optimization: 2
     },
     recording: {
-      allEventProps: true
+      allEventProps: true,
+      delayEvents: false,
+      delay: 5000
     },
     replaying: {
-      saveReplay: false,
-      enableAlerts: false
+      saveReplay: true,
+      delayEvents: false,
+      enableAlerts: false,
+      recordDeltas: true
     },
     server: 'http://sbarman.webfactional.com/api/',
     //server: "http://127.0.0.1:8000/api/",
     benchmarking: {
-      timeout: 120,
+      timeout: 240,
     },
   };
 
