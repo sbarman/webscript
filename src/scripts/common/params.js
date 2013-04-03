@@ -125,7 +125,8 @@ var params = null;
       saveReplay: true,
       delayEvents: false,
       enableAlerts: false,
-      recordDeltas: true
+      recordDeltas: true,
+      cancelUnknownEvents: true
     },
     server: 'http://sbarman.webfactional.com/api/',
     //server: "http://127.0.0.1:8000/api/",

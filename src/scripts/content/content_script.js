@@ -154,12 +154,24 @@ function processEvent(eventData) {
   var eventMessage;
   if (recording == RecordState.RECORDING || 
       recording == RecordState.REPLAYING) {
+
     var type = eventData.type;
     var dispatchType = getEventType(type);
-    var properties = getEventProps(type);
+
+    if (recording == RecordState.REPLAYING && !eventData.extensionGenerated &&
+        params.replaying.cancelUnknownEvents) {
+      eventData.stopImmediatePropagation();
+      eventData.preventDefault();
+
+      recordLog.log('[' + id + '] cancel event:', type, dispatchType,
+                    eventData);
+      return;
+    }
+
     recordLog.log('[' + id + '] process event:', type, dispatchType,
                   eventData);
 
+    var properties = getEventProps(type);
     var target = eventData.target;
     var nodeName = target.nodeName.toLowerCase();
 
