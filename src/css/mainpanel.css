@@ -7,6 +7,7 @@ body {
   border: 1px solid black;
   padding: 2px;
   margin: 3px;
+  height: 25px;
 }
 
 #headerDiv {
@@ -19,6 +20,11 @@ body {
 }
 
 #container {
+  overflow: auto;
+  width: 100%;
+}
+
+#messages {
   overflow: auto;
   width: 100%;
 }
@@ -37,6 +43,12 @@ body {
 }
 
 .event {
+  font: 15px arial, sans-serif;
+  border: 1px solid black;
+  overflow: hidden;
+}
+
+.message {
   font: 15px arial, sans-serif;
   border: 1px solid black;
   overflow: hidden;

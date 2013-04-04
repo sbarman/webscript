@@ -206,7 +206,7 @@ function generateCompensationEvent(element, eventMessage,
       }
 
       log.log('new annotation event:', name, prop, newNode.toString());
-      sendAlertRight(name + ' ' + prop + '<br>' + newNode.toString());
+      sendAlert(name + ' ' + prop + '\n' + newNode.toString());
       for (var j in examplesForAnnotation) {
         var example = examplesForAnnotation[j];
         log.log('annotation event for prop:', prop, ', before:',
@@ -1055,35 +1055,7 @@ function addCompensationEvent(name, typeOfNode, typeOfEvent, replayNodes,
 
 //function for sending an alert that the user will see
 function sendAlert(msg) {
-  if (!params.replaying.enableAlerts) return;
-
-  var replayStatusDiv = document.createElement('div');
-  replayStatusDiv.setAttribute('class', 'replayStatus');
-  replayStatusDiv.setAttribute('style',
-    'z-index:99999999999999999999999999; \
-    background-color:yellow; \
-    position:fixed; \
-    left:0px; \
-    top:0px; \
-    width:200px; \
-    font-size:10px');
-  replayStatusDiv.innerHTML = msg;
-  document.body.appendChild(replayStatusDiv);
-}
-
-function sendAlertRight(msg) {
-  var replayStatusDiv = document.createElement('div');
-  replayStatusDiv.setAttribute('class', 'replayStatus');
-  replayStatusDiv.setAttribute('style',
-    'z-index:99999999999999999999999999; \
-    background-color:yellow; \
-    position:fixed; \
-    right:0px; \
-    top:0px; \
-    width:500px; \
-    font-size:13px');
-  replayStatusDiv.innerHTML = msg;
-  document.body.appendChild(replayStatusDiv);
+  port.postMessage({type: 'message', value: msg});
 }
 
 /* takes in two DOMs, traversing and lining up. main divergence code */

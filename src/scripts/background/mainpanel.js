@@ -140,12 +140,7 @@ var Panel = (function PanelClosure() {
 
     this.loadParams();
     this.attachHandlers(controller);
-
-    var total = $('#top').height();
-    var header = $('#headerDiv').height();
-    var containerHeight = window.innerHeight - header - 16;
-
-    $('#container').css('height', containerHeight + 'px');
+    this.resize();
   }
 
   Panel.prototype = {
@@ -302,6 +297,11 @@ var Panel = (function PanelClosure() {
       newDiv += '</div>';
       $('#events').append(newDiv);
     },
+    addMessage: function _addMessage(message) {
+      var newDiv = $("<div class='message wordwrap'/>");
+      newDiv.text(message);
+      $('#messages').prepend(newDiv);
+    },
     clearEvents: function _clearEvents() {
       $('#events').empty();
     },
@@ -310,6 +310,16 @@ var Panel = (function PanelClosure() {
     },
     stopRecording: function _stopRecording() {
       $('#status').text('Stopped');
+    },
+    resize: function _resize() {
+      var total = $(window).height();
+      var header = $('#headerDiv').outerHeight(true);
+      var rest = total - header;
+      var containerHeight = Math.round(.6 * rest);
+      var messagesHeight = rest - containerHeight;
+  
+      $('#container').css('height', containerHeight + 'px');
+      $('#messages').css('height', messagesHeight + 'px');
     }
   };
 
@@ -1085,6 +1095,8 @@ var handleMessage = function(port, request) {
     record.addEvent(request, port.name);
   } else if (request.type == 'comment') {
     record.addComment(request, port.name);
+  } else if (request.type == 'message') {
+    panel.addMessage("[" + port.name + "] " + request.value);
   } else if (request.type == 'getRecording') {
     port.postMessage({type: 'recording', value: record.getStatus()});
   } else if (request.type == 'getParams') {
@@ -1113,6 +1125,10 @@ $(window).unload(function() {
   controller.stop();
   chrome.browserAction.setBadgeText({text: ''});
   chrome.extension.onMessage.removeListener(handleMessage);
+});
+
+$(window).resize(function() {
+  panel.resize();
 });
 
 ports.sendToAll({type: 'params', value: params});
