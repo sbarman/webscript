@@ -24,15 +24,6 @@ var threeArgFuncs = {
   'substr_func': substr_func
 };
 
-function xpathFromAbstractNode(node) {
-  if (node && node.prop && node.prop.id && node.prop.id != '') {
-    return '//' + node.prop.nodeName + "[@id='" + node.prop.id + "']";
-  }
-  if (node && node.prop) {
-    return '//' + node.prop.nodeName;
-  }
-}
-
 function addComment(name, value) {
   port.postMessage({
     type: 'comment',
@@ -127,15 +118,15 @@ function generateCompensationEvent(element, eventMessage,
   //but this may not be the same xpath to the corresponding element that was used
   //during record time.  So we have to make sure that the xpath of the correct divergence
   //was matched with the xpath of the element
-  if (eventMessage.nodeName != delta.record.prop.nodeName.toLowerCase())
+  if (eventMessage.nodeName != delta.orig.prop.nodeName.toLowerCase())
     return;
 
-  if (delta.record.prop.type && delta.replay.prop.type &&
-      delta.record.prop.type == 'hidden' && delta.replay.prop.type == 'hidden')
+  if (delta.orig.prop.type && delta.changed.prop.type &&
+      delta.orig.prop.type == 'hidden' && delta.changed.prop.type == 'hidden')
     return;
 
-  if (delta.record.prop.hidden && delta.replay.prop.hidden &&
-      delta.record.prop.hidden == 'true' && delta.replay.prop.hidden == 'true')
+  if (delta.orig.prop.hidden && delta.changed.prop.hidden &&
+      delta.orig.prop.hidden == 'true' && delta.changed.prop.hidden == 'true')
     return;
 
   if (thisDeltaShouldHappen) {
@@ -157,12 +148,12 @@ function generateCompensationEvent(element, eventMessage,
     //make nodes for all the message properties
     var messagePropNodes = createMessagePropNodes(eventMessage);
     //make nodes for all the element properties
-    var elementPropNodes = createElementPropNodes(delta.record.prop);
+    var elementPropNodes = createElementPropNodes(delta.orig.prop);
     //let's add the current instance to our list of examples
     var newExample = {
       'messagePropMap': messagePropMap,
-      'elementPropsBefore': delta.record.prop,
-      'elementPropsAfter': delta.replay.prop,
+      'elementPropsBefore': delta.orig.prop,
+      'elementPropsAfter': delta.changed.prop,
       'messagePropNodes': messagePropNodes,
       'elementPropNodes': elementPropNodes
     };
@@ -171,7 +162,7 @@ function generateCompensationEvent(element, eventMessage,
     log.log('annotation examples:', examplesForAnnotation,
             examplesForAnnotation.length);
 
-    var propsToChange = delta.divergingProps;
+    var propsToChange = [delta.divergingProp];
     propsToChange = _.without(propsToChange, params.synthesis.omittedProps);
 
     log.log('props to change:', propsToChange);
@@ -185,8 +176,8 @@ function generateCompensationEvent(element, eventMessage,
       //our annotation event won't be able to fire till next time
       //(becuase it might involve a record action)
       log.log('Setting prop ', prop, ' from ', element[prop], ' to ',
-              delta.replay.prop[prop]);
-      element[prop] = delta.replay.prop[prop];
+              delta.changed.prop[prop]);
+      element[prop] = delta.changed.prop[prop];
 
       var depth = params.synthesis.depth;
       var optimization = params.synthesis.optimization;
@@ -197,7 +188,6 @@ function generateCompensationEvent(element, eventMessage,
         replayNodes.push(new TopNode(prop, newNode));
       } else {
         //else, use the value of valueAtRecordAfter
-        //eventMessage[prop + '_value'] = delta.replay.prop[prop];
         log.log('NEW ANNOTATION: going to use the value of the ' +
                 'record prop', prop);
         newNode = new Node('mirror', prop);
@@ -1058,72 +1048,53 @@ function sendAlert(msg) {
   port.postMessage({type: 'message', value: msg});
 }
 
-/* takes in two DOMs, traversing and lining up. main divergence code */
-function getDomDivergence(origDom, changedDom) {
-  return recursiveCompare(origDom, changedDom);
-}
 
-//we're going to return the list of divergences, taking out any divergences
-//that also appear in divergencesToRemove
-//if we call this on recordDeltas, replayDeltas, we'll return the list of
-//recordDeltas that did not also appear during replay time
-// TODO: removed partial divergences, check if node has the correct value
-function filterDivergences(divergences, divergencesToRemove) {
-  var finalDivergences = [];
-  for (var i in divergences) {
-    var divergence = divergences[i];
-    var divMatched = false;
-    //console.log("divergence ", divergence);
-    for (var j in divergencesToRemove) {
-      var divergenceToRemove = divergencesToRemove[j];
-      //now let's check if every property changed by divergence
-      //is also changed in the same way by divergenceToRemove
-      //in which case we can go ahead and say that divergence is matched
-      if (unmatchedDivergences(divergence, divergenceToRemove)) {
-        divMatched = true;
+//***************************************************************************
+//  Delta code
+//***************************************************************************
+
+// we're going to return the list of deltas, taking out any deltas
+// that also appear in deltasToRemove
+
+// if we call this on filterDeltas(recordDeltas replayDeltas), we'll return the
+// list of recordDeltas that did not also appear during replay time
+function filterDeltas(deltas, deltasToRemove) {
+  var finalDeltas = [];
+
+  for (var i = 0, ii = deltas.length; i < ii; ++i) {
+    var delta = deltas[i];
+    var matched = false;
+    for (var j = 0, jj = deltasToRemove.length; j < jj; ++j) {
+      var deltaToRemove = deltasToRemove[j];
+      // now let's check if every property changed by delta
+      // is also changed in the same way by deltaToRemove
+      // in which case we can go ahead and say that delta is matched
+      if (deltaEqual(delta, deltaToRemove)) {
+        matched = true;
         continue;
       }
     }
-    if (!divMatched) {
-      finalDivergences.push(divergence);
-    }
+
+    if (!matched)
+      finalDeltas.push(delta);
   }
-  return finalDivergences;
+  return finalDeltas;
 }
 
 // returns true if div2 changes all the props that div1 changes or div2 leaves
-// the property unchanged and value is correct
-function unmatchedDivergences(div1, div2) {
-  var div1Before = div1.record;
-  var div1After = div1.replay;
-  var div2Before = div2.record;
-  var div2After = div2.replay;
+// the property unchanged and value is correct. Only checks for property
+// differences
 
-  //which properties are different after the event (in browser 1)?
-  var divergingProps1 = divergingProps(div1Before.prop, div1After.prop);
-  //which properties are different after the event (in browser 2)?
-  var divergingProps2 = divergingProps(div2Before.prop, div2After.prop);
+function deltaEqual(delta1, delta2) {
+  var type = 'Property is different.';
+  if (delta1.type != type || delta2.type != type)
+    return false;
 
-  //we have to make sure that any properties that were different
-  //in div1 are also different in div2
-  //Also, they should end with the same value.
-  for (var i = 0; i < divergingProps1.length; i++) {
-    //console.log("diverging prop", divergingProps1[i]);
-    var ind = divergingProps2.indexOf(divergingProps1[i]);
-    if (ind == -1) {
-      //console.log("ind is -1, returning false");
-      return false;
-    }
-    if (div1After.prop[divergingProps1[i]] !==
-        div2After.prop[divergingProps2[ind]]) {
-      //console.log("val not equal, returning false");
-      //console.log(div1After,div2After,div1After.prop[divergingProps1[i]],div2After.prop[divergingProps2[ind]]);
-      return false;
-    }
-  }
+  var prop1 = delta1.divergingProp;
+  var prop2 = delta2.divergingProp;
 
-  //console.log("returning true");
-  return true;
+  return prop1 == prop2 && 
+         delta1.changed.prop[prop1] == delta2.changed.prop[prop2];
 }
 
 //returns a list of the properties for which two objects have different
@@ -1131,8 +1102,6 @@ function unmatchedDivergences(div1, div2) {
 function divergingProps(obj1props, obj2props) {
   if (!(obj1props && obj2props)) {
     throw "divergingProps called with bad arguements";
-    //console.log('DIVERGING PROP WEIRDNESS ', obj1, obj2);
-    //return [];
   }
   var obj1props = _.omit(obj1props, params.synthesis.omittedProps);
   var obj2props = _.omit(obj2props, params.synthesis.omittedProps);
@@ -1146,235 +1115,127 @@ function divergingProps(obj1props, obj2props) {
   return divergingProps;
 }
 
-function divergenceEquals(div1, div2) {
-
-  /*
-  if (!(div1.type == div2.type)){
-    console.log("type didn't match", div1.type, div2.type);
-    return false;
-  }
-  */
-
-  for (var i = 0; i < div1.relevantChildren; i++) {
-    if (!(i < div2.relevantChildren.length &&
-        div1.relevantChildren[i] == div2.relevantChildren[i])) {
-      return false;
-    }
-  }
-
-  return true;
-
-  /*
-  console.log(nodeEquals(div1.replay,div2.replay), div1.replay, div2.replay);
-  console.log(nodeEquals(div1.record,div2.record), div1.record, div2.record);
-  console.log(div1.type==div2.type, div1.type, div2.type);
-  var ret = nodeEquals(div1.replay,div2.replay) &&
-            nodeEquals(div1.record,div2.record) &&
-            div1.type == div2.type;
-  return ret;
-  */
+// takes in two DOMs, traversing and lining up and outputs the differences
+function getDeltas(origDom, changedDom) {
+  return recursiveCompare(origDom, changedDom);
 }
 
-//descend to BODY node in the document, ignore head and scripts
-function findBody(dom) {
-  if (dom) {
-    if (dom.prop && dom.prop.tagName &&
-        dom.prop.tagName.toUpperCase() == 'BODY') {
-      return dom;
-    }
-    if (dom.children) {
-      var children = dom.children;
-      var numChildren = children.length;
-      for (var i = 0; i < numChildren; i++) {
-        var ret = findBody(children[i]);
-        if (ret) {
-          return ret;
-        }
-      }
-    }
-  }
-}
 
-/* tries to line up DOM nodes, descends through DOM */
-function recursiveCompare(obj1, obj2) {
-  if (!obj1 && !obj2)
+// tries to line up DOM nodes, descends through DOM
+function recursiveCompare(origNode, changedNode) {
+  if (!origNode && !changedNode)
     throw "both nodes doesn't actually exist";
 
   if (verbose) {
-    log.log('recursiveCompare', obj1, obj2);
-    log.log(nodeToString(obj1));
-    log.log(nodeToString(obj2));
+    log.log('recursiveCompare', origNode, changedNode);
+    log.log(nodeToString(origNode));
+    log.log(nodeToString(changedNode));
   }
 
-  // both nodes have children
-  if (obj1 && obj2 && obj1.children && obj2.children) {
-    var divergences = [];
-    var children1 = obj1.children;
-    var children2 = obj2.children;
-    var numChildren1 = children1.length;
-    var numChildren2 = children2.length;
+  // check if both nodes are DOM nodes and not just text nodes
+  if (origNode && changedNode &&
+      origNode.type == 'DOM' && changedNode.type == 'DOM') {
 
-    //we've tried to match a node that turns out not to be nodeEqual
-    //we want to mark that this is a divergence, but we might also be
-    //calling it divergent even though there are more relevant divergences
-    //among its children, so let's just add this divergence and continue
-    //descending
-    if (!nodeEquals(obj1, obj2)) {
-      if (verbose) {
-        log.log("We tried to match a couple of nodes that aren't nodeEqual.");
-        log.log(obj1, obj2);
-      }
-      
-      var props1 = obj1.prop || [];
-      var props2 = obj2.prop || [];
-      props1 = _.omit(props1, params.synthesis.omittedProps);
-      props2 = _.omit(props2, params.synthesis.omittedProps);
+    var deltas = [];
+
+    // we've tried to match a node that turns out not to be the same
+    // we want to mark that this is a divergence, but there may be  more 
+    // relevant deltas among its children, so let's just add this divergence
+    // and continue descending
+    if (!nodeEquals(origNode, changedNode)) {
+      var props1 = origNode.prop || [];
+      var props2 = changedNode.prop || [];
+      var omittedProps = params.synthesis.omittedProps;
+
+      props1 = _.omit(props1, omittedProps);
+      props2 = _.omit(props2, omittedProps);
      
-      var divProps = divergingProps(props1, props2);
-      for (var i = 0, ii = divProps.length; i < ii; ++i) {
-        divergences.push({
-          'type': "We expect these nodes to be the same, but they're not.",
-          'record': obj1,
-          'replay': obj2,
-          'relevantChildren': [],
-          'relevantChildrenXPaths': [xpathFromAbstractNode(obj2)],
-          'divergingProps': [divProps[i]]
+      var diffProps = divergingProps(props1, props2);
+      for (var i = 0, ii = diffProps.length; i < ii; ++i) {
+        deltas.push({
+          'type': "Property is different.",
+          'orig': origNode,
+          'changed': changedNode,
+          'divergingProp': diffProps[i]
         });
       }
     }
+  
+    // check the children 
+    var children1 = origNode.children;
+    var children2 = changedNode.children;
+    var numChildren1 = children1.length;
+    var numChildren2 = children2.length;
 
-    //these objects have messy children that need matching
+    // these objects have messy children that need matching
+    var mismatched = false;
     if (numChildren1 != numChildren2) {
-      if (verbose) {
-        log.log('numchildren is different');
-      }
-      divergences = divergences.concat(
-          recursiveVisitMismatchedChildren(obj1, obj2));
-      return divergences;
-    }
-
-    if (verbose)
-      log.log('about to try going through the children');
-
-    //proceed on the assumption that we can just index into these
-    //children without difficulty, only change our mind if we find
-    //any of the children's properties don't match
-    for (var i = 0; i < numChildren1; i++) {
-      if (!(nodeEquals(children1[i], children2[i]))) {
-        var newDivergences = recursiveVisitMismatchedChildren(obj1, obj2);
-        divergences = divergences.concat(newDivergences);
-        return divergences;
+      mismatched = true;
+    } else  {
+      // proceed on the assumption that we can just index into these
+      // children without difficulty, only change our mind if we find
+      // any of the children's properties don't match
+      for (var i = 0; i < numChildren1; i++) {
+        if (!(nodeEquals(children1[i], children2[i]))) {
+          mismatched = true;
+          break;
+        }
       }
     }
 
-    if (verbose) {
-      log.log('we found that the matched children were nodeEqual. ' +
-              "we're going to recurse normally");
-    }
-
-    //if we're here, we didn't have to do mismatched children at this step
-    //recurse normally
-    for (var i = 0; i < numChildren1; i++) {
-      var newDivergences = recursiveCompare(children1[i], children2[i]);
-      divergences = divergences.concat(newDivergences);
-    }
-
-    return divergences;
-  } else {
-    // at least one node doesn't have children
-    if (verbose)
-      log.log("don't have children of both objects");
-
-    //we hit this if only one of obj1 and obj2 has children
-    //or if only one of obj1 and obj2
-    //this is bad stuff.  we matched all the parents, but things went
-    //bad here, so this should definitely be a divergence
-    //seems like probably a dom node was added to or removed from
-    //obj1 or obj2
-    if (!obj1) {
-      if (verbose || scenarioVerbose) {
-        log.log('For some reason, we called ' +
-                'recursiveCompare without an obj1');
-        log.log(obj1, obj2);
-      }
-      return [{
-        'type': 'A node is present that was not present in the original page.',
-        'record': obj1,
-        'replay': obj2,
-        'relevantChildren': [],
-        'relevantChildrenXPaths': [xpathFromAbstractNode(obj2)]
-      }];
-    } else if (!obj2) {
-      if (verbose || scenarioVerbose) {
-        log.log('For some reason we called ' +
-                'recursiveCompare without an obj2');
-        log.log(obj1, obj2);
-      }
-      return [{
-        'type': 'A node is missing that was present in the original page.',
-        'record': obj1,
-        'replay': obj2,
-        'relevantChildren': [],
-        'relevantChildrenXPaths': [xpathFromAbstractNode(obj2)]
-      }];
-    } else if (obj1.children) {
-      if (verbose || scenarioVerbose) {
-        log.log('obj2 lacks children');
-        log.log(obj1, obj2);
-      }
-      return [{
-        'type': 'A node or nodes is missing that was present in the ' +
-                'original page.',
-        'record': obj1,
-        'replay': obj2,
-        'relevantChildren': obj1.children,
-        'relevantChildrenXPaths': [xpathFromAbstractNode(obj2)]
-      }];
-    } else if (obj2.children) {
-      if (verbose || scenarioVerbose) {
-        log.log('obj1 lacks children');
-        log.log(obj1, obj2);
-      }
-      return [{
-        'type': 'A node or nodes is present that was not present in the ' +
-                'original page.',
-        'record': obj1,
-        'replay': obj2,
-        'relevantChildren': obj2.children,
-        'relevantChildrenXPaths': [xpathFromAbstractNode(obj2)]
-      }];
-    //we also hit this if neither node has children.
+    if (mismatched) {
+      deltas = deltas.concat(recursiveCompareMismatched(origNode, changedNode));
     } else {
-      //neither has children
-      if (nodeEquals(obj1, obj2)) {
-        //Yay!  We descended all the way, and the nodes are the same
-        return [];
+      // if we're here, we didn't have to do mismatched children at this step
+      // recurse normally
+      for (var i = 0; i < numChildren1; i++) {
+        var newDivergences = recursiveCompare(children1[i], children2[i]);
+        deltas = deltas.concat(newDivergences);
       }
-      if (verbose) {
-        log.log('Descended all the way, and ' +
-                    "the nodes aren't the same");
-        log.log(obj1, obj2);
+    }
+    return deltas;
+  // at least one node isn't a DOM node
+  } else {
+    if (!origNode) {
+      return [{
+        'type': 'New node in changed DOM.',
+        'orig': origNode,
+        'changed': changedNode,
+      }];
+    } else if (!changedNode) {
+      return [{
+        'type': 'Node missing in changed DOM.',
+        'orig': origNode,
+        'changed': changedNode,
+      }];
+    } else if (origNode.type == 'DOM' || changedNode.type == 'DOM') {
+      return [{
+        'type': 'Node types differ.',
+        'orig': origNode,
+        'changed': changedNode,
+      }];
+    // Both nodes should be text nodes
+    } else if (origNode.type == 'text' && origNode.type == 'text') {
+      if (nodeEquals(origNode, changedNode)) {
+        return [];
       }
       //sad, we descended all the way and the nodes aren't the same
       return [{
-        'type': "We expect these nodes to be the same, but they're not.",
-        'record': obj1,
-        'replay': obj2,
-        'relevantChildren': obj2,
-        'relevantChildrenXPaths': [xpathFromAbstractNode(obj2)]
+        'type': "Nodes not the same.",
+        'orig': origNode,
+        'changed': changedNode,
       }];
     }
   }
 }
 
-//try to match up children before traversing the rest of the subtree
-//we know that both obj1 and obj2 have children
-//all we have to do is find a mapping between children
-//then call our recursive visit method on the pairs if they're unequal
-function recursiveVisitMismatchedChildren(obj1, obj2) {
+//  try to match up children before traversing the rest of the subtree
+//  both obj1 and obj2 have children so we need to find a mapping between
+//    children
+function recursiveCompareMismatched(origNode, changedNode) {
   var divergences = [];
-  var children1 = obj1.children;
-  var children2 = obj2.children;
+  var children1 = origNode.children;
+  var children2 = changedNode.children;
   var numChildren1 = children1.length;
   var numChildren2 = children2.length;
   var children1NumMatches = [];
@@ -1382,9 +1243,9 @@ function recursiveVisitMismatchedChildren(obj1, obj2) {
   var children2MatchedWith = [];
 
   if (verbose) {
-    console.log('recursive visit mismatched children', obj1, obj2);
-    console.log(nodeToString(obj1));
-    console.log(nodeToString(obj2));
+    console.log('recursive visit mismatched children', origNode, changedNode);
+    console.log(nodeToString(origNode));
+    console.log(nodeToString(changedNode));
   }
 
   for (var i = 0; i < numChildren1; i++) {
@@ -1395,8 +1256,8 @@ function recursiveVisitMismatchedChildren(obj1, obj2) {
     children2MatchedWith.push(-1);
   }
 
-  //let's iterate through obj2's children and try to find a
-  //corresponding child in obj1's children
+  //let's iterate through changedNode's children and try to find a
+  //corresponding child in origNode's children
   //we'll make a mapping
 
   for (var i = 0; i < numChildren2; i++) {
@@ -1459,36 +1320,21 @@ function recursiveVisitMismatchedChildren(obj1, obj2) {
         children1MatchedWith[maxSimilarityScoreIndex] = i;
         children1NumMatches[maxSimilarityScoreIndex]++;
       //otherwise, let's assume we haven't found a match for child2
-      //and it was added to obj2's page
+      //and it was added to changedNode's page
       } else if (children2MatchedWith[i] == -1) {
-        if (verbose) {
-          console.log("Scenario 1 divergence, couldn't find a match for " +
-                      'child2', child2, 'in the original page');
-          console.log(obj1, obj2);
-        }
         divergences.push({
-          'type': 'A node is present that was  not present in the original ' +
-                  'page.',
-          'record': obj1,
-          'replay': obj2,
+          'type': 'New child in changed DOM.',
+          'orig': origNode,
+          'changed': changedNode,
           'relevantChildren': [child2],
-          'relevantChildrenXPaths': [xpathFromAbstractNode(child2)]
         });
       }
     }
   }
 
-  if (verbose) {
-    console.log('iterated through all children, assigned anything with ' +
-                'sufficiently high similarity score');
-    console.log('children1NumMatches', children1NumMatches);
-    console.log('children1MatchedWith', children1MatchedWith);
-    console.log('children2MatchedWith', children2MatchedWith);
-  }
-
-  //now we need to see which of obj1's children didn't have any obj2
+  //now we need to see which of origNode's children didn't have any changedNode
   //children mapped to them
-  //if such a child is similar to other obj1 children that did get
+  //if such a child is similar to other origNode children that did get
   //mapped to, it looks like a different number of children type problem
   //and we should report that
   //otherwise it looks as though there was a child removed, and we
@@ -1513,34 +1359,22 @@ function recursiveVisitMismatchedChildren(obj1, obj2) {
           //we have a match!
           numSiblingsInObj1Page++;
           //let's not catch this later when we report nodes
-          //missing from obj2's page but present in obj1's
+          //missing from changedNode's page but present in origNode's
           children1NumMatches[j] = -1;
         }
       }
       //let's distinguish between 1-1 mappings and sibling classes here
       if (numSiblingsInObj1Page > 1 || children1NumMatches[i] > 1) {
         //this is a case of having multiple similar siblings
-        if (verbose || scenarioVerbose) {
-          console.log('Scenario 2 divergence, different numbers of ' +
-                      'children like', children1[i], 'at position i ', i);
-          console.log(obj1, obj2);
-          console.log(similarityStringClasses(obj1));
-          console.log(similarityStringClasses(obj2));
-        }
         divergences.push({
-          'type': 'The original page had ' + numSiblingsInObj1Page +
-                  ' instances of a particular kind of node, but this page ' +
-                  'has ' + children1NumMatches[i] + ' different instances.',
-          'record': obj1,
-          'replay': obj2,
+          'type': 'Different number of a particular node type: ' + 
+                  numSiblingsInObj1Page + '/' + children1NumMatches[i],
+          'orig': origNode,
+          'changed': changedNode,
           'relevantChildren': [children1[i]],
-          'relevantChildrenXPaths': [xpathFromAbstractNode(obj2)]
         });
       } else {
         //1-1 mapping, so let's keep descending to find out what's going on
-        if (verbose) {
-          console.log('going to recurse with i', i);
-        }
         divergences = divergences.concat(recursiveCompare(children1[i],
                                          children2[children1MatchedWith[i]]));
       }
@@ -1554,20 +1388,14 @@ function recursiveVisitMismatchedChildren(obj1, obj2) {
 
   for (var i = 0; i < numChildren1; i++) {
     if (children1NumMatches[i] == 0) {
-      if (verbose || scenarioVerbose) {
-        console.log("Scenario 3 divergence, couldn't find a match for child1",
-                    children1[i], 'in the new page');
-        console.log(obj1, obj2);
-      }
       if (!(children1[i].prop && children1[i].prop.innerText)) {
         continue;
       }
       divergences.push({
-        'type': 'A node is missing that was present in the original page.',
-        'record': obj1,
-        'replay': obj2,
+        'type': 'Missing child in changed DOM.',
+        'orig': origNode,
+        'changed': changedNode,
         'relevantChildren': [children1[i]],
-        'relevantChildrenXPaths': [xpathFromAbstractNode(obj2)]
       });
     }
   }
@@ -1695,29 +1523,16 @@ function tagMatchesAndTotalTags(obj1, obj2, depth) {
 /* checks if two nodes have the same properties, all properties must be the 
    same */
 function nodeEquals(node1, node2) {
-  if (node1 && node2 && node1.prop && node2.prop) {
-    /*
-    if (node1.prop.innerText && node2.prop.innerText){
-      //if the inner text is the same, let's assume they're equal
-      if(node1.prop.innerText==node2.prop.innerText){
-        return true;
-      }
-      //if the id is the same, let's assume they're equal
+  if (node1 && node2) {
+    if ('prop' in node1 && 'prop' in node2) {
+      var omittedProps = params.synthesis.omittedProps;
+      var node1RelevantProps = _.omit(node1.prop, omittedProps);
+      var node2RelevantProps = _.omit(node2.prop, omittedProps);
 
-      //if (node1.prop.id && node2.prop.id
-       // && node1.prop.id!="" && node1.prop.id==node2.prop.id){
-       // return true;
-      //}
-
+      return _.isEqual(node1RelevantProps, node2RelevantProps);
+    } else if ('text' in node1 && 'text' in node2) {
+      return node1.text == node2.text;
     }
-    else if(node1.prop.nodeName.toLowerCase() != "input"){
-      //hypothesize that there is no effect on user if no innerText
-      return true;
-    }
-    */
-    var node1RelevantProps = _.omit(node1.prop, params.synthesis.omittedProps);
-    var node2RelevantProps = _.omit(node2.prop, params.synthesis.omittedProps);
-    return _.isEqual(node1RelevantProps, node2RelevantProps);
   }
   return node1 == node2;
 }

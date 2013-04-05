@@ -248,8 +248,8 @@ function localSnapshotRecord(target) {
 
 function updateRecordDeltas() {
   if (lastRecordEvent) {
-    var deltas = getDomDivergence(lastRecordSnapshot.before, 
-                                  lastRecordSnapshot.after);
+    var deltas = getDeltas(lastRecordSnapshot.before, 
+                           lastRecordSnapshot.after);
     lastRecordEvent.deltas = deltas;
     port.postMessage({type: 'event', value: lastRecordEvent});
   }
@@ -265,7 +265,7 @@ function handleMessage(request) {
   } else if (request.type == 'event') {
     simulate(request);
   } else if (request.type == 'snapshot') {
-    port.postMessage({type: 'snapshot', value: snapshotDom(document)});
+    port.postMessage({type: 'snapshot', value: snapshot()});
   } else if (request.type == 'deltas') {
     updateRecordDeltas();
   } else if (request.type == 'reset') {
@@ -345,11 +345,11 @@ function simulate(request) {
 
     snapshotReplay(target);
     if (lastReplaySnapshot){
-      var replayDeltas = getDomDivergence(lastReplaySnapshot.before,
+      var replayDeltas = getDeltas(lastReplaySnapshot.before,
                                           lastReplaySnapshot.after);
-      //var replayDeltas = getDomDivergence(lastReplaySnapshot.after,
+      //var replayDeltas = getDeltas(lastReplaySnapshot.after,
       //                                    lastReplaySnapshot.before);
-/*      var actualDeltas = getDomDivergence(lastReplaySnapshot.before,
+/*      var actualDeltas = getDeltas(lastReplaySnapshot.before,
                                            beforeAnnotation);
 */      // check if these deltas match the deltas from the last simulated event
       // and synthesize appropriate compensation events for unmatched deltas
@@ -468,37 +468,10 @@ function synthesize(recordDeltas, replayDeltas, target, recordEventMessage,
   log.log('RECORD DELTAS', recordDeltas);
   log.log('REPLAY DELTAS', replayDeltas);
 
-  function splitDelta(delta) {
-    var divProps = delta.divergingProps;
-    if (divProps && divProps.length > 1) {
-      var deltas = [];
-      for (var i = 0, ii = divProps.length; i < ii; ++i) {
-        var clone = jQuery.extend({}, delta);
-        clone.divergingProps = [divProps[i]];
-        deltas.push(clone);
-      }
-      return deltas;
-    } else {
-      return [delta];
-    }
-  }
-
-  var newRecordDeltas = [];
-  for (var i = 0, ii = recordDeltas.length; i < ii; ++i) {
-    newRecordDeltas = newRecordDeltas.concat(splitDelta(recordDeltas[i]));
-  }
-  recordDeltas = newRecordDeltas;
-
-  var newReplayDeltas = [];
-  for (var i = 0, ii = replayDeltas.length; i < ii; ++i) {
-    newReplayDeltas = newReplayDeltas.concat(splitDelta(replayDeltas[i]));
-  }
-  replayDeltas = newReplayDeltas;
-
   //effects of events that were found in record browser but not replay browser
-  var recordDeltasNotMatched = filterDivergences(recordDeltas, replayDeltas);
+  var recordDeltasNotMatched = filterDeltas(recordDeltas, replayDeltas);
   //effects of events that were found in replay browser but not record browser
-  var replayDeltasNotMatched = filterDivergences(replayDeltas, recordDeltas);
+  var replayDeltasNotMatched = filterDeltas(replayDeltas, recordDeltas);
 
   log.log('recordDeltasNotMatched', recordDeltasNotMatched);
   log.log('replayDeltasNotMatched', replayDeltasNotMatched);
@@ -508,8 +481,7 @@ function synthesize(recordDeltas, replayDeltas, target, recordEventMessage,
   for (var i = 0, ii = recordDeltasNotMatched.length; i < ii; i++) {
     var delta = recordDeltasNotMatched[i];
     //addComment('delta', JSON.stringify(recordDeltasNotMatched));
-    if (delta.type == "We expect these nodes to be the same, but they're " +
-                      'not.') {
+    if (delta.type == 'Property is different.') {
       generateCompensationEvent(target, recordEventMessage, 
                                 delta, true);
     }
