@@ -13,8 +13,8 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["scripts/common/jquery-1.7.2.js",
-             "scripts/common/underscore.js",
+      "js": ["scripts/lib/jquery-1.7.2.js",
+             "scripts/lib/underscore.js",
              "scripts/common/params.js",
              "scripts/common/logging.js",
              "scripts/common/common.js",
