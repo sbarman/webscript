@@ -158,6 +158,7 @@ function processEvent(eventData) {
     eventMessage['dispatchType'] = dispatchType;
     eventMessage['nodeName'] = nodeName;
     eventMessage['pageEventId'] =  eventId++;
+    eventMessage['recordState'] = recording;
     
     if (params.recording.allEventProps) {
       for (var prop in eventData) {
@@ -456,7 +457,7 @@ function handleMessage(request) {
     simulate(request);
   } else if (request.type == 'snapshot') {
     port.postMessage({type: 'snapshot', value: snapshot()});
-  } else if (request.type == 'deltas') {
+  } else if (request.type == 'lastEvent') {
     postEventMessage();
   } else if (request.type == 'reset') {
     reset();
