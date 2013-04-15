@@ -82,12 +82,12 @@ var PortManager = (function PortManagerClosure() {
 
       ports[portName] = port;
 
-      port.onMessage.addListener(function(msg) {
+      port.addMessageListener(function(msg) {
         handleMessage(port, msg);
       });
 
       var portManager = this;
-      port.onDisconnect.addListener(function(evt) {
+      port.addDisconnectListener(function(evt) {
         portLog.log('disconnect port:', port);
 
         if (portName in ports) {
@@ -1121,7 +1121,7 @@ var handleMessage = function(port, request) {
 chrome.extension.onMessage.addListener(handleIdMessage);
 
 chrome.extension.onConnect.addListener(function(port) {
-  ports.connectPort(port);
+  ports.connectPort(new Port(port));
 });
 
 // window is closed so tell the content scripts to stop recording and reset the
