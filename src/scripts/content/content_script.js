@@ -494,8 +494,8 @@ value.URL = document.URL;
 // Add all the other handlers
 chrome.extension.sendMessage({type: 'getId', value: value}, function(resp) {
   id = resp.value;
-  port = chrome.extension.connect({name: id});
-  port.onMessage.addListener(handleMessage);
+  port = new Port(id);
+  port.addListener(handleMessage);
 
   // see if recording is going on
   port.postMessage({type: 'getRecording', value: null});
@@ -510,4 +510,3 @@ var pollUrlId = window.setInterval(function() {
 }, 1000);
 
 })();
-

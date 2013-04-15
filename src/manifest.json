@@ -1,8 +1,8 @@
 {
-  "name": "Code It Up!",
+  "name": "Hmmm!",
   "version": "1.0",
   "manifest_version": 2,
-  "description": "Programing for the masses.",
+  "description": "Programing for all.",
   "browser_action": {
     "default_title": "WebScript",
     "default_icon": "icons/16-full-color.png"
@@ -18,7 +18,8 @@
              "scripts/common/params.js",
              "scripts/common/logging.js",
              "scripts/common/common.js",
-             "scripts/content/dom_to_json.js", 
+             "scripts/content/dom_to_json.js",
+             "scripts/content/port.js", 
              "scripts/content/synthesis.js",
              "scripts/content/content_script.js"],
       "run_at": "document_start",
