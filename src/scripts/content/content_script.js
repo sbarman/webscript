@@ -185,11 +185,13 @@ function processEvent(eventData) {
     recordLog.log('[' + id + '] event message:', eventMessage);
 
     if (recording == RecordState.RECORDING || 
-        (recording == RecordState.REPLAYING && params.replaying.recordDeltas)) {
+        (recording == RecordState.REPLAYING && params.replaying.saveReplay)) {
+
+      port.postMessage({type: 'event', value: eventMessage});
 
       snapshotRecord(target);
       if (lastRecordSnapshot)
-        postEventMessage();
+        updateDeltas();
 
       lastRecordEvent = eventMessage;
     }
@@ -228,12 +230,14 @@ function snapshotRecord(target) {
   }
 }
 
-function postEventMessage() {
+function updateDeltas() {
   if (lastRecordEvent) {
     var deltas = getDeltas(lastRecordSnapshot.before, 
                            lastRecordSnapshot.after);
     lastRecordEvent.deltas = deltas;
-    port.postMessage({type: 'event', value: lastRecordEvent});
+    var update = {type: 'updateEvent', value: {'deltas': deltas,
+                  'pageEventId': lastRecordEvent.pageEventId}};
+    port.postMessage(update); 
   }
 }
 
@@ -457,8 +461,8 @@ function handleMessage(request) {
     simulate(request);
   } else if (request.type == 'snapshot') {
     port.postMessage({type: 'snapshot', value: snapshot()});
-  } else if (request.type == 'lastEvent') {
-    postEventMessage();
+  } else if (request.type == 'updateDeltas') {
+    updateDeltas();
   } else if (request.type == 'reset') {
     reset();
   } else if (request.type == 'resetCompensaton') {
@@ -504,8 +508,10 @@ chrome.extension.sendMessage({type: 'getId', value: value}, function(resp) {
 
 var pollUrlId = window.setInterval(function() {
   if (value.URL != document.URL) {
-    port.postMessage({type: 'url', value: document.URL});
-    value.URL = document.URL;
+    var url = document.URL;
+    value.URL = url;
+    port.postMessage({type: 'url', value: url});
+    log.log('url change: ', url);
   }
 }, 1000);
 

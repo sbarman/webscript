@@ -112,7 +112,7 @@ var params = null;
           'textContent', 'className', 'childElementCount', 'scrollHeight',
           'scrollWidth', 'clientHeight', 'clientWidth', 'clientTop',
           'clientLeft', 'offsetHeight', 'offsetWidth', 'offsetTop',
-          'offsetLeft', "text", "valueAsNumber"],
+          'offsetLeft', 'text', 'valueAsNumber', 'id', 'class'],
       depth: 2,
       optimization: 2
     },
@@ -124,8 +124,6 @@ var params = null;
     replaying: {
       saveReplay: true,
       delayEvents: false,
-      enableAlerts: false,
-      recordDeltas: true,
       cancelUnknownEvents: true
     },
     server: 'http://sbarman.webfactional.com/api/',
