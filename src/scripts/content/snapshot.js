@@ -101,6 +101,9 @@ var snapshotNode = null;
   };
   
   snapshotNode = function(node) {
+    if (!node)
+      return null;
+
 	  var objTree = cloneNode(node, node.nodeName, nodeToXPath(node));
 	  return objTree;
   };
