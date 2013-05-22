@@ -96,8 +96,8 @@ var params = null;
 
   params = {
     user: 'sbarman',
-    simultaneous: false,
-    localSnapshot: false,
+    simultaneous: false, // this is probably broken now
+    localSnapshot: true,
     timing: 0,
     events: events,
     defaultProps: defaultProps,

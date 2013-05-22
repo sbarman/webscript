@@ -44,6 +44,10 @@ var LogLevel = {
       warn: function() {
         if (level <= LogLevel.WARN)
           this.print.apply(this, arguments);
+      },
+      error: function() {
+        if (level <= LogLevel.ERROR)
+          this.print.apply(this, arguments);
       }
     };
 
@@ -55,14 +59,11 @@ var LogLevel = {
     }
 
     NoopLogger.prototype = {
-      log: function() {
-      },
-      info: function() {
-      },
-      debug: function() {
-      },
-      warn: function() {
-      }
+      log: function() {},
+      info: function() {},
+      debug: function() {},
+      warn: function() {},
+      error: function() {}
     };
 
     return NoopLogger;

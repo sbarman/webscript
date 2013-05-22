@@ -3,10 +3,10 @@
 
 'use strict';
 
-var port;
-var annotationEvents = {};
-var nodeToXPath = null;
+var port; // port variable to send msgs to content script
+var annotationEvents = {}; // current annotation events used during replay
 
+// closure so global scope won't get dirty
 (function() {
 
 // global variables
@@ -14,13 +14,13 @@ var recording = RecordState.STOPPED;
 var id = 'setme';
 
 // record variables
-var eventId = 0; // counter to give each event a unique id
-var lastRecordEvent = null; // last event recorded
+var pageEventId = 0; // counter to give each event on page a unique id
+var lastRecordEvent; // last event recorded
 var lastRecordSnapshot; // snapshot (before and after) for last event
 var curRecordSnapshot; // snapshot (before and after) the current event
 
 // replay variables
-var lastReplayEvent = null; // last event replayed
+var lastReplayEvent; // last event replayed
 var lastReplaySnapshot; // snapshop taken before the event is replayed
 var curReplaySnapshot; // snapshot taken before the next event is replayed
 
@@ -28,81 +28,6 @@ var curReplaySnapshot; // snapshot taken before the next event is replayed
 var log = getLog('content');
 var recordLog = getLog('record');
 var replayLog = getLog('replay');
-
-// ***************************************************************************
-// Utility functions
-// ***************************************************************************
-
-function addComment(name, value) {
-  log.log('comment added:', name, value);
-  port.postMessage({type: 'comment', value: {name: name, value: value}});
-}
-
-nodeToXPath = function(element) {
-//  we want the full path, not one that uses the id since ids can change
-//  if (element.id !== '')
-//    return 'id("' + element.id + '")';
-  if (element.tagName.toLowerCase() === 'html')
-    return element.tagName;
-
-  var ix = 0;
-  var siblings = element.parentNode.childNodes;
-  for (var i = 0, ii = siblings.length; i < ii; i++) {
-    var sibling = siblings[i];
-    if (sibling === element)
-      return nodeToXPath(element.parentNode) + '/' + element.tagName +
-             '[' + (ix + 1) + ']';
-    if (sibling.nodeType === 1 && sibling.tagName === element.tagName)
-      ix++;
-  }
-}
-
-// convert an xpath expression to an array of DOM nodes
-function xPathToNodes(xpath) {
-  // contains an node with a namspace (maybe?)
-  if (xpath.indexOf(':') > 0) {
-    var currentNode = document.documentElement;
-    var paths = xpath.split('/');
-    // assume first path is "HTML"
-    paths: for (var i = 1, ii = paths.length; i < ii; ++i) {
-      var children = currentNode.children;
-      var path = paths[i];
-      var splits = path.split(/\[|\]/)
-
-      var tag = splits[0];
-      if (splits.length > 1) {
-        var index = parseInt(splits[1]);
-      } else {
-        var index = 1;
-      }
-
-      var seen = 0;
-      children: for (var j = 0, jj = children.length; j < jj; ++j) {
-        var c = children[j];
-        if (c.tagName == tag) {
-          seen++;
-          if (seen == index) {
-            currentNode = c;
-            continue paths;
-          }
-        }
-      }
-      throw "Cannot find child"; 
-    }
-    return [currentNode];
-  } else {
-    var q = document.evaluate(xpath, document, null, XPathResult.ANY_TYPE,
-                              null);
-    var results = [];
-  
-    var next = q.iterateNext();
-    while (next) {
-      results.push(next);
-      next = q.iterateNext();
-    }
-    return results;
-  }
-};
 
 // ***************************************************************************
 // Recording code
@@ -128,88 +53,94 @@ function getEventProps(type) {
 }
 
 // create an event record given the data from the event handler
-function processEvent(eventData) {
+function recordEvent(eventData) {
   var eventMessage;
-  if (recording == RecordState.RECORDING || 
-      recording == RecordState.REPLAYING) {
-    var type = eventData.type;
-    var dispatchType = getEventType(type);
 
-    if (recording == RecordState.REPLAYING && !eventData.extensionGenerated &&
-        params.replaying.cancelUnknownEvents) {
-      eventData.stopImmediatePropagation();
-      eventData.preventDefault();
+  // check if we are stopped, then just return
+  if (recording == RecordState.STOPPED)
+    return true;
 
-      recordLog.log('[' + id + '] cancel event:', type, dispatchType,
-                    eventData);
-      return false;
-    }
+  var type = eventData.type;
+  var dispatchType = getEventType(type);
 
-    recordLog.log('[' + id + '] process event:', type, dispatchType,
+  // cancel the affects of events which are not extension generated
+  if (recording == RecordState.REPLAYING && !eventData.extensionGenerated &&
+      params.replaying.cancelUnknownEvents) {
+
+    recordLog.debug('[' + id + '] cancel event:', type, dispatchType,
                   eventData);
+    eventData.stopImmediatePropagation();
+    eventData.preventDefault();
 
-    var properties = getEventProps(type);
-    var target = eventData.target;
-    var nodeName = target.nodeName.toLowerCase();
+    return false;
+  }
 
-    eventMessage = {};
-    eventMessage['target'] = nodeToXPath(target);
-    eventMessage['URL'] = document.URL;
-    eventMessage['dispatchType'] = dispatchType;
-    eventMessage['nodeName'] = nodeName;
-    eventMessage['pageEventId'] =  eventId++;
-    eventMessage['recordState'] = recording;
-    
-    if (params.recording.allEventProps) {
-      for (var prop in eventData) {
-        try {
-          var type = typeof(eventData[prop]);
-          if (type == 'number' || type == 'boolean' || type == 'string' ||
-              type == 'undefined')
-            eventMessage[prop] = eventData[prop];
-        } catch (e) {
-          recordLog.log('[' + id + ']' + e);
-        }
-      }
-    } else {
-      for (var prop in properties) {
-        if (prop in eventData)
+  // continue recording the event
+  recordLog.debug('[' + id + '] process event:', type, dispatchType,
+                eventData);
+
+  var properties = getEventProps(type);
+  var target = eventData.target;
+  var nodeName = target.nodeName.toLowerCase();
+
+  eventMessage = {};
+  eventMessage['target'] = nodeToXPath(target);
+  eventMessage['URL'] = document.URL;
+  eventMessage['dispatchType'] = dispatchType;
+  eventMessage['nodeName'] = nodeName;
+  eventMessage['pageEventId'] =  pageEventId++;
+  eventMessage['recordState'] = recording;
+  
+  // record all properties of the event object
+  if (params.recording.allEventProps) {
+    for (var prop in eventData) {
+      try {
+        var type = typeof(eventData[prop]);
+        if (type == 'number' || type == 'boolean' || type == 'string' ||
+            type == 'undefined')
           eventMessage[prop] = eventData[prop];
+      } catch (e) {
+        recordLog.error('[' + id + '] error recording property:', prop, e);
       }
     }
-
-    if (eventMessage['charCode']) {
-      eventMessage['char'] = String.fromCharCode(eventMessage['charCode']);
-    }
-
-    recordLog.log('[' + id + '] event message:', eventMessage);
-
-    if (recording == RecordState.RECORDING || 
-        (recording == RecordState.REPLAYING && params.replaying.saveReplay)) {
-
-      port.postMessage({type: 'event', value: eventMessage});
-
-      snapshotRecord(target);
-      if (lastRecordSnapshot)
-        updateDeltas();
-
-      lastRecordEvent = eventMessage;
-    }
-
-    // just spin for some number of seconds
-    if (recording == RecordState.RECORDING && params.recording.delayEvents) {
-      var curTime = new Date().getTime();
-      var endTime = curTime + params.recording.delay;
-      while (curTime < endTime) {
-        curTime = new Date().getTime();
-      }
+  // only record the default event properties
+  } else {
+    for (var prop in properties) {
+      if (prop in eventData)
+        eventMessage[prop] = eventData[prop];
     }
   }
+
+  // record the actual character, instead of just the charCode
+  if (eventMessage['charCode'])
+    eventMessage['char'] = String.fromCharCode(eventMessage['charCode']);
+
+  // save the event record
+  recordLog.debug('[' + id + '] saving event message:', eventMessage);
+  port.postMessage({type: 'event', value: eventMessage});
+
+  // deal with snapshotting the DOM, calculating the deltas, and sending
+  // updates
+  updateDeltas(target);
+
+  lastRecordEvent = eventMessage;
+  
+  // just spin for some number of seconds to delay the page compared
+  // to some server
+  if (recording == RecordState.RECORDING && params.recording.delayEvents) {
+    var curTime = new Date().getTime();
+    var endTime = curTime + params.recording.delay;
+    while (curTime < endTime)
+      curTime = new Date().getTime();
+  }
+  
   return true;
 };
 
-function reset() {
+function resetRecord() {
   lastRecordEvent = null;
+  lastRecordSnapshot = null;
+  curRecordSnapshot = null;
 }
 
 function snapshotRecord(target) {
@@ -230,8 +161,10 @@ function snapshotRecord(target) {
   }
 }
 
-function updateDeltas() {
-  if (lastRecordEvent) {
+function updateDeltas(target) {
+  snapshotRecord(target);
+
+  if (lastRecordEvent && lastRecordSnapshot) {
     var deltas = getDeltas(lastRecordSnapshot.before, 
                            lastRecordSnapshot.after);
     lastRecordEvent.deltas = deltas;
@@ -251,7 +184,7 @@ function simulate(request) {
   var eventData = request.value;
   var eventName = eventData.type;
 
-  replayLog.log('simulating: ', eventName, eventData);
+  replayLog.debug('simulating:', eventName, eventData);
 
   if (eventName == 'wait') {
     checkWait(eventData);
@@ -267,31 +200,30 @@ function simulate(request) {
   var nodes = xPathToNodes(eventData.target);
   //if we don't successfully find nodes, let's alert
   if (nodes.length != 1) {
-    sendAlert("Couldn't find the DOM node we needed.");
+    replayLog.error('could not find DOM nodes for replay: ', nodes);
     return;
   }
   var target = nodes[0];
 
+  // make sure the deltas from the last event actually happened
   if (params.synthesis.enabled && lastReplayEvent) {
-    // make sure the deltas from the last event actually happened
     var recordDeltas = lastReplayEvent.deltas || [];
 
-    // run the old compensation events
+    // run the compensation events for the last event
     for (var i in annotationEvents) {
       var annotation = annotationEvents[i];
       if (annotation.replay && annotation.guard(target, lastReplayEvent)) {
-        if (synthesisVerbose){
-          log.log("annotation event being used", i, annotation.recordNodes,
-                      annotation.replayNodes);
-        }
+        replayLog.debug('annotation event being used', i,
+                        annotation.recordNodes, annotation.replayNodes);
         annotation.replay(target, lastReplayEvent);
       }
     }
 
+    // make sure replay matches recording
     snapshotReplay(target);
     if (lastReplaySnapshot){
       var replayDeltas = getDeltas(lastReplaySnapshot.before,
-                                          lastReplaySnapshot.after);
+                                   lastReplaySnapshot.after);
       // check if these deltas match the deltas from the last simulated event
       // and synthesize appropriate compensation events for unmatched deltas
       synthesize(recordDeltas, replayDeltas, target, lastReplayEvent,
@@ -309,19 +241,21 @@ function simulate(request) {
   var eventType = getEventType(eventName);
   var defaultProperties = getEventProps(eventName);
 
-  if (!eventType)
-    throw new SyntaxError(eventData.type + ' event not supported');
+  if (!eventType) {
+    replayLog.error("can't find event type ", eventName);
+    return;
+  }
 
   var options = jQuery.extend({}, defaultProperties, eventData);
 
   // needed since some event properties are marked as read only
-  var setEventProp = function(e, prop, value) {
+  function setEventProp(e, prop, value) {
     Object.defineProperty(e, prop, {value: value});
     if (e.prop != value) {
       Object.defineProperty(e, prop, {get: function() {value}});
       Object.defineProperty(e, prop, {value: value});
     }
-  };
+  }
 
   var oEvent = document.createEvent(eventType);
   if (eventType == 'Event') {
@@ -349,23 +283,26 @@ function simulate(request) {
         document.defaultView, options.data, options.inputMethod,
         options.locale);
   } else {
-    log.log('Unknown type of event');
+    replayLog.error('unknown type of event');
   }
-  replayLog.log('[' + id + '] dispatchEvent', eventName, options, oEvent);
-  port.postMessage({type: 'ack', value: true});
-  replayLog.log('[' + id + '] sent ack');
 
   // used to detect extension generated events
   oEvent.extensionGenerated = true;
 
-  //this does the actual event simulation
+  // this does the actual event simulation
   target.dispatchEvent(oEvent);
+  replayLog.debug('[' + id + '] dispatchEvent', eventName, options, target, 
+                  oEvent);
 
-  //let's update a div letting us know what event we just got
+  port.postMessage({type: 'ack', value: true});
+  replayLog.debug('[' + id + '] sent ack');
+
+  // update panel showing event was sent
   sendAlert('Received Event: ' + eventData.type);
 }
 
 function snapshotReplay(target){
+  replayLog.log('snapshot target:', target);
   if (params.localSnapshot) {
     lastReplaySnapshot = curReplaySnapshot;
     if (lastReplaySnapshot)
@@ -384,41 +321,37 @@ function snapshotReplay(target){
 }
 
 function resnapshotBefore(target){
-  if (params.localSnapshot) {
+  if (params.localSnapshot)
     curReplaySnapshot.before = snapshotNode(target);
-  } else {
+  else
     curReplaySnapshot.before = snapshot();
-  }
 }
 
 function synthesize(recordDeltas, replayDeltas, target, recordEventMessage,
                     snapshot) {
 
-  log.log('RECORD DELTAS', recordDeltas);
-  log.log('REPLAY DELTAS', replayDeltas);
+  replayLog.info('record deltas:', recordDeltas);
+  replayLog.info('replay deltas:', replayDeltas);
 
-  //effects of events that were found in record browser but not replay browser
+  // effects of events that were found in record browser but not replay browser
   var recordDeltasNotMatched = filterDeltas(recordDeltas, replayDeltas);
-  //effects of events that were found in replay browser but not record browser
+  // effects of events that were found in replay browser but not record browser
   var replayDeltasNotMatched = filterDeltas(replayDeltas, recordDeltas);
 
-  log.log('recordDeltasNotMatched', recordDeltasNotMatched);
-  log.log('replayDeltasNotMatched', replayDeltasNotMatched);
+  replayLog.info('record deltas not matched: ', recordDeltasNotMatched);
+  replayLog.info('replay deltas not matched: ', replayDeltasNotMatched);
 
   //the thing below is the stuff that's doing divergence synthesis
-
   for (var i = 0, ii = recordDeltasNotMatched.length; i < ii; i++) {
     var delta = recordDeltasNotMatched[i];
-    //addComment('delta', JSON.stringify(recordDeltasNotMatched));
-    if (delta.type == 'Property is different.') {
-      generateCompensationEvent(target, recordEventMessage, 
-                                delta, true);
-    }
+    if (delta.type == 'Property is different.')
+      replayLog.debug('generating compensation event:', target, delta);
+      generateCompensationEvent(target, recordEventMessage, delta, true);
   }
 }
 
 function checkWait(eventData) {
-  replayLog.log('checking:', eventData);
+  replayLog.debug('checking wait:', eventData);
   var result = eval(eventData.condition);
   port.postMessage({type: 'ack', value: result});
 }
@@ -441,10 +374,10 @@ function updateParams(newParams) {
     for (var e in listOfEvents) {
       if (listOfEvents[e] && !oldListOfEvents[e]) {
         log.log('[' + id + '] extension listening for ' + e);
-        document.addEventListener(e, processEvent, true);
+        document.addEventListener(e, recordEvent, true);
       } else if (!listOfEvents[e] && oldListOfEvents[e]) {
         log.log('[' + id + '] extension stopped listening for ' + e);
-        document.removeEventListener(e, processEvent, true);
+        document.removeEventListener(e, recordEvent, true);
       }
     }
   }
@@ -464,8 +397,8 @@ function handleMessage(request) {
   } else if (request.type == 'updateDeltas') {
     updateDeltas();
   } else if (request.type == 'reset') {
-    reset();
-  } else if (request.type == 'resetCompensaton') {
+    resetRecord();
+  } else if (request.type == 'resetCompensation') {
     annotationEvents = {};
   } else if (request.type == 'url') {
     port.postMessage({type: 'url', value: document.URL});
@@ -479,7 +412,7 @@ function addListenersForRecording() {
     var listOfEvents = events[eventType];
     for (var e in listOfEvents) {
       listOfEvents[e] = true;
-      document.addEventListener(e, processEvent, true);
+      document.addEventListener(e, recordEvent, true);
     }
   }
 };
