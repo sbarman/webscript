@@ -83,6 +83,10 @@ function recordEvent(eventData) {
   var target = eventData.target;
   var nodeName = target.nodeName.toLowerCase();
 
+  // deal with snapshotting the DOM, calculating the deltas, and sending
+  // updates
+  updateDeltas(target);
+
   eventMessage = {};
   eventMessage['target'] = nodeToXPath(target);
   eventMessage['URL'] = document.URL;
@@ -118,10 +122,6 @@ function recordEvent(eventData) {
   // save the event record
   recordLog.debug('[' + id + '] saving event message:', eventMessage);
   port.postMessage({type: 'event', value: eventMessage});
-
-  // deal with snapshotting the DOM, calculating the deltas, and sending
-  // updates
-  updateDeltas(target);
 
   lastRecordEvent = eventMessage;
   
@@ -168,8 +168,14 @@ function updateDeltas(target) {
     var deltas = getDeltas(lastRecordSnapshot.before, 
                            lastRecordSnapshot.after);
     lastRecordEvent.deltas = deltas;
-    var update = {type: 'updateEvent', value: {'deltas': deltas,
-                  'pageEventId': lastRecordEvent.pageEventId}};
+    var update = {
+      type: 'updateEvent',
+      value: {
+        'deltas': deltas,
+        'pageEventId': lastRecordEvent.pageEventId,
+        'recording': recording
+      }
+    };
     port.postMessage(update); 
   }
 }
@@ -207,7 +213,11 @@ function simulate(request) {
 
   // make sure the deltas from the last event actually happened
   if (params.synthesis.enabled && lastReplayEvent) {
-    var recordDeltas = lastReplayEvent.deltas || [];
+    var recordDeltas = lastReplayEvent.deltas;
+    if (typeof recordDeltas == 'undefined') {
+      replayLog.error('no deltas found for last event:', lastReplayEvent);
+      recordDeltas = [];
+    }
 
     // run the compensation events for the last event
     for (var i in annotationEvents) {
@@ -299,6 +309,15 @@ function simulate(request) {
 
   // update panel showing event was sent
   sendAlert('Received Event: ' + eventData.type);
+}
+
+function updateEvent(request) {
+  var update = request.value;
+  if (lastReplayEvent.pageEventId == update.pageEventId) {
+    for (var key in update) {
+      lastReplayEvent[key] = update[key];
+    }
+  }
 }
 
 function snapshotReplay(target){
@@ -402,6 +421,10 @@ function handleMessage(request) {
     annotationEvents = {};
   } else if (request.type == 'url') {
     port.postMessage({type: 'url', value: document.URL});
+  } else if (request.type == 'updateEvent') {
+    updateEvent(request);
+  } else {
+    log.error('cannot handle message:', request);
   }
 }
 
