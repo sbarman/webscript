@@ -585,7 +585,7 @@ var Replay = (function ReplayClosure() {
       this.tabMapping = {};
       this.replayState = ReplayState.REPLAYING;
     },
-    setNextEvent: function _setNextEvent(time) {
+    setNextTimeout: function _setNextTimeout(time) {
       if (typeof time == 'undefined')
         time = this.getNextTime();
 
@@ -612,6 +612,51 @@ var Replay = (function ReplayClosure() {
       replayLog.log('wait time:', waitTime);
       return waitTime;
     },
+    skipCascadingEvents: function _skipCascadingEvents() {
+      replayLog.log('skipping cascading events');
+
+      var events = this.events;
+      var index = this.index;
+
+      // we haven't started replay yet
+      if (index == 0)
+        return;
+
+      var recordedEvents = this.record.getReplayEvents();
+
+      var lastExtGenEvent = -1;
+      for (var i = recordedEvents.length - 1; i >= 0; --i) {
+        var e = recordedEvents[i];
+        var extGen = e.msg.value.extensionGenerated;
+
+        if (extGen) {
+          lastExtGenEvent = i;
+          break;
+        }
+      }
+
+      // no extension generated events recorded, so no cascading events exist
+      if (lastExtGenEvent == -1)
+        return;
+
+      // start after the last extension generated event, then try to match
+      // with the recorded script
+      for (var i = lastExtGenEvent + 1, ii = recordedEvents.length;
+          i < ii; ++i) {
+        var r = recordedEvents[i].msg.value;
+        var e = events[index].msg.value;
+
+        var sameEventType = r.type == e.type;
+        var sameTarget = r.target == e.target;
+
+        if (sameEventType && sameTarget)
+          ++index;
+        else
+          break;
+      }
+
+      this.index = index;
+    },
     pause: function _pause() {
       var handle = this.timeoutHandle;
       if (handle) {
@@ -621,7 +666,7 @@ var Replay = (function ReplayClosure() {
     },
     restart: function _restart() {
       if (this.timeoutHandle == null)
-        this.setNextEvent(0);
+        this.setNextTimeout(0);
     },
     replayOne: function _replayOne() {
       this.replayState = ReplayState.REPLAY_ONE;
@@ -760,7 +805,7 @@ var Replay = (function ReplayClosure() {
         if (ackReturn != null && ackReturn == true) {
           this.replayState = ReplayState.REPLAYING;
           this.index++;
-          this.setNextEvent(0);
+          this.setNextTimeout(0);
 
           replayLog.log('found wait ack');
           return;
@@ -773,19 +818,22 @@ var Replay = (function ReplayClosure() {
           this.replayState = ReplayState.REPLAYING;
           this.index++;
           if (replayState == ReplayState.REPLAY_ACK)
-            this.setNextEvent(0);
+            this.setNextTimeout(0);
           else
             this.pause();
 
           replayLog.log('found replay ack');
         // no ack, try again in one second
         } else {
-          this.setNextEvent(1000);
+          this.setNextTimeout(1000);
 
           replayLog.log('continue waiting for replay ack');
         }
         return;
       }
+
+      if (params.replaying.skipCascadingEvents)
+        this.skipCascadingEvents();
 
       var events = this.events;
       var index = this.index;
@@ -829,7 +877,7 @@ var Replay = (function ReplayClosure() {
           replayPort = newPort;
           replayLog.log('tab already seen, found port:', replayPort);
         } else {
-          this.setNextEvent();
+          this.setNextTimeout();
           replayLog.log('tab already seen, no port found');
           return;
         }
@@ -844,7 +892,7 @@ var Replay = (function ReplayClosure() {
             var newTabId = newTab.id;
             replay.tabMapping[tab] = newTabId;
             replay.ports.tabIdToTab[newTabId] = newTab;
-            replay.setNextEvent(4000);
+            replay.setNextTimeout(4000);
           }
         );
         return;
@@ -857,7 +905,7 @@ var Replay = (function ReplayClosure() {
         var ackReturn = this.ports.getAck(this.ackVar);
         if (ackReturn == null || ackReturn != true) {
           replayPort.postMessage(msg);
-          this.setNextEvent(1000);
+          this.setNextTimeout(1000);
 
           replayLog.log('continue waiting for wait ack');
         }
@@ -867,7 +915,7 @@ var Replay = (function ReplayClosure() {
         if (type == 'wait') {
           replayPort.postMessage(msg);
           this.replayState = ReplayState.WAIT_ACK;
-          this.setNextEvent(0);
+          this.setNextTimeout(0);
 
           replayLog.log('start waiting for wait ack');
         } else {
@@ -892,7 +940,7 @@ var Replay = (function ReplayClosure() {
               this.index = index;
             }
           }
-          this.setNextEvent();
+          this.setNextTimeout();
         }
       } else {
         throw 'unknown replay state';
