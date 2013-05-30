@@ -99,6 +99,7 @@ var params = null;
     simultaneous: false, // this is probably broken now
     localSnapshot: true,
     timing: 0,
+    outline: true,
     events: events,
     defaultProps: defaultProps,
     logging: {
@@ -125,10 +126,10 @@ var params = null;
       saveReplay: true,
       delayEvents: false,
       cancelUnknownEvents: false,
-      skipCascadingEvents: true
+      skipCascadingEvents: false
     },
-    server: 'http://sbarman.webfactional.com/api/',
-    //server: "http://127.0.0.1:8000/api/",
+    //server: 'http://sbarman.webfactional.com/api/',
+    server: "http://127.0.0.1:8000/api/",
     benchmarking: {
       timeout: 240,
     },

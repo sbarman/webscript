@@ -181,6 +181,39 @@ function updateDeltas(target) {
 }
 
 // ***************************************************************************
+// Capture code
+// ***************************************************************************
+
+var domOutline = DomOutline({
+    borderWidth: 2,
+    onClick: captureNodeReply
+  }
+);
+
+function captureNode() {
+  if (recording == RecordState.RECORDING) {
+    log.log('starting node capture');
+    recording = RecordState.STOPPED;
+    domOutline.start();
+  }
+}
+
+function captureNodeReply(target) {
+  recording = RecordState.RECORDING;
+
+  var eventMessage = {};
+  eventMessage['type'] = 'capture';
+  eventMessage['target'] = nodeToXPath(target);
+  eventMessage['URL'] = document.URL;
+  eventMessage['nodeName'] = target.nodeName.toLowerCase();
+  eventMessage['timestamp'] = new Date().getTime();
+  eventMessage['recordState'] = recording;
+
+  log.log('capturing:', target, eventMessage);
+  port.postMessage({type: 'event', value: eventMessage});
+}
+
+// ***************************************************************************
 // Replaying code
 // ***************************************************************************
 
@@ -195,11 +228,27 @@ function simulate(request) {
   if (eventName == 'wait') {
     checkWait(eventData);
     return;
-  }
-
-  if (eventName == 'custom') {
+  } else if (eventName == 'custom') {
     var script = eval(eventData.script);
     script(element, eventData);
+    return;
+  } else if (eventName == 'capture') {
+    var nodes = xPathToNodes(eventData.target);
+    //if we don't successfully find nodes, let's alert
+    if (nodes.length != 1) {
+      replayLog.error('could not find DOM nodes for replay: ', nodes);
+      return;
+    }
+    
+    var target = nodes[0];
+    replayLog.log('found capture node:', target);
+    var innerHtml = target.innerHTML;
+    var nodeName = target.nodeName.toLowerCase();
+    var msg = {innerHtml: target.innerHTML,
+               nodeName: target.nodeName.toLowerCase()};
+    
+    port.postMessage({type: 'saveCapture', value: msg});
+    port.postMessage({type: 'ack', value: true});
     return;
   }
 
@@ -423,6 +472,8 @@ function handleMessage(request) {
     port.postMessage({type: 'url', value: document.URL});
   } else if (request.type == 'updateEvent') {
     updateEvent(request);
+  } else if (request.type == 'capture') {
+    captureNode();
   } else {
     log.error('cannot handle message:', request);
   }
@@ -472,3 +523,5 @@ var pollUrlId = window.setInterval(function() {
 }, 1000);
 
 })();
+
+

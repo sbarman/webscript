@@ -159,6 +159,10 @@ var Panel = (function PanelClosure() {
         controller.reset();
       });
 
+      $('#capture').click(function(eventObject) {
+        controller.capture();
+      });
+
       $('#replay').click(function(eventObject) {
         controller.replayScript();
       });
@@ -374,6 +378,10 @@ var Record = (function RecordClosure() {
       this.ports.sendToAll({type: 'updateDeltas', value: null});
       this.ports.sendToAll({type: 'recording', value: this.getStatus()});
     },
+    captureNode: function _captureNode() {
+      if (this.recordState == RecordState.RECORDING)
+        this.ports.sendToAll({type: 'capture', value: null});
+    },
     startReplayRecording: function _startReplayRecording() {
       this.recordState = RecordState.REPLAYING;
 
@@ -501,7 +509,9 @@ var Record = (function RecordClosure() {
 
       if (recordState == RecordState.RECORDING && params.simultaneous)
         this.simultaneousReplayer.updateEvent(eventRequest, portName);
-    }, 
+    },
+//    addCapture: function _addCapture(eventRequest, portName) {
+//    },
     clearEvents: function _clearEvents() {
       this.loadedScriptId = null;
       this.events = [];
@@ -705,6 +715,10 @@ var Replay = (function ReplayClosure() {
           replayLog.log('saving replay:', replayEvents);
         }
       }, 1000);
+    },
+    saveCapture: function _saveCapture(capture, scriptId) {
+      replayLog.log('capture:', capture, scriptId);
+      this.scriptServer.saveCapture(capture, scriptId);
     },
     findPortInTab: function _findPortInTab(tab, topFrame, snapshot, msg) {
       var ports = this.ports;
@@ -1107,6 +1121,10 @@ var Controller = (function ControllerClosure() {
       ctlLog.log('reset');
       this.record.clearEvents();
     },
+    capture: function() {
+      ctlLog.log('capture');
+      this.record.captureNode();
+    },
     replayScript: function() {
       ctlLog.log('replay');
       this.stop();
@@ -1153,6 +1171,13 @@ var Controller = (function ControllerClosure() {
     setLoadedEvents: function(scriptId, events) {
       this.record.setEvents(events);
       this.record.setLoadedScriptId(scriptId);
+    },
+    saveCapture: function _saveCapture(capture) {
+      var replay = this.replay;
+      var id = this.record.getLoadedScriptId();
+      if (replay && id) {
+        replay.saveCapture(capture, id);
+      }
     }
   };
 
@@ -1187,13 +1212,17 @@ function handleIdMessage(request, sender, sendResponse) {
 }
 
 // Route messages from the ports
-var handleMessage = function(port, request) {
+function handleMessage(port, request) {
   if (request.type == 'event') {
     record.addEvent(request, port.name);
   } else if (request.type == 'updateEvent') {
     record.updateEvent(request, port.name); 
   } else if (request.type == 'comment') {
     record.addComment(request, port.name);
+  } else if (request.type == 'capture') {
+    record.addCapture(request, port.name);
+  } else if (request.type == 'saveCapture') {
+    controller.saveCapture(request.value);
   } else if (request.type == 'message') {
     panel.addMessage("[" + port.name + "] " + request.value);
   } else if (request.type == 'getRecording') {

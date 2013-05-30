@@ -315,7 +315,53 @@ var ScriptServer = (function ScriptServerClosure() {
         url: server + 'benchmark_run/',
       });
       return null;
-    }
+    },
+    saveCapture: function _saveCapture(capture, scriptId) {
+      var scriptServer = this;
+      var server = this.server;
+
+      var postMsg = {};
+      postMsg['script'] = scriptId;
+      postMsg['innerHtml'] = capture.innerHtml;
+      postMsg['nodeName'] = capture.nodeName;
+      
+      $.ajax({
+        error: function(jqXHR, textStatus, errorThrown) {
+          scriptLog.log(jqXHR, textStatus, errorThrown);
+        },
+        success: function(data, textStatus, jqXHR) {
+          scriptLog.log(data, textStatus, jqXHR);
+        },
+        contentType: 'application/json',
+        data: JSON.stringify(postMsg),
+        dataType: 'json',
+        processData: false,
+        type: 'POST',
+        url: server + 'capture/',
+      });
+      return null;
+    },
+    getCapture: function _getCapture(scriptId, cont) {
+      var scriptServer = this;
+      var server = this.server;
+
+      $.ajax({
+        error: function(jqXHR, textStatus, errorThrown) {
+          scriptLog.log(jqXHR, textStatus, errorThrown);
+        },
+        success: function(data, textStatus, jqXHR) {
+          scriptLog.log(data, textStatus, jqXHR);
+          var capture = data;
+          cont(capture);
+        },
+        url: server + 'capture/' + scriptId + '/?format=json',
+        type: 'GET',
+        processData: false,
+        accepts: 'application/json',
+        dataType: 'json'
+      });
+      return null;
+    },
   };
 
   return ScriptServer;
