@@ -199,6 +199,11 @@ function captureNode() {
   }
 }
 
+function cancelCaptureNode() {
+  recording = RecordState.RECORDING;
+  domOutline.stop();
+}
+
 function captureNodeReply(target) {
   recording = RecordState.RECORDING;
 
@@ -492,6 +497,8 @@ function handleMessage(request) {
     updateEvent(request);
   } else if (request.type == 'capture') {
     captureNode();
+  } else if (request.type == 'cancelCapture') {
+    cancelCaptureNode();
   } else {
     log.error('cannot handle message:', request);
   }

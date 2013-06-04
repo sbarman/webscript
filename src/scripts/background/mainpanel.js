@@ -347,6 +347,7 @@ var Record = (function RecordClosure() {
     this.simultaneousReplayer = null;
     this.lastTime = 0;
     this.loadedScriptId = null;
+    this.capturing = false;
   }
 
   Record.prototype = {
@@ -379,8 +380,10 @@ var Record = (function RecordClosure() {
       this.ports.sendToAll({type: 'recording', value: this.getStatus()});
     },
     captureNode: function _captureNode() {
-      if (this.recordState == RecordState.RECORDING)
+      if (this.recordState == RecordState.RECORDING) {
         this.ports.sendToAll({type: 'capture', value: null});
+        this.capturing = true;
+      }
     },
     startReplayRecording: function _startReplayRecording() {
       this.recordState = RecordState.REPLAYING;
@@ -413,6 +416,11 @@ var Record = (function RecordClosure() {
       this.commentCounter += 1;
     },
     addEvent: function _addEvent(eventRequest, portName) {
+      if (this.capturing && eventRequest.value.type == 'capture') {
+        this.ports.sendToAll({type: 'cancelCapture', value: null});
+        this.capturing = false;
+      }
+
       var ports = this.ports;
       var tab = ports.getTab(portName);
       var portInfo = ports.getTabInfo(tab);
