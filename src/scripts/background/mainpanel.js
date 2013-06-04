@@ -667,6 +667,46 @@ var Replay = (function ReplayClosure() {
 
       this.index = index;
     },
+    markCascadingEvents: function _skipCascadingEvents() {
+      replayLog.log('marked cascading events');
+
+      var events = this.events;
+      var index = this.index;
+
+      // we haven't started replay yet
+      if (index == 0)
+        return;
+
+      var recordedEvents = this.record.getReplayEvents();
+
+      var lastExtGenEvent = -1;
+      for (var i = recordedEvents.length - 1; i >= 0; --i) {
+        var e = recordedEvents[i];
+        var extGen = e.msg.value.extensionGenerated;
+
+        if (extGen) {
+          lastExtGenEvent = i;
+          break;
+        }
+      }
+
+      // no extension generated events recorded, so no cascading events exist
+      if (lastExtGenEvent == -1)
+        return;
+
+      for (var i = lastExtGenEvent + 1, ii = recordedEvents.length,
+               j = index, jj = events.length;
+           i < ii && j < jj; ++i) {
+        var r = recordedEvents[i].msg.value;
+        var e = events[j].msg.value;
+
+        if (r.type == e.type && r.target == e.target) {
+          e.cascading = true;
+          e.cascadingOrigin = index - 1;
+          j++;
+        }
+      }
+    },
     pause: function _pause() {
       var handle = this.timeoutHandle;
       if (handle) {
@@ -846,8 +886,9 @@ var Replay = (function ReplayClosure() {
         return;
       }
 
-      if (params.replaying.skipCascadingEvents)
-        this.skipCascadingEvents();
+      this.markCascadingEvents();
+      //if (params.replaying.skipCascadingEvents)
+      //  this.skipCascadingEvents();
 
       var events = this.events;
       var index = this.index;

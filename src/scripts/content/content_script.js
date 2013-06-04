@@ -23,6 +23,7 @@ var curRecordSnapshot; // snapshot (before and after) the current event
 var lastReplayEvent; // last event replayed
 var lastReplaySnapshot; // snapshop taken before the event is replayed
 var curReplaySnapshot; // snapshot taken before the next event is replayed
+var accumulatedDeltas = [];
 
 // loggers
 var log = getLog('content');
@@ -252,6 +253,16 @@ function simulate(request) {
     return;
   }
 
+  if (params.replaying.skipCascadingEvents && eventData.cascading) {
+    replayLog.debug('skipping event', eventData);
+    port.postMessage({type: 'ack', value: true});
+
+    if (params.synthesis.enabled)
+      accumulatedDeltas =  accumulatedDeltas.concat(eventData.deltas);
+
+    return;
+  }
+
   var nodes = xPathToNodes(eventData.target);
   //if we don't successfully find nodes, let's alert
   if (nodes.length != 1) {
@@ -267,6 +278,9 @@ function simulate(request) {
       replayLog.error('no deltas found for last event:', lastReplayEvent);
       recordDeltas = [];
     }
+
+    recordDeltas = recordDeltas.concat(accumulatedDeltas);
+    accumulatedDeltas = [];
 
     // run the compensation events for the last event
     for (var i in annotationEvents) {
@@ -347,6 +361,10 @@ function simulate(request) {
 
   // used to detect extension generated events
   oEvent.extensionGenerated = true;
+  if (eventData.cascading) {
+    oEvent.cascading = eventData.cascading;
+    oEvent.cascadingOrigin = eventData.cascadingOrigin;
+  }
 
   // this does the actual event simulation
   target.dispatchEvent(oEvent);
