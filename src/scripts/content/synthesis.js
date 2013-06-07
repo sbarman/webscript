@@ -24,16 +24,6 @@ var threeArgFuncs = {
   'substr_func': substr_func
 };
 
-function addComment(name, value) {
-  port.postMessage({
-    type: 'comment',
-    value: {
-      name: name,
-      value: value
-    }
-  });
-}
-
 function Node(type, val, leftNode, rightNode, rightRightNode) {
   this.type = type;
   this.val = val;
@@ -107,112 +97,114 @@ function xPathToNodes(xpath) {
   return results;
 }
 
-//generate annotation events for the case where we just have different
-//values for properties of matched nodes
-function generateCompensationEvent(element, eventMessage,
-                                   delta, thisDeltaShouldHappen) {
-  log.log("Generating compensation event:", element, eventMessage, delta);
-  //first ensure that this element is actually the element on which we have diverged
-
-  //we know that our element will have the same xpath as the eventData specified
-  //but this may not be the same xpath to the corresponding element that was used
-  //during record time.  So we have to make sure that the xpath of the correct divergence
-  //was matched with the xpath of the element
-  if (eventMessage.nodeName != delta.orig.prop.nodeName.toLowerCase())
+// generate annotation events for the case where we just have different
+// values for properties of matched nodes
+function generateCompensation(eventMessage, delta) {
+  log.log("Generating compensation event:", eventMessage, delta);
+  // first ensure that the eventMessage target is the same as the delta's
+  // target. if not, lets just ignore this delta for now
+  if (eventMessage.target != delta.orig.prop.xpath) {
+    log.error('delta and eventMessage targets are different');
     return;
+  }
 
+  // ignore nodes where the element is hidden
   if (delta.orig.prop.type && delta.changed.prop.type &&
       delta.orig.prop.type == 'hidden' && delta.changed.prop.type == 'hidden')
     return;
 
-  if (delta.orig.prop.hidden && delta.changed.prop.hidden &&
-      delta.orig.prop.hidden == 'true' && delta.changed.prop.hidden == 'true')
+  if (delta.orig.prop.hidden == 'true' && delta.changed.prop.hidden == 'true')
     return;
 
-  if (thisDeltaShouldHappen) {
-    var typeOfNode = eventMessage.nodeName;
-    var typeOfEvent = eventMessage.type;
-    var name = typeOfEvent + '_' + typeOfNode;
+  var typeOfNode = eventMessage.nodeName;
+  var typeOfEvent = eventMessage.type;
+  var name = typeOfEvent + '_' + typeOfNode;
+  var element = xPathToNode(eventMessage.target);
 
-    //let's get the examples associated with this type of compensation event
-    var examplesForAnnotation = [];
-    if (annotationEvents[name]) {
-      examplesForAnnotation = annotationEvents[name].examples;
-    } else {
-      annotationEvents[name] = {};
-      annotationEvents[name].examples = examplesForAnnotation;
-    }
-
-    //for the event message, associated properties with their values
-    var messagePropMap = createMessagePropMap(eventMessage);
-    //make nodes for all the message properties
-    var messagePropNodes = createMessagePropNodes(eventMessage);
-    //make nodes for all the element properties
-    var elementPropNodes = createElementPropNodes(delta.orig.prop);
-    //let's add the current instance to our list of examples
-    var newExample = {
-      'messagePropMap': messagePropMap,
-      'elementPropsBefore': delta.orig.prop,
-      'elementPropsAfter': delta.changed.prop,
-      'messagePropNodes': messagePropNodes,
-      'elementPropNodes': elementPropNodes
-    };
-    examplesForAnnotation.push(newExample);
-
-    log.log('annotation examples:', examplesForAnnotation,
-            examplesForAnnotation.length);
-
-    var propsToChange = [delta.divergingProp];
-    propsToChange = _.without(propsToChange, params.synthesis.omittedProps);
-
-    log.log('props to change:', propsToChange);
-
-    var replayNodes = [];
-    var recordNodes = [];
-    for (var i = 0; i < propsToChange.length; i++) {
-      var prop = propsToChange[i];
-
-      //correct the diverging value so we don't diverge, since
-      //our annotation event won't be able to fire till next time
-      //(becuase it might involve a record action)
-      log.log('Setting prop ', prop, ' from ', element[prop], ' to ',
-              delta.changed.prop[prop]);
-      element[prop] = delta.changed.prop[prop];
-
-      var depth = params.synthesis.depth;
-      var optimization = params.synthesis.optimization;
-      var newNode = findExpression(examplesForAnnotation, prop, depth,
-                                   optimization);
-      
-      if (newNode) {
-        replayNodes.push(new TopNode(prop, newNode));
-      } else {
-        //else, use the value of valueAtRecordAfter
-        log.log('NEW ANNOTATION: going to use the value of the ' +
-                'record prop', prop);
-        newNode = new Node('mirror', prop);
-        replayNodes.push(new TopNode(prop, newNode));
-        recordNodes.push(new TopNode(prop, new Node('mirrorRecord', prop)));
-      }
-
-      log.log('new annotation event:', name, prop, newNode.toString());
-      sendAlert(name + ' ' + prop + '\n' + newNode.toString());
-      for (var j in examplesForAnnotation) {
-        var example = examplesForAnnotation[j];
-        log.log('annotation event for prop:', prop, ', before:',
-                example.elementPropsBefore[prop],
-                ', after:', example.elementPropsAfter[prop]);
-      }
-    }
-
-    //now we know what statement we want to do at replay to correct each
-    //diverging prop
-    var compensationEvent = addCompensationEvent(name, typeOfNode,
-        typeOfEvent, replayNodes, recordNodes, newExample);
-    //the line below actually runs the compensation event
-    //if (compensationEvent){compensationEvent.replay(element,eventMessage);}
-    log.log('annotation events after addition ', annotationEvents);
+  //let's get the examples associated with this type of compensation event
+  if (!annotationEvents[name]) {
+    var newAnnotation = {
+      'guard': null,
+      'record': null,
+      'replay': null,
+      'examples': [],
+      'replayNodes': {},
+      'recordNodes': {}
+      };
+    annotationEvents[name] = newAnnotation;
   }
+  var examples = annotationEvents[name].examples;
+
+  // for the event message, associated properties with their values
+  var messagePropMap = createMessagePropMap(eventMessage);
+  // make nodes for all the message properties
+  var messagePropNodes = createMessagePropNodes(eventMessage);
+  // make nodes for all the element properties
+  var elementPropNodes = createElementPropNodes(delta.orig.prop);
+  // let's add the current instance to our list of examples
+  var newExample = {
+    'messagePropMap': messagePropMap,
+    'elementPropsBefore': delta.orig.prop,
+    'elementPropsAfter': delta.changed.prop,
+    'messagePropNodes': messagePropNodes,
+    'elementPropNodes': elementPropNodes
+  };
+  examples.push(newExample);
+
+  log.log('annotation examples:', name, examples, examples.length);
+
+  var propsToChange = [delta.divergingProp];
+  propsToChange = _.without(propsToChange, params.synthesis.omittedProps);
+
+  log.log('props to change:', propsToChange);
+
+  var replayNodes = {};
+  var recordNodes = {};
+  for (var i = 0, ii = propsToChange.length; i < ii; i++) {
+    var prop = propsToChange[i];
+    var before = element[prop];
+    var after = delta.changed.prop[prop];
+
+    // correct the diverging value so we don't diverge, since our annotation
+    // event won't be able to fire till next time (becuase it might involve a
+    // record action)
+    log.log('Setting prop ', prop, ' from ', before, ' to ', after);
+    sendAlert(name + ' ' + prop + ': ' + before + ' -> ' + after);
+
+    element[prop] = after;
+
+    var depth = params.synthesis.depth;
+    var optimization = params.synthesis.optimization;
+    var newNode = findExpression(examples, prop, depth, optimization);
+    
+    if (newNode) {
+      replayNodes[prop] = new TopNode(prop, newNode);
+    } else {
+      //else, use the value from the recording
+      newNode = new Node('mirror', prop);
+      replayNodes[prop] = new TopNode(prop, newNode);
+      recordNodes[prop] = new TopNode(prop, new Node('mirrorRecord', prop));
+    }
+
+    log.log('new annotation event:', name, prop, newNode.toString());
+    sendAlert(name + ' ' + prop + '\n' + newNode.toString());
+
+    // log all the examples so far
+    for (var j in examples) {
+      var example = examples[j];
+      log.log('annotation event for prop ', prop, ':',
+              example.elementPropsBefore[prop], ' -> ',
+              example.elementPropsAfter[prop]);
+    }
+  }
+
+  //now we know what statement we want to do at replay to correct each
+  //diverging prop
+  var compensationEvent = addCompensationEvent(name, typeOfNode,
+      typeOfEvent, replayNodes, recordNodes, newExample);
+  //the line below actually runs the compensation event
+  //if (compensationEvent){compensationEvent.replay(element,eventMessage);}
+  log.log('annotation events after addition ', annotationEvents);
 }
 
 
@@ -856,31 +848,31 @@ function functionsFromNodes(nodes) {
     var targetProp = topNode.targetProp;
     var node = topNode.node;
     var RHSFunction = functionFromNode(node);
-    var wholeFunction = makeFunction(topNode,targetProp,node,RHSFunction);
+    var wholeFunction = makeFunction(targetProp, node, RHSFunction);
     functions.push(wholeFunction);
   }
   return functions;
 }
 
-function makeFunction(topNode,targetProp,node,RHSFunction){
-  var wholeFunction;
+function makeFunction(targetProp, node, RHSFunction){
+  var compFunction;
   if (node.type == 'mirrorRecord') {
-      wholeFunction = function(eventMessage, element) {
-        if ((typeof element[targetProp]) !== 'undefined') {
-          eventMessage[targetProp + '_value'] = RHSFunction(eventMessage,
-                                                            element);
-        }
-      };
-    } else {
-      wholeFunction = function(eventMessage, element) {
-        if ((typeof element[targetProp]) !== 'undefined') {
-          log.log("before compensation:", element[targetProp]);
-          element[targetProp] = RHSFunction(eventMessage, element);
-          log.log("after compensation:", element[targetProp]);
-        }
-      };
-    }
-  return wholeFunction;
+    compFunction = function(eventMessage, element) {
+      if ((typeof element[targetProp]) !== 'undefined') {
+        eventMessage[targetProp + '_value'] = RHSFunction(eventMessage,
+                                                          element);
+      }
+    };
+  } else {
+    compFunction = function(eventMessage, element) {
+      if ((typeof element[targetProp]) !== 'undefined') {
+        log.log("before compensation:", element[targetProp]);
+        element[targetProp] = RHSFunction(eventMessage, element);
+        log.log("after compensation:", element[targetProp]);
+      }
+    };
+  }
+  return compFunction;
 }
 
 
@@ -997,17 +989,24 @@ function makeMirrorRecordFunction(node) {
 
 function addCompensationEvent(name, typeOfNode, typeOfEvent, replayNodes,
                               recordNodes, example) {
-  if (recordNodes.length == 0 && replayNodes.length == 0) {
+  if (Object.keys(recordNodes).length == 0 &&
+      Object.keys(replayNodes).length == 0)
     return;
-  }
+
+  var oldAnnotation = annotationEvents[name];
+  var oldReplayNodes = oldAnnotation.replayNodes;
+  var oldRecordNodes = oldAnnotation.recordNodes;
+
+  var allReplayNodes = $.extend({}, oldReplayNodes, replayNodes);
+  var allRecordNodes = $.extend({}, oldRecordNodes, recordNodes);
 
   var guard = function(eventData, eventMessage) {
     return eventMessage.nodeName == typeOfNode &&
            eventMessage.type == typeOfEvent;
   };
 
-  var replayFunctions = functionsFromNodes(replayNodes);
-  var recordFunctions = functionsFromNodes(recordNodes);
+  var replayFunctions = functionsFromNodes(allReplayNodes);
+  var recordFunctions = functionsFromNodes(allRecordNodes);
 
   var replay = function(element, eventMessage) {
     //iterate through the statements we want to execute
@@ -1037,17 +1036,11 @@ function addCompensationEvent(name, typeOfNode, typeOfEvent, replayNodes,
     'record': record,
     'replay': replay,
     'examples': examples,
-    'replayNodes': replayNodes,
-    'recordNodes': recordNodes
+    'replayNodes': allReplayNodes,
+    'recordNodes': allRecordNodes
   };
   return annotationEvents[name];
 }
-
-//function for sending an alert that the user will see
-function sendAlert(msg) {
-  port.postMessage({type: 'message', value: msg});
-}
-
 
 //***************************************************************************
 //  Delta code
@@ -1117,20 +1110,13 @@ function divergingProps(obj1props, obj2props) {
 
 // takes in two DOMs, traversing and lining up and outputs the differences
 function getDeltas(origDom, changedDom) {
-  return recursiveCompare(origDom, changedDom);
+  return compareNodes(origDom, changedDom);
 }
 
-
 // tries to line up DOM nodes, descends through DOM
-function recursiveCompare(origNode, changedNode) {
+function compareNodes(origNode, changedNode) {
   if (!origNode && !changedNode)
     throw "both nodes doesn't actually exist";
-
-  if (verbose) {
-    log.log('recursiveCompare', origNode, changedNode);
-    log.log(nodeToString(origNode));
-    log.log(nodeToString(changedNode));
-  }
 
   // check if both nodes are DOM nodes and not just text nodes
   if (origNode && changedNode &&
@@ -1184,12 +1170,12 @@ function recursiveCompare(origNode, changedNode) {
     }
 
     if (mismatched) {
-      deltas = deltas.concat(recursiveCompareMismatched(origNode, changedNode));
+      deltas = deltas.concat(compareNodesMismatched(origNode, changedNode));
     } else {
       // if we're here, we didn't have to do mismatched children at this step
       // recurse normally
       for (var i = 0; i < numChildren1; i++) {
-        var newDivergences = recursiveCompare(children1[i], children2[i]);
+        var newDivergences = compareNodes(children1[i], children2[i]);
         deltas = deltas.concat(newDivergences);
       }
     }
@@ -1232,7 +1218,7 @@ function recursiveCompare(origNode, changedNode) {
 //  try to match up children before traversing the rest of the subtree
 //  both obj1 and obj2 have children so we need to find a mapping between
 //    children
-function recursiveCompareMismatched(origNode, changedNode) {
+function compareNodesMismatched(origNode, changedNode) {
   var divergences = [];
   var children1 = origNode.children;
   var children2 = changedNode.children;
@@ -1375,7 +1361,7 @@ function recursiveCompareMismatched(origNode, changedNode) {
         });
       } else {
         //1-1 mapping, so let's keep descending to find out what's going on
-        divergences = divergences.concat(recursiveCompare(children1[i],
+        divergences = divergences.concat(compareNodes(children1[i],
                                          children2[children1MatchedWith[i]]));
       }
     }

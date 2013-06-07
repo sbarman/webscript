@@ -78,11 +78,26 @@ function xPathToNodes(xpath) {
   }
 }
 
+function xPathToNode(xpath) {
+  var nodes = xPathToNodes(xpath);
+  //if we don't successfully find nodes, let's alert
+  if (nodes.length != 1)
+    throw 'xpath has more than 1 node';
+
+  return nodes[0];
+}
+
+
 // ***************************************************************************
 // Server functions
 // ***************************************************************************
 
 function addComment(name, value) {
   port.postMessage({type: 'comment', value: {name: name, value: value}});
+}
+
+//function for sending an alert that the user will see
+function sendAlert(msg) {
+  port.postMessage({type: 'message', value: msg});
 }
 

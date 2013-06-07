@@ -239,15 +239,9 @@ function simulate(request) {
     script(element, eventData);
     return;
   } else if (eventName == 'capture') {
-    var nodes = xPathToNodes(eventData.target);
-    //if we don't successfully find nodes, let's alert
-    if (nodes.length != 1) {
-      replayLog.error('could not find DOM nodes for replay: ', nodes);
-      return;
-    }
-    
-    var target = nodes[0];
+    var target = xPathToNode(eventData.target);
     replayLog.log('found capture node:', target);
+
     var innerHtml = target.innerHTML;
     var nodeName = target.nodeName.toLowerCase();
     var msg = {innerHtml: target.innerHTML,
@@ -268,34 +262,37 @@ function simulate(request) {
     return;
   }
 
-  var nodes = xPathToNodes(eventData.target);
-  //if we don't successfully find nodes, let's alert
-  if (nodes.length != 1) {
-    replayLog.error('could not find DOM nodes for replay: ', nodes);
-    return;
-  }
-  var target = nodes[0];
+  var target = xPathToNode(eventData.target);
 
   // make sure the deltas from the last event actually happened
   if (params.synthesis.enabled && lastReplayEvent) {
+    try {
+      var lastTarget = xPathToNode(lastReplayEvent.target);
+      // run the compensation events for the last event
+      for (var i in annotationEvents) {
+        var annotation = annotationEvents[i];
+        if (annotation.replay && 
+            annotation.guard(lastTarget, lastReplayEvent)) {
+
+          replayLog.debug('annotation event being used', i,
+                          annotation.recordNodes, annotation.replayNodes);
+          annotation.replay(lastTarget, lastReplayEvent);
+        }
+      }
+    } catch(e) {
+      replayLog.error('error when replaying annotation events:', e);
+    }
+
     var recordDeltas = lastReplayEvent.deltas;
     if (typeof recordDeltas == 'undefined') {
       replayLog.error('no deltas found for last event:', lastReplayEvent);
       recordDeltas = [];
     }
 
+    // if we skipped any events, we need to add those deltas to the
+    // deltas of the last event
     recordDeltas = recordDeltas.concat(accumulatedDeltas);
     accumulatedDeltas = [];
-
-    // run the compensation events for the last event
-    for (var i in annotationEvents) {
-      var annotation = annotationEvents[i];
-      if (annotation.replay && annotation.guard(target, lastReplayEvent)) {
-        replayLog.debug('annotation event being used', i,
-                        annotation.recordNodes, annotation.replayNodes);
-        annotation.replay(target, lastReplayEvent);
-      }
-    }
 
     // make sure replay matches recording
     snapshotReplay(target);
@@ -304,7 +301,7 @@ function simulate(request) {
                                    lastReplaySnapshot.after);
       // check if these deltas match the deltas from the last simulated event
       // and synthesize appropriate compensation events for unmatched deltas
-      synthesize(recordDeltas, replayDeltas, target, lastReplayEvent,
+      synthesize(recordDeltas, replayDeltas, lastReplayEvent,
                  lastReplaySnapshot.after);
     }
 
@@ -418,9 +415,7 @@ function resnapshotBefore(target){
     curReplaySnapshot.before = snapshot();
 }
 
-function synthesize(recordDeltas, replayDeltas, target, recordEventMessage,
-                    snapshot) {
-
+function synthesize(recordDeltas, replayDeltas, recordEvent, snapshot) {
   replayLog.info('record deltas:', recordDeltas);
   replayLog.info('replay deltas:', replayDeltas);
 
@@ -436,8 +431,8 @@ function synthesize(recordDeltas, replayDeltas, target, recordEventMessage,
   for (var i = 0, ii = recordDeltasNotMatched.length; i < ii; i++) {
     var delta = recordDeltasNotMatched[i];
     if (delta.type == 'Property is different.')
-      replayLog.debug('generating compensation event:', target, delta);
-      generateCompensationEvent(target, recordEventMessage, delta, true);
+      replayLog.debug('generating compensation event:', delta);
+      generateCompensation(recordEvent, delta);
   }
 }
 
