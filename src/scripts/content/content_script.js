@@ -173,6 +173,7 @@ function updateDeltas(target) {
       type: 'updateEvent',
       value: {
         'deltas': deltas,
+        'nodeSnapshot': snapshotNode(lastRecordSnapshot.target),
         'pageEventId': lastRecordEvent.pageEventId,
         'recording': recording
       }

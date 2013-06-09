@@ -177,14 +177,15 @@ function generateCompensation(eventMessage, delta) {
     var optimization = params.synthesis.optimization;
     var newNode = findExpression(examples, prop, depth, optimization);
     
-    if (newNode) {
-      replayNodes[prop] = new TopNode(prop, newNode);
-    } else {
-      //else, use the value from the recording
+    if (!newNode) {
       newNode = new Node('mirror', prop);
-      replayNodes[prop] = new TopNode(prop, newNode);
-      recordNodes[prop] = new TopNode(prop, new Node('mirrorRecord', prop));
+//      replayNodes[prop] = new TopNode(prop, newNode);
+//    } else {
+      //else, use the value from the recording
+//      replayNodes[prop] = new TopNode(prop, newNode);
+//      recordNodes[prop] = new TopNode(prop, new Node('mirrorRecord', prop));
     }
+    replayNodes[prop] = new TopNode(prop, newNode);
 
     log.log('new annotation event:', name, prop, newNode.toString());
     sendAlert(name + ' ' + prop + '\n' + newNode.toString());
@@ -856,22 +857,15 @@ function functionsFromNodes(nodes) {
 
 function makeFunction(targetProp, node, RHSFunction){
   var compFunction;
-  if (node.type == 'mirrorRecord') {
-    compFunction = function(eventMessage, element) {
-      if ((typeof element[targetProp]) !== 'undefined') {
-        eventMessage[targetProp + '_value'] = RHSFunction(eventMessage,
-                                                          element);
-      }
-    };
-  } else {
-    compFunction = function(eventMessage, element) {
-      if ((typeof element[targetProp]) !== 'undefined') {
-        log.log("before compensation:", element[targetProp]);
-        element[targetProp] = RHSFunction(eventMessage, element);
-        log.log("after compensation:", element[targetProp]);
-      }
-    };
-  }
+  compFunction = function(eventMessage, element) {
+    if ((typeof element[targetProp]) !== 'undefined') {
+      log.log("before compensation:", element[targetProp]);
+      var newVal = RHSFunction(eventMessage, element);
+      if (newVal)
+        element[targetProp] = newVal;
+      log.log("after compensation:", element[targetProp]);
+    }
+  };
   return compFunction;
 }
 
@@ -974,7 +968,12 @@ function makeFunctionFunction(node) {
 function makeMirrorFunction(node) {
   var targetProp = node.val;
   var mirrorFunction = function(eventMessage, element) {
-    return eventMessage[targetProp + '_value'];
+//    return eventMessage[targetProp + '_value'];
+    var snapshotProps = eventMessage.nodeSnapshot.prop;
+    if (targetProp in snapshotProps)
+      return snapshotProps[targetProp];
+    else
+      return null;
   };
   return mirrorFunction;
 }
@@ -1006,7 +1005,7 @@ function addCompensationEvent(name, typeOfNode, typeOfEvent, replayNodes,
   };
 
   var replayFunctions = functionsFromNodes(allReplayNodes);
-  var recordFunctions = functionsFromNodes(allRecordNodes);
+  //var recordFunctions = functionsFromNodes(allRecordNodes);
 
   var replay = function(element, eventMessage) {
     //iterate through the statements we want to execute
@@ -1015,18 +1014,18 @@ function addCompensationEvent(name, typeOfNode, typeOfEvent, replayNodes,
     }
   };
 
-  var record;
-  //if we don't have anything to do at record, go ahead and avoid
-  //making a function for it
-  if (recordFunctions.length == 0) {
-    record = null;
-  } else {
-    var record = function(element, eventMessage) {
-      for (var i = 0; i < recordFunctions.length; i++) {
-        recordFunctions[i](element, eventMessage);
-      }
-    };
-  }
+  var record = null;
+//  //if we don't have anything to do at record, go ahead and avoid
+//  //making a function for it
+//  if (recordFunctions.length == 0) {
+//    record = null;
+//  } else {
+//    var record = function(element, eventMessage) {
+//      for (var i = 0; i < recordFunctions.length; i++) {
+//        recordFunctions[i](element, eventMessage);
+//      }
+//    };
+//  }
 
   //let's get the examples associated with this type of compensation event
   var examples = annotationEvents[name].examples;
