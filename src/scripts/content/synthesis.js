@@ -883,8 +883,8 @@ function functionFromNode(node) {
     return makeFunctionFunction(node);
   } else if (node.type == 'mirror') {
     return makeMirrorFunction(node);
-  } else if (node.type == 'mirrorRecord') {
-    return makeMirrorRecordFunction(node);
+//  } else if (node.type == 'mirrorRecord') {
+//    return makeMirrorRecordFunction(node);
   }
 }
 
