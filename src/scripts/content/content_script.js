@@ -134,7 +134,12 @@ function recordEvent(eventData) {
     while (curTime < endTime)
       curTime = new Date().getTime();
   }
-  
+
+  if (params.replaying.dummyCascadingEvents && eventData.dummy) {
+    eventData.stopImmediatePropagation();
+    eventData.preventDefault();
+  }
+
   return true;
 };
 
@@ -379,6 +384,14 @@ function simulate(request) {
 
   // update panel showing event was sent
   sendAlert('Received Event: ' + eventData.type);
+
+  if (params.replaying.dummyCascadingEvents) {
+    var dummyEvent = document.createEvent(eventType);
+    dummyEvent.initEvent('copy', true, true);
+    dummyEvent.dummy = true;
+    dummyEvent.extensionGenerated = true;
+    document.body.dispatchEvent(dummyEvent);
+  }
 }
 
 function updateEvent(request) {

@@ -126,7 +126,8 @@ var params = null;
       saveReplay: true,
       delayEvents: false,
       cancelUnknownEvents: false,
-      skipCascadingEvents: true
+      skipCascadingEvents: true,
+      dummyCascadingEvents: false
     },
     server: 'http://sbarman.webfactional.com/api/',
     //server: "http://127.0.0.1:8000/api/",
