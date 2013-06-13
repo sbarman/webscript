@@ -210,7 +210,7 @@ var ScriptServer = (function ScriptServerClosure() {
       getComments();
       return null;
     },
-    getScript: function _getScript(name, cont) {
+    getScript: function _getScript(name, convert, cont) {
       var scriptServer = this;
       var server = this.server;
 
@@ -234,6 +234,11 @@ var ScriptServer = (function ScriptServerClosure() {
               var serverEvents = scriptEvents.sort(function(a, b) {
                 return a.execution_order - b.execution_order;
               });
+
+              if (!convert) {
+                cont(script.id, serverEvents);
+                return;
+              }
 
               for (var i = 0, ii = serverEvents.length; i < ii; ++i) {
                 var e = serverEvents[i];
