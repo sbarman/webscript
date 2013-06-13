@@ -33,38 +33,7 @@ function nodeToXPath(element) {
 
 // convert an xpath expression to an array of DOM nodes
 function xPathToNodes(xpath) {
-  // contains an node with a namspace (maybe?)
-  if (xpath.indexOf(':') > 0) {
-    var currentNode = document.documentElement;
-    var paths = xpath.split('/');
-    // assume first path is "HTML"
-    paths: for (var i = 1, ii = paths.length; i < ii; ++i) {
-      var children = currentNode.children;
-      var path = paths[i];
-      var splits = path.split(/\[|\]/)
-
-      var tag = splits[0];
-      if (splits.length > 1) {
-        var index = parseInt(splits[1]);
-      } else {
-        var index = 1;
-      }
-
-      var seen = 0;
-      children: for (var j = 0, jj = children.length; j < jj; ++j) {
-        var c = children[j];
-        if (c.tagName == tag) {
-          seen++;
-          if (seen == index) {
-            currentNode = c;
-            continue paths;
-          }
-        }
-      }
-      throw "Cannot find child";
-    }
-    return [currentNode];
-  } else {
+  try {
     var q = document.evaluate(xpath, document, null, XPathResult.ANY_TYPE,
                               null);
     var results = [];
@@ -75,7 +44,40 @@ function xPathToNodes(xpath) {
       next = q.iterateNext();
     }
     return results;
+  } catch (e) {
+    getLog('misc').error('xPath throws error when evaluated', xpath); 
   }
+
+  // error was thrown, attempt to just walk down the dom tree
+  var currentNode = document.documentElement;
+  var paths = xpath.split('/');
+  // assume first path is "HTML"
+  paths: for (var i = 1, ii = paths.length; i < ii; ++i) {
+    var children = currentNode.children;
+    var path = paths[i];
+    var splits = path.split(/\[|\]/)
+
+    var tag = splits[0];
+    if (splits.length > 1) {
+      var index = parseInt(splits[1]);
+    } else {
+      var index = 1;
+    }
+
+    var seen = 0;
+    children: for (var j = 0, jj = children.length; j < jj; ++j) {
+      var c = children[j];
+      if (c.tagName == tag) {
+        seen++;
+        if (seen == index) {
+          currentNode = c;
+          continue paths;
+        }
+      }
+    }
+    throw "Cannot find child";
+  }
+  return [currentNode];
 }
 
 function xPathToNode(xpath) {
