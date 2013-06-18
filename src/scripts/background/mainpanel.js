@@ -1212,7 +1212,7 @@ var Controller = (function ControllerClosure() {
     getScript: function(name) {
       ctlLog.log('getting script');
       var controller = this;
-      var events = this.scriptServer.getScript(name,
+      var events = this.scriptServer.getScript(name, true,
           function(scriptId, events) {
             controller.setLoadedEvents(scriptId, events);
           });

@@ -85,18 +85,6 @@ TopNode.prototype = {
   }
 };
 
-function xPathToNodes(xpath) {
-  var q = document.evaluate(xpath, document, null, XPathResult.ANY_TYPE, null);
-  var results = [];
-
-  var next = q.iterateNext();
-  while (next) {
-    results.push(next);
-    next = q.iterateNext();
-  }
-  return results;
-}
-
 // generate annotation events for the case where we just have different
 // values for properties of matched nodes
 function generateCompensation(eventMessage, delta) {

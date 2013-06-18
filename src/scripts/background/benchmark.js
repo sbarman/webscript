@@ -28,7 +28,7 @@ var Benchmarker = (function BenchmarkerClosure() {
           return;
 
         var benchmark = benchmarks[index];
-        scriptServer.getScript(benchmark.script.id, function(id, events) {
+        scriptServer.getScript(benchmark.script.id, true, function(id, events) {
           benchmarker.controller.setLoadedEvents(id, events);
           benchmarker.runBenchmark(events, benchmark.success_condition,
                                    function(replay) {
