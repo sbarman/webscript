@@ -62,9 +62,9 @@ var PortManager = (function PortManagerClosure() {
       this.portNameToPortInfo[portName] = value;
 
       var tabIdToPortNames = this.tabIdToPortNames;
-      if (!(tabId in tabIdToPortNames)) {
+      if (!(tabId in tabIdToPortNames))
         tabIdToPortNames[tabId] = [];
-      }
+
       tabIdToPortNames[tabId].push(portName);
 
       value.portName = portName;
@@ -72,7 +72,13 @@ var PortManager = (function PortManagerClosure() {
       if (value.top) {
         this.tabIdToCurrentPortInfo[tabId] = {top: value, frames: []};
       } else {
-        var portInfo = this.tabIdToCurrentPortInfo[tabId];
+        var tabIdToCurrentPortInfo = this.tabIdToCurrentPortInfo;
+
+        if (!tabIdToCurrentPortInfo[tabId]) {
+          portLog.error("can't find mapping in tabIdToCurrentPortInfo:", tabId);
+          tabIdToCurrentPortInfo[tabId] = {top: null, frames: []};
+        }
+        var portInfo = tabIdToCurrentPortInfo[tabId];
         portInfo.frames.push(value);
       }
       return portName;
@@ -103,9 +109,10 @@ var PortManager = (function PortManagerClosure() {
 
         // the top level port might have already been disconnected which means
         // portInfo will be null
-        if (portInfo != undefined) {
+        // if (portInfo != undefined) {
           if (portInfo.top.portName == portName) {
-            delete tabIdToCurrentPortInfo[tabId];
+            portInfo.top = null;
+            // delete tabIdToCurrentPortInfo[tabId];
           } else {
             var frames = portInfo.frames;
             for (var i = 0, ii = frames.length; i < ii; ++i) {
@@ -115,7 +122,7 @@ var PortManager = (function PortManagerClosure() {
               }
             }
           }
-        }
+        // }
       });
     },
     getAck: function() {
@@ -405,11 +412,12 @@ var Record = (function RecordClosure() {
       recordLog.log('added comment:', comment, portName);
 
       if (this.recordState == RecordState.RECORDING) {
-        comment.execution_order = this.events.length + (0.01 *
+        // order number is the index of the current event + some fraction
+        comment.execution_order = (this.events.length - 1) + (0.01 *
             (this.commentCounter + 1));
         this.comments.push(comment);
       } else if (this.recordState == RecordState.REPLAYING) {
-        comment.execution_order = this.replayEvents.length + (0.01 *
+        comment.execution_order = (this.replayEvents.length - 1) + (0.01 *
             (this.commentCounter + 1));
         this.replayComments.push(comment);
       }
@@ -796,6 +804,11 @@ var Replay = (function ReplayClosure() {
           }
         }
 
+        if (urlFrames.length == 0)
+          return;
+        else if (urlFrames.length == 1)
+          return ports.getPort(urlFrames[0].portName);
+
         var allFrameSnapshots = true;
         for (var i = 0, ii = urlFrames.length; i < ii; i++) {
           if (!ports.getSnapshot(urlFrames[i].portName)) {
@@ -846,8 +859,8 @@ var Replay = (function ReplayClosure() {
               topScore = score;
             }
           }
-          newPort = ports[urlFrames[index].portName];
-          portToSnapshot = {};
+          this.portToSnapshot = {};
+          newPort = ports.getPort(urlFrames[index].portName);
         } else {
           for (var i = 0, ii = urlFrames.length; i < ii; i++) {
             var port = ports.getPort(urlFrames[i].portName);
@@ -1213,7 +1226,7 @@ var Controller = (function ControllerClosure() {
       ctlLog.log('getting script');
       var controller = this;
       var events = this.scriptServer.getScript(name, true,
-          function(scriptId, events) {
+          function(scriptId, events, comments) {
             controller.setLoadedEvents(scriptId, events);
           });
     },

@@ -165,18 +165,15 @@ function generateCompensation(eventMessage, delta) {
     var optimization = params.synthesis.optimization;
     var newNode = findExpression(examples, prop, depth, optimization);
     
-    if (!newNode) {
+    if (!newNode)
       newNode = new Node('mirror', prop);
-//      replayNodes[prop] = new TopNode(prop, newNode);
-//    } else {
-      //else, use the value from the recording
-//      replayNodes[prop] = new TopNode(prop, newNode);
-//      recordNodes[prop] = new TopNode(prop, new Node('mirrorRecord', prop));
-    }
+
     replayNodes[prop] = new TopNode(prop, newNode);
 
     log.log('new annotation event:', name, prop, newNode.toString());
     sendAlert(name + ' ' + prop + '\n' + newNode.toString());
+    addComment('annotation create', name + ':' + prop + ':' + 
+               newNode.toString());
 
     // log all the examples so far
     for (var j in examples) {
@@ -830,28 +827,31 @@ function generateValuesForExamples(examples, correctTuple) {
   return values;
 }
 
-function functionsFromNodes(nodes) {
+function functionsFromNodes(nodes, typeOfNode, typeOfEvent) {
   var functions = [];
   for (var i in nodes) {
     var topNode = nodes[i];
     var targetProp = topNode.targetProp;
     var node = topNode.node;
     var RHSFunction = functionFromNode(node);
-    var wholeFunction = makeFunction(targetProp, node, RHSFunction);
+    var wholeFunction = makeFunction(targetProp, node, RHSFunction, typeOfNode,
+                                     typeOfEvent);
     functions.push(wholeFunction);
   }
   return functions;
 }
 
-function makeFunction(targetProp, node, RHSFunction){
-  var compFunction;
-  compFunction = function(eventMessage, element) {
+function makeFunction(targetProp, node, RHSFunction, typeOfNode, typeOfEvent){
+  var compFunction = function(eventMessage, element) {
     if ((typeof element[targetProp]) !== 'undefined') {
-      log.log("before compensation:", element[targetProp]);
+      var oldVal = element[targetProp];
+      log.log("before compensation:", oldVal);
       var newVal = RHSFunction(eventMessage, element);
       if (newVal)
         element[targetProp] = newVal;
       log.log("after compensation:", element[targetProp]);
+      addComment('annotation execute', typeOfNode + ":" + typeOfEvent + ":" +
+                 targetProp + ':' + oldVal + ':' + newVal);
     }
   };
   return compFunction;
@@ -992,8 +992,8 @@ function addCompensationEvent(name, typeOfNode, typeOfEvent, replayNodes,
            eventMessage.type == typeOfEvent;
   };
 
-  var replayFunctions = functionsFromNodes(allReplayNodes);
-  //var recordFunctions = functionsFromNodes(allRecordNodes);
+  var replayFunctions = functionsFromNodes(allReplayNodes, typeOfNode,
+                                           typeOfEvent);
 
   var replay = function(element, eventMessage) {
     //iterate through the statements we want to execute
@@ -1003,17 +1003,6 @@ function addCompensationEvent(name, typeOfNode, typeOfEvent, replayNodes,
   };
 
   var record = null;
-//  //if we don't have anything to do at record, go ahead and avoid
-//  //making a function for it
-//  if (recordFunctions.length == 0) {
-//    record = null;
-//  } else {
-//    var record = function(element, eventMessage) {
-//      for (var i = 0; i < recordFunctions.length; i++) {
-//        recordFunctions[i](element, eventMessage);
-//      }
-//    };
-//  }
 
   //let's get the examples associated with this type of compensation event
   var examples = annotationEvents[name].examples;

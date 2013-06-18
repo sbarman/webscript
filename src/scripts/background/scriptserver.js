@@ -24,8 +24,6 @@ var ScriptServer = (function ScriptServerClosure() {
 
         var e = events[i];
         var msgValue = e.msg.value;
-        evtMsg['dom_post_event_state'] = JSON.stringify(msgValue.snapshotAfter);
-        evtMsg['dom_pre_event_state'] = JSON.stringify(msgValue.snapshotBefore);
         evtMsg['event_type'] = msgValue.type;
         evtMsg['execution_order'] = i;
 
@@ -43,9 +41,6 @@ var ScriptServer = (function ScriptServerClosure() {
         }
 
         msgprop: for (var prop in msgValue) {
-          if (prop == 'snapshotBefore' || prop == 'snapshotAfter') {
-            continue msgprop;
-          }
           var propMsg = {};
           var val = msgValue[prop];
           propMsg['name'] = prop;
@@ -88,7 +83,7 @@ var ScriptServer = (function ScriptServerClosure() {
         var commentMsg = [];
         for (var i = 0, ii = comments.length; i < ii; ++i) {
           var comment = comments[i];
-          comment['script_id'] = parentId;
+          comment['script_id'] = scriptId;
           commentMsg.push(comment);
         }
 
@@ -229,38 +224,39 @@ var ScriptServer = (function ScriptServerClosure() {
                 script = s;
               }
             }
-            var events = [];
-            scriptServer.getEvents(script.events, function(scriptEvents) {
-              var serverEvents = scriptEvents.sort(function(a, b) {
-                return a.execution_order - b.execution_order;
-              });
 
-              if (!convert) {
-                cont(script.id, serverEvents);
-                return;
-              }
+            scriptServer.getComments(script.id, function(comments) {
+              scriptServer.getEvents(script.events, function(scriptEvents) {
+                var serverEvents = scriptEvents.sort(function(a, b) {
+                  return a.execution_order - b.execution_order;
+                });
 
-              for (var i = 0, ii = serverEvents.length; i < ii; ++i) {
-                var e = serverEvents[i];
-                var serverParams = e.parameters;
-                var event = {};
-                event.msg = {type: 'event', value: {}};
-
-                var msgValue = event.msg.value;
-                msgValue.snapshotBefore = JSON.parse(e.dom_pre_event_state);
-                msgValue.snapshotAfter = JSON.parse(e.dom_post_event_state);
-
-                for (var j = 0, jj = serverParams.length; j < jj; ++j) {
-                  var p = serverParams[j];
-                  if (p.name.charAt(0) == '_') {
-                    event[p.name.slice(1)] = JSON.parse(p.value);
-                  } else {
-                    msgValue[p.name] = JSON.parse(p.value);
-                  }
+                if (!convert) {
+                  cont(script.id, serverEvents, comments);
+                  return;
                 }
-                events.push(event);
-              }
-              cont(script.id, events);
+
+                var events = [];
+                for (var i = 0, ii = serverEvents.length; i < ii; ++i) {
+                  var e = serverEvents[i];
+                  var serverParams = e.parameters;
+                  var event = {};
+                  event.msg = {type: 'event', value: {}};
+
+                  var msgValue = event.msg.value;
+
+                  for (var j = 0, jj = serverParams.length; j < jj; ++j) {
+                    var p = serverParams[j];
+                    if (p.name.charAt(0) == '_') {
+                      event[p.name.slice(1)] = JSON.parse(p.value);
+                    } else {
+                      msgValue[p.name] = JSON.parse(p.value);
+                    }
+                  }
+                  events.push(event);
+                }
+                cont(script.id, events, comments);
+              });
             });
           }
         },

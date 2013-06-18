@@ -140,6 +140,7 @@ function recordEvent(eventData) {
     eventData.preventDefault();
   }
 
+  // TODO: special case with mouseover, need to return false
   return true;
 };
 
@@ -374,6 +375,8 @@ function simulate(request) {
     oEvent.cascadingOrigin = eventData.cascadingOrigin;
   }
 
+  oEvent.isTrusted = true;
+
   // this does the actual event simulation
   target.dispatchEvent(oEvent);
   replayLog.debug('[' + id + '] dispatchEvent', eventName, options, target, 
@@ -441,12 +444,25 @@ function synthesize(recordDeltas, replayDeltas, recordEvent, snapshot) {
   replayLog.info('record deltas not matched: ', recordDeltasNotMatched);
   replayLog.info('replay deltas not matched: ', replayDeltasNotMatched);
 
+  for (var i = 0, ii = replayDeltasNotMatched.length; i < ii; ++i) {
+    var delta = replayDeltasNotMatched[i];
+    replayLog.debug('unmatched replay delta', delta);
+    var divProp = delta.divergingProp;
+    addComment('replay delta', divProp + ':' + delta.orig.prop[divProp] + 
+               '->' + delta.changed.prop[divProp]);
+  }
+
   //the thing below is the stuff that's doing divergence synthesis
-  for (var i = 0, ii = recordDeltasNotMatched.length; i < ii; i++) {
+  for (var i = 0, ii = recordDeltasNotMatched.length; i < ii; ++i) {
     var delta = recordDeltasNotMatched[i];
-    if (delta.type == 'Property is different.')
+
+    var divProp = delta.divergingProp;
+    addComment('record delta', divProp + ':' + delta.orig.prop[divProp] +
+               '->' + delta.changed.prop[divProp]);
+    if (delta.type == 'Property is different.') {
       replayLog.debug('generating compensation event:', delta);
       generateCompensation(recordEvent, delta);
+    }
   }
 }
 
