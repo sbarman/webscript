@@ -132,7 +132,7 @@ var params = null;
     server: 'http://sbarman.webfactional.com/api/',
     //server: "http://127.0.0.1:8000/api/",
     benchmarking: {
-      timeout: 240,
+      timeout: 600,
     },
   };
 

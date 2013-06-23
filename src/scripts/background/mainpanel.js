@@ -591,7 +591,9 @@ var Replay = (function ReplayClosure() {
   };
 
   Replay.prototype = {
-    replay: function _replay() {
+    replay: function _replay(cont) {
+      this.cont = cont;
+
       replayLog.log('starting replay');
       this.pause();
       this.record.startReplayRecording();
@@ -758,6 +760,10 @@ var Replay = (function ReplayClosure() {
       var record = this.record;
       record.stopReplayRecording();
 
+      var cont = this.cont;
+      if (cont)
+        cont(this);
+
       var scriptServer = this.scriptServer;
       setTimeout(function() {
         var replayEvents = record.getReplayEvents();
@@ -767,7 +773,7 @@ var Replay = (function ReplayClosure() {
         if (params.replaying.saveReplay && scriptId && 
             replayEvents.length > 0) {
           scriptServer.saveScript("replay " + scriptId, replayEvents, comments,
-                                  scriptId);
+                                  params, scriptId);
           replayLog.log('saving replay:', replayEvents);
         }
       }, 1000);
@@ -1220,7 +1226,7 @@ var Controller = (function ControllerClosure() {
       ctlLog.log('saving script');
       var events = this.record.getEvents();
       var comments = this.record.getComments();
-      this.scriptServer.saveScript(name, events, comments);
+      this.scriptServer.saveScript(name, events, comments, params);
     },
     getScript: function(name) {
       ctlLog.log('getting script');

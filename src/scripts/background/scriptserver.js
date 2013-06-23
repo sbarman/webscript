@@ -75,39 +75,75 @@ var ScriptServer = (function ScriptServerClosure() {
     saveComments: function _saveComments(scriptId, comments) {
       var server = this.server;
 
-      function saveComments() {
-        if (!comments)
-          return;
+      if (!comments)
+        return;
 
-        var postMsg = {};
-        var commentMsg = [];
-        for (var i = 0, ii = comments.length; i < ii; ++i) {
-          var comment = comments[i];
-          comment['script_id'] = scriptId;
-          commentMsg.push(comment);
-        }
-
-        postMsg['comments'] = commentMsg;
-        scriptLog.log('saving comments:', postMsg);
-        $.ajax({
-          error: function(jqXHR, textStatus, errorThrown) {
-            scriptLog.log('error comments', jqXHR, textStatus, errorThrown);
-          },
-          success: function(data, textStatus, jqXHR) {
-            scriptLog.log(data, jqXHR, textStatus);
-          },
-          contentType: 'application/json',
-          data: JSON.stringify(postMsg),
-          dataType: 'json',
-          processData: false,
-          type: 'POST',
-          url: server + 'comment/'
-        });
+      var postMsg = {};
+      var commentMsg = [];
+      for (var i = 0, ii = comments.length; i < ii; ++i) {
+        var comment = comments[i];
+        comment['script_id'] = scriptId;
+        commentMsg.push(comment);
       }
 
-      saveComments();
+      postMsg['comments'] = commentMsg;
+      scriptLog.log('saving comments:', postMsg);
+      $.ajax({
+        error: function(jqXHR, textStatus, errorThrown) {
+          scriptLog.log('error comments', jqXHR, textStatus, errorThrown);
+        },
+        success: function(data, textStatus, jqXHR) {
+          scriptLog.log(data, jqXHR, textStatus);
+        },
+        contentType: 'application/json',
+        data: JSON.stringify(postMsg),
+        dataType: 'json',
+        processData: false,
+        type: 'POST',
+        url: server + 'comment/'
+      });
     },
-    saveScript: function _saveScript(name, events, comments, parentId) {
+    saveParams: function _saveParams(scriptId, params) {
+      var server = this.server;
+
+      function convertParams(param, prefix) {
+        prefix = prefix || '';
+        var list = [];
+
+        for (var p in param) {
+          var v = param[p];
+          if (typeof v == 'object')
+            list = list.concat(convertParams(v, prefix + p + '.'));
+          else
+            list.push({name: prefix + p, value: v});
+        }
+        return list;
+      }
+
+      var listParams = convertParams(params);
+
+      var postMsg = {};
+
+      postMsg['params'] = listParams;
+      postMsg['script_id'] = scriptId;
+
+      scriptLog.log('saving params:', postMsg);
+      $.ajax({
+        error: function(jqXHR, textStatus, errorThrown) {
+          scriptLog.log('error params', jqXHR, textStatus, errorThrown);
+        },
+        success: function(data, textStatus, jqXHR) {
+          scriptLog.log(data, jqXHR, textStatus);
+        },
+        contentType: 'application/json',
+        data: JSON.stringify(postMsg),
+        dataType: 'json',
+        processData: false,
+        type: 'POST',
+        url: server + 'script_param/'
+      });
+    },
+    saveScript: function _saveScript(name, events, comments, params, parentId) {
       if (events.length == 0)
         return;
 
@@ -138,6 +174,7 @@ var ScriptServer = (function ScriptServerClosure() {
           var scriptId = data.id;
           scriptServer.saveEvents(scriptId, events);
           scriptServer.saveComments(scriptId, comments);
+          scriptServer.saveParams(scriptId, params);
         },
         contentType: 'application/json',
         data: JSON.stringify(postMsg),
