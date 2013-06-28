@@ -307,8 +307,8 @@ function simulate(request) {
       var replayDeltas = getDeltas(lastReplaySnapshot.before,
                                    lastReplaySnapshot.after);
       // check if these deltas match the deltas from the last simulated event
-      // and synthesize appropriate compensation events for unmatched deltas
-      synthesize(recordDeltas, replayDeltas, lastReplayEvent,
+      // and correct for unmatched deltas
+      fixDeltas(recordDeltas, replayDeltas, lastReplayEvent,
                  lastReplaySnapshot.after);
     }
 
@@ -432,7 +432,7 @@ function resnapshotBefore(target){
     curReplaySnapshot.before = snapshot();
 }
 
-function synthesize(recordDeltas, replayDeltas, recordEvent, snapshot) {
+function fixDeltas(recordDeltas, replayDeltas, recordEvent, snapshot) {
   replayLog.info('record deltas:', recordDeltas);
   replayLog.info('replay deltas:', replayDeltas);
 
@@ -444,24 +444,40 @@ function synthesize(recordDeltas, replayDeltas, recordEvent, snapshot) {
   replayLog.info('record deltas not matched: ', recordDeltasNotMatched);
   replayLog.info('replay deltas not matched: ', replayDeltasNotMatched);
 
+  var element = xPathToNode(recordEvent.target);
+
   for (var i = 0, ii = replayDeltasNotMatched.length; i < ii; ++i) {
     var delta = replayDeltasNotMatched[i];
     replayLog.debug('unmatched replay delta', delta);
-    var divProp = delta.divergingProp;
-    addComment('replay delta', divProp + ':' + delta.orig.prop[divProp] + 
-               '->' + delta.changed.prop[divProp]);
+    
+    if (delta.type == 'Property is different.') {
+      var divProp = delta.divergingProp;
+      addComment('replay delta', divProp + ':' + delta.orig.prop[divProp] + 
+                 '->' + delta.changed.prop[divProp]);
+
+      if (params.replaying.strategy == ReplayStrategy.FORCED) {
+        element[divProp] = delta.orig.prop[divProp];
+      }
+    }
+
   }
 
   //the thing below is the stuff that's doing divergence synthesis
   for (var i = 0, ii = recordDeltasNotMatched.length; i < ii; ++i) {
     var delta = recordDeltasNotMatched[i];
+    replayLog.debug('unmatched record delta', delta);
 
-    var divProp = delta.divergingProp;
-    addComment('record delta', divProp + ':' + delta.orig.prop[divProp] +
-               '->' + delta.changed.prop[divProp]);
     if (delta.type == 'Property is different.') {
-      replayLog.debug('generating compensation event:', delta);
-      generateCompensation(recordEvent, delta);
+      var divProp = delta.divergingProp;
+      addComment('record delta', divProp + ':' + delta.orig.prop[divProp] +
+                 '->' + delta.changed.prop[divProp]);
+
+      if (params.replaying.strategy == ReplayStrategy.COMPENSATION) {
+        replayLog.debug('generating compensation event:', delta);
+        generateCompensation(recordEvent, delta);
+      } else if (params.replaying.strategy == ReplayStrategy.FORCED) {
+        element[divProp] = delta.changed.prop[divProp];
+      }
     }
   }
 }

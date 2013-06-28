@@ -127,7 +127,9 @@ var params = null;
       delayEvents: false,
       cancelUnknownEvents: false,
       skipCascadingEvents: true,
-      dummyCascadingEvents: false
+      dummyCascadingEvents: false,
+      eventTimeout: 60,
+      strategy: ReplayStrategy.FORCED 
     },
     server: 'http://sbarman.webfactional.com/api/',
     //server: "http://127.0.0.1:8000/api/",

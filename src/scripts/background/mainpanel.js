@@ -215,7 +215,6 @@ var Panel = (function PanelClosure() {
       // content scripts so that everything is kept in sync
       $('#params').change(function(eventObject) {
         panel.updateParams();
-        panel.ports.sendToAll({type: 'params', value: params});
         return false;
       });
     },
@@ -279,6 +278,7 @@ var Panel = (function PanelClosure() {
         }
         cur[names[names.length - 1]] = val;
       }
+      this.controller.updateParams();
     },
     addEvent: function _addEvent(eventRecord) {
       var eventInfo = eventRecord.msg.value;
@@ -612,6 +612,7 @@ var Replay = (function ReplayClosure() {
       this.portMapping = {};
       this.tabMapping = {};
       this.replayState = ReplayState.REPLAYING;
+      this.timeoutInfo = {startTime: 0, index: -1};
     },
     setNextTimeout: function _setNextTimeout(time) {
       if (typeof time == 'undefined')
@@ -639,51 +640,6 @@ var Replay = (function ReplayClosure() {
       }
       replayLog.log('wait time:', waitTime);
       return waitTime;
-    },
-    skipCascadingEvents: function _skipCascadingEvents() {
-      replayLog.log('skipping cascading events');
-
-      var events = this.events;
-      var index = this.index;
-
-      // we haven't started replay yet
-      if (index == 0)
-        return;
-
-      var recordedEvents = this.record.getReplayEvents();
-
-      var lastExtGenEvent = -1;
-      for (var i = recordedEvents.length - 1; i >= 0; --i) {
-        var e = recordedEvents[i];
-        var extGen = e.msg.value.extensionGenerated;
-
-        if (extGen) {
-          lastExtGenEvent = i;
-          break;
-        }
-      }
-
-      // no extension generated events recorded, so no cascading events exist
-      if (lastExtGenEvent == -1)
-        return;
-
-      // start after the last extension generated event, then try to match
-      // with the recorded script
-      for (var i = lastExtGenEvent + 1, ii = recordedEvents.length;
-          i < ii; ++i) {
-        var r = recordedEvents[i].msg.value;
-        var e = events[index].msg.value;
-
-        var sameEventType = r.type == e.type;
-        var sameTarget = r.target == e.target;
-
-        if (sameEventType && sameTarget)
-          ++index;
-        else
-          break;
-      }
-
-      this.index = index;
     },
     markCascadingEvents: function _skipCascadingEvents() {
       replayLog.log('marked cascading events');
@@ -878,6 +834,25 @@ var Replay = (function ReplayClosure() {
       return newPort;
     },
     guts: function _guts() {
+      // we have enabled event timeouts
+      var eventTimeout = params.replaying.eventTimeout;
+      if (eventTimeout > 0) {
+        var timeoutInfo = this.timeoutInfo;
+        var curTime = new Date().getTime(); 
+
+        // we havent changed events
+        if (timeoutInfo.index == this.index) {
+          if (curTime - timeoutInfo.startTime > eventTimeout * 1000) {
+            // lets call the end of this script
+            replayLog.log('event ' + index + ': has timed out');
+            this.finish();
+            return;
+          }
+        } else {
+          this.timeoutInfo = {startTime: curTime, index: this.index};
+        }
+      }
+
       var replayState = this.replayState;
 
       // check for acks
@@ -914,8 +889,6 @@ var Replay = (function ReplayClosure() {
       }
 
       this.markCascadingEvents();
-      //if (params.replaying.skipCascadingEvents)
-      //  this.skipCascadingEvents();
 
       var events = this.events;
       var index = this.index;
@@ -1016,7 +989,7 @@ var Replay = (function ReplayClosure() {
             if (err.message == "Attempting to use a disconnected port object") {
               // we probably navigated away from the page so lets skip all
               // events that use this same port
-              while (events[index].port == port) {
+              while (index < events.length && events[index].port == port) {
                 ++index;
               }
               this.index = index;
@@ -1246,6 +1219,9 @@ var Controller = (function ControllerClosure() {
       if (replay && id) {
         replay.saveCapture(capture, id);
       }
+    },
+    updateParams: function _updateParams() {
+      panel.ports.sendToAll({type: 'params', value: params});
     }
   };
 
