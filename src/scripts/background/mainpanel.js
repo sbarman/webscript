@@ -330,7 +330,7 @@ var Panel = (function PanelClosure() {
       var rest = total - header;
       var containerHeight = Math.round(.6 * rest);
       var messagesHeight = rest - containerHeight;
-  
+
       $('#container').css('height', containerHeight + 'px');
       $('#messages').css('height', messagesHeight + 'px');
     }
@@ -493,7 +493,7 @@ var Record = (function RecordClosure() {
         replayEvents.push(eventRecord);
       } else {
         recordLog.error('Unknown recording state');
-        throw "Unknown record state";
+        throw 'Unknown record state';
       }
       this.commentCounter = 0;
     },
@@ -503,7 +503,7 @@ var Record = (function RecordClosure() {
       var recordState = updates.recording;
 
       recordLog.log('updating event:', updates, pageEventId);
-    
+
       var events;
       if (recordState == RecordState.RECORDING)
         events = this.events;
@@ -587,7 +587,7 @@ var Replay = (function ReplayClosure() {
     REPLAY_ACK: 3,
     REPLAY_ONE_ACK: 4,
     WAIT_ACK: 5,
-    FINISHED: 6,
+    FINISHED: 6
   };
 
   Replay.prototype = {
@@ -710,7 +710,7 @@ var Replay = (function ReplayClosure() {
       if (this.replayState == ReplayState.FINISHED)
         return;
 
-      this.replayState = ReplayState.FINISHED
+      this.replayState = ReplayState.FINISHED;
       this.pause();
 
       var record = this.record;
@@ -726,9 +726,9 @@ var Replay = (function ReplayClosure() {
         var comments = record.getReplayComments();
         var scriptId = record.getLoadedScriptId();
 
-        if (params.replaying.saveReplay && scriptId && 
+        if (params.replaying.saveReplay && scriptId &&
             replayEvents.length > 0) {
-          scriptServer.saveScript("replay " + scriptId, replayEvents, comments,
+          scriptServer.saveScript('replay ' + scriptId, replayEvents, comments,
                                   params, scriptId);
           replayLog.log('saving replay:', replayEvents);
         }
@@ -838,7 +838,7 @@ var Replay = (function ReplayClosure() {
       var eventTimeout = params.replaying.eventTimeout;
       if (eventTimeout > 0) {
         var timeoutInfo = this.timeoutInfo;
-        var curTime = new Date().getTime(); 
+        var curTime = new Date().getTime();
 
         // we havent changed events
         if (timeoutInfo.index == this.index) {
@@ -986,7 +986,7 @@ var Replay = (function ReplayClosure() {
             replayLog.log('start waiting for replay ack');
           } catch (err) {
             replayLog.error('error:', err.message, err);
-            if (err.message == "Attempting to use a disconnected port object") {
+            if (err.message == 'Attempting to use a disconnected port object') {
               // we probably navigated away from the page so lets skip all
               // events that use this same port
               while (index < events.length && events[index].port == port) {
@@ -1260,7 +1260,7 @@ function handleMessage(port, request) {
   if (request.type == 'event') {
     record.addEvent(request, port.name);
   } else if (request.type == 'updateEvent') {
-    record.updateEvent(request, port.name); 
+    record.updateEvent(request, port.name);
   } else if (request.type == 'comment') {
     record.addComment(request, port.name);
   } else if (request.type == 'capture') {
@@ -1268,7 +1268,7 @@ function handleMessage(port, request) {
   } else if (request.type == 'saveCapture') {
     controller.saveCapture(request.value);
   } else if (request.type == 'message') {
-    panel.addMessage("[" + port.name + "] " + request.value);
+    panel.addMessage('[' + port.name + '] ' + request.value);
   } else if (request.type == 'getRecording') {
     port.postMessage({type: 'recording', value: record.getStatus()});
   } else if (request.type == 'getParams') {
@@ -1281,7 +1281,7 @@ function handleMessage(port, request) {
   } else if (request.type == 'url') {
     ports.updateUrl(port, request.value);
   }
-};
+}
 
 
 // Attach the event handlers to their respective events

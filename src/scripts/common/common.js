@@ -11,7 +11,7 @@ var ReplayStrategy = {
   DEFAULT: 0,
   COMPENSATION: 1,
   FORCED: 2
-}
+};
 
 function lcs(x, y) {
   var s, i, j, m, n,

@@ -88,7 +88,7 @@ TopNode.prototype = {
 // generate annotation events for the case where we just have different
 // values for properties of matched nodes
 function generateCompensation(eventMessage, delta) {
-  log.log("Generating compensation event:", eventMessage, delta);
+  log.log('Generating compensation event:', eventMessage, delta);
   // first ensure that the eventMessage target is the same as the delta's
   // target. if not, lets just ignore this delta for now
   if (eventMessage.target != delta.orig.prop.xpath) {
@@ -164,7 +164,7 @@ function generateCompensation(eventMessage, delta) {
     var depth = params.synthesis.depth;
     var optimization = params.synthesis.optimization;
     var newNode = findExpression(examples, prop, depth, optimization);
-    
+
     if (!newNode)
       newNode = new Node('mirror', prop);
 
@@ -172,7 +172,7 @@ function generateCompensation(eventMessage, delta) {
 
     log.log('new annotation event:', name, prop, newNode.toString());
     sendAlert(name + ' ' + prop + '\n' + newNode.toString());
-    addComment('annotation create', name + ':' + prop + ':' + 
+    addComment('annotation create', name + ':' + prop + ':' +
                newNode.toString());
 
     // log all the examples so far
@@ -541,7 +541,7 @@ function deepMatchingValueOptimized(examples, targetProp, values, depth) {
   }
 
   for (var tuple1 in values) {
-    var tupl// e1vals = values[tuple1][0];
+    var tupl;// e1vals = values[tuple1][0];
     var node1 = values[tuple1][1];
     for (var tuple2 in values) {
       var tuple2vals = values[tuple2][0];
@@ -719,9 +719,10 @@ function deepMatchingValueOptimized2(examples, targetProp, values, depth) {
             valuesForLater[tupleString] = [tuple, newNode];
           }
         }
-        //if the new thing is an if, split into two pools and do two separate searches
-        //also, first check if the if actually splits the pool at all.  if it doesn't, skip the if
-        //if we can't find a solution for one pool, don't do the if either
+        // if the new thing is an if, split into two pools and do two separate
+        // searches also, first check if the if actually splits the pool at
+        // all.  if it doesn't, skip the if if we can't find a solution for
+        // one pool, don't do the if either
         if (doIf) {
           var trueList = [];
           var trueIndexes = [];
@@ -750,7 +751,8 @@ function deepMatchingValueOptimized2(examples, targetProp, values, depth) {
           //we've already built up.  we're going to have to try to generate
           //a wholly new expression of the appropriate depth, for each branch
 
-          //let's send off a search for an expression that works for all trueList examples
+          //let's send off a search for an expression that works for all
+          //trueList examples
           var trueExpression = deepMatchingValueOptimized2(trueList,
               targetProp, generateValuesForExamples(trueList, correctTuple),
               depth - 1);
@@ -841,16 +843,16 @@ function functionsFromNodes(nodes, typeOfNode, typeOfEvent) {
   return functions;
 }
 
-function makeFunction(targetProp, node, RHSFunction, typeOfNode, typeOfEvent){
+function makeFunction(targetProp, node, RHSFunction, typeOfNode, typeOfEvent) {
   var compFunction = function(eventMessage, element) {
     if ((typeof element[targetProp]) !== 'undefined') {
       var oldVal = element[targetProp];
-      log.log("before compensation:", oldVal);
+      log.log('before compensation:', oldVal);
       var newVal = RHSFunction(eventMessage, element);
       if (newVal)
         element[targetProp] = newVal;
-      log.log("after compensation:", element[targetProp]);
-      addComment('annotation execute', typeOfNode + ":" + typeOfEvent + ":" +
+      log.log('after compensation:', element[targetProp]);
+      addComment('annotation execute', typeOfNode + ':' + typeOfEvent + ':' +
                  targetProp + ':' + oldVal + ':' + newVal);
     }
   };
@@ -1062,7 +1064,7 @@ function deltaEqual(delta1, delta2) {
   var prop1 = delta1.divergingProp;
   var prop2 = delta2.divergingProp;
 
-  return prop1 == prop2 && 
+  return prop1 == prop2 &&
          delta1.changed.prop[prop1] == delta2.changed.prop[prop2];
 }
 
@@ -1070,7 +1072,7 @@ function deltaEqual(delta1, delta2) {
 //values
 function divergingProps(obj1props, obj2props) {
   if (!(obj1props && obj2props)) {
-    throw "divergingProps called with bad arguements";
+    throw 'divergingProps called with bad arguements';
   }
   var obj1props = _.omit(obj1props, params.synthesis.omittedProps);
   var obj2props = _.omit(obj2props, params.synthesis.omittedProps);
@@ -1101,7 +1103,7 @@ function compareNodes(origNode, changedNode) {
     var deltas = [];
 
     // we've tried to match a node that turns out not to be the same
-    // we want to mark that this is a divergence, but there may be  more 
+    // we want to mark that this is a divergence, but there may be  more
     // relevant deltas among its children, so let's just add this divergence
     // and continue descending
     if (!nodeEquals(origNode, changedNode)) {
@@ -1111,19 +1113,19 @@ function compareNodes(origNode, changedNode) {
 
       props1 = _.omit(props1, omittedProps);
       props2 = _.omit(props2, omittedProps);
-     
+
       var diffProps = divergingProps(props1, props2);
       for (var i = 0, ii = diffProps.length; i < ii; ++i) {
         deltas.push({
-          'type': "Property is different.",
+          'type': 'Property is different.',
           'orig': origNode,
           'changed': changedNode,
           'divergingProp': diffProps[i]
         });
       }
     }
-  
-    // check the children 
+
+    // check the children
     var children1 = origNode.children;
     var children2 = changedNode.children;
     var numChildren1 = children1.length;
@@ -1133,7 +1135,7 @@ function compareNodes(origNode, changedNode) {
     var mismatched = false;
     if (numChildren1 != numChildren2) {
       mismatched = true;
-    } else  {
+    } else {
       // proceed on the assumption that we can just index into these
       // children without difficulty, only change our mind if we find
       // any of the children's properties don't match
@@ -1162,19 +1164,19 @@ function compareNodes(origNode, changedNode) {
       return [{
         'type': 'New node in changed DOM.',
         'orig': origNode,
-        'changed': changedNode,
+        'changed': changedNode
       }];
     } else if (!changedNode) {
       return [{
         'type': 'Node missing in changed DOM.',
         'orig': origNode,
-        'changed': changedNode,
+        'changed': changedNode
       }];
     } else if (origNode.type == 'DOM' || changedNode.type == 'DOM') {
       return [{
         'type': 'Node types differ.',
         'orig': origNode,
-        'changed': changedNode,
+        'changed': changedNode
       }];
     // Both nodes should be text nodes
     } else if (origNode.type == 'text' && origNode.type == 'text') {
@@ -1183,9 +1185,9 @@ function compareNodes(origNode, changedNode) {
       }
       //sad, we descended all the way and the nodes aren't the same
       return [{
-        'type': "Nodes not the same.",
+        'type': 'Nodes not the same.',
         'orig': origNode,
-        'changed': changedNode,
+        'changed': changedNode
       }];
     }
   }
@@ -1268,7 +1270,6 @@ function compareNodesMismatched(origNode, changedNode) {
         //if we haven't matched it yet, we have to keep computing
         //similarity scores
         var similarityScore = similarity(child2, child1);
-        //console.log("Didn't match.  Had to find similarity. ", similarityScore);
         if (similarityScore > maxSimilarityScore) {
           maxSimilarityScore = similarityScore;
           maxSimilarityScoreIndex = j;
@@ -1288,7 +1289,7 @@ function compareNodesMismatched(origNode, changedNode) {
           'type': 'New child in changed DOM.',
           'orig': origNode,
           'changed': changedNode,
-          'relevantChildren': [child2],
+          'relevantChildren': [child2]
         });
       }
     }
@@ -1329,11 +1330,11 @@ function compareNodesMismatched(origNode, changedNode) {
       if (numSiblingsInObj1Page > 1 || children1NumMatches[i] > 1) {
         //this is a case of having multiple similar siblings
         divergences.push({
-          'type': 'Different number of a particular node type: ' + 
+          'type': 'Different number of a particular node type: ' +
                   numSiblingsInObj1Page + '/' + children1NumMatches[i],
           'orig': origNode,
           'changed': changedNode,
-          'relevantChildren': [children1[i]],
+          'relevantChildren': [children1[i]]
         });
       } else {
         //1-1 mapping, so let's keep descending to find out what's going on
@@ -1357,7 +1358,7 @@ function compareNodesMismatched(origNode, changedNode) {
         'type': 'Missing child in changed DOM.',
         'orig': origNode,
         'changed': changedNode,
-        'relevantChildren': [children1[i]],
+        'relevantChildren': [children1[i]]
       });
     }
   }
@@ -1404,7 +1405,6 @@ function similarity(obj1, obj2) {
   //maybe just put down tags.  that'd be nice I think
   //we'll check to depth 4
   var ret = tagMatchesAndTotalTags(obj1, obj2, 1);
-  //console.log("similarity of ", nodeToString(obj1), " and ", nodeToString(obj2), "is", ret.tagMatches/ret.totalTags);
   var score = ret.tagMatches / ret.totalTags;
   return score;
 }
@@ -1432,7 +1432,6 @@ function tagMatchesAndTotalTags(obj1, obj2, depth) {
   if (obj1.prop && obj2.prop && obj1.prop.tagName && obj2.prop.tagName) {
     totalTags++;
     if (obj1.prop.tagName == obj2.prop.tagName) {
-      //console.log("the tag name ", obj1.prop.tagName, " matches, increment tagMatches");
       tagMatches++;
     }
   }
@@ -1441,7 +1440,6 @@ function tagMatchesAndTotalTags(obj1, obj2, depth) {
       obj1.prop.className == obj2.prop.className) {
     totalTags++;
     tagMatches++;
-    //console.log("the class name ", obj1.prop.className, " matches, increment totalTags and tagMatches");
   }
   //if there are no children or if we're at depth limit, don't continue
   if (!(obj1.children && obj2.children) || depth <= 0) {
@@ -1482,7 +1480,7 @@ function tagMatchesAndTotalTags(obj1, obj2, depth) {
 }
 
 
-/* checks if two nodes have the same properties, all properties must be the 
+/* checks if two nodes have the same properties, all properties must be the
    same */
 function nodeEquals(node1, node2) {
   if (node1 && node2) {

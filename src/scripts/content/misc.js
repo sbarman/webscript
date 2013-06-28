@@ -17,7 +17,7 @@ function nodeToXPath(element) {
   // if there is no parent node then this element has been disconnected
   // from the root of the DOM tree
   if (!element.parentNode)
-    return "";
+    return '';
 
   var ix = 0;
   var siblings = element.parentNode.childNodes;
@@ -45,7 +45,7 @@ function xPathToNodes(xpath) {
     }
     return results;
   } catch (e) {
-    getLog('misc').error('xPath throws error when evaluated', xpath); 
+    getLog('misc').error('xPath throws error when evaluated', xpath);
   }
 
   // error was thrown, attempt to just walk down the dom tree
@@ -55,7 +55,7 @@ function xPathToNodes(xpath) {
   paths: for (var i = 1, ii = paths.length; i < ii; ++i) {
     var children = currentNode.children;
     var path = paths[i];
-    var splits = path.split(/\[|\]/)
+    var splits = path.split(/\[|\]/);
 
     var tag = splits[0];
     if (splits.length > 1) {
@@ -75,7 +75,7 @@ function xPathToNodes(xpath) {
         }
       }
     }
-    throw "Cannot find child";
+    throw 'Cannot find child';
   }
   return [currentNode];
 }

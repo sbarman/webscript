@@ -334,7 +334,7 @@ var ScriptServer = (function ScriptServerClosure() {
       postMsg['benchmark'] = benchmarkRun.benchmark.id;
       postMsg['successful'] = benchmarkRun.successful;
       postMsg['events_executed'] = benchmarkRun.events_executed;
-      
+
       if (benchmarkRun.errors)
         postMsg['errror'] = benchmarkRun.errors;
 
@@ -350,7 +350,7 @@ var ScriptServer = (function ScriptServerClosure() {
         dataType: 'json',
         processData: false,
         type: 'POST',
-        url: server + 'benchmark_run/',
+        url: server + 'benchmark_run/'
       });
       return null;
     },
@@ -362,7 +362,7 @@ var ScriptServer = (function ScriptServerClosure() {
       postMsg['script'] = scriptId;
       postMsg['innerHtml'] = capture.innerHtml;
       postMsg['nodeName'] = capture.nodeName;
-      
+
       $.ajax({
         error: function(jqXHR, textStatus, errorThrown) {
           scriptLog.log(jqXHR, textStatus, errorThrown);
@@ -375,7 +375,7 @@ var ScriptServer = (function ScriptServerClosure() {
         dataType: 'json',
         processData: false,
         type: 'POST',
-        url: server + 'capture/',
+        url: server + 'capture/'
       });
       return null;
     },
@@ -399,7 +399,7 @@ var ScriptServer = (function ScriptServerClosure() {
         dataType: 'json'
       });
       return null;
-    },
+    }
   };
 
   return ScriptServer;

@@ -8,9 +8,9 @@ var snapshotNode = null;
 
 (function() {
   var ignoreTags = {'script': true, 'style': true};
-  
-  function cloneNode(node, nodeName, xpath){
-	  
+
+  function cloneNode(node, nodeName, xpath) {
+
     var returnVal = {children: [], prop: {}, type: 'DOM'};
     returnVal.prop['nodeName'] = nodeName;
     returnVal.prop['xpath'] = xpath;
@@ -60,11 +60,11 @@ var snapshotNode = null;
         if (nodeType === 3) { // nodeType is "Text" (3)
           var value = child.nodeValue.trim();
           if (value)
-            children.push({text: value, type: 'text'}); 
+            children.push({text: value, type: 'text'});
         } else if (nodeType === 1) { // nodeType is "Element" (1)
           if (!(childNodeName in ignoreTags) &&
               !child.classList.contains('replayStatus')) {
-            
+
             var newPath = xpath + '/' + childNodeName + '[' +
                           childrenTags[childNodeName] + ']';
             var child = cloneSubtree(child, childNodeName, newPath);
@@ -99,13 +99,13 @@ var snapshotNode = null;
   snapshot = function() {
     return descendToBody(document);
   };
-  
+
   snapshotNode = function(node) {
     if (!node)
       return null;
 
-	  var objTree = cloneNode(node, node.nodeName, nodeToXPath(node));
-	  return objTree;
+    var objTree = cloneNode(node, node.nodeName, nodeToXPath(node));
+    return objTree;
   };
 
 })();

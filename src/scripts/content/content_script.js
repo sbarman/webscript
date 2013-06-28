@@ -96,9 +96,9 @@ function recordEvent(eventData) {
   eventMessage['URL'] = document.URL;
   eventMessage['dispatchType'] = dispatchType;
   eventMessage['nodeName'] = nodeName;
-  eventMessage['pageEventId'] =  pageEventId++;
+  eventMessage['pageEventId'] = pageEventId++;
   eventMessage['recordState'] = recording;
-  
+
   // record all properties of the event object
   if (params.recording.allEventProps) {
     for (var prop in eventData) {
@@ -128,7 +128,7 @@ function recordEvent(eventData) {
   port.postMessage({type: 'event', value: eventMessage});
 
   lastRecordEvent = eventMessage;
-  
+
   // just spin for some number of seconds to delay the page compared
   // to some server
   if (recording == RecordState.RECORDING && params.recording.delayEvents) {
@@ -175,7 +175,7 @@ function updateDeltas(target) {
   snapshotRecord(target);
 
   if (lastRecordEvent && lastRecordSnapshot) {
-    var deltas = getDeltas(lastRecordSnapshot.before, 
+    var deltas = getDeltas(lastRecordSnapshot.before,
                            lastRecordSnapshot.after);
     lastRecordEvent.deltas = deltas;
     var update = {
@@ -187,7 +187,7 @@ function updateDeltas(target) {
         'recording': recording
       }
     };
-    port.postMessage(update); 
+    port.postMessage(update);
   }
 }
 
@@ -256,7 +256,7 @@ function simulate(request) {
     var nodeName = target.nodeName.toLowerCase();
     var msg = {innerHtml: target.innerHTML,
                nodeName: target.nodeName.toLowerCase()};
-    
+
     port.postMessage({type: 'saveCapture', value: msg});
     port.postMessage({type: 'ack', value: true});
     return;
@@ -267,7 +267,7 @@ function simulate(request) {
     port.postMessage({type: 'ack', value: true});
 
     if (params.synthesis.enabled)
-      accumulatedDeltas =  accumulatedDeltas.concat(eventData.deltas);
+      accumulatedDeltas = accumulatedDeltas.concat(eventData.deltas);
 
     return;
   }
@@ -289,7 +289,7 @@ function simulate(request) {
       // run the compensation events for the last event
       for (var i in annotationEvents) {
         var annotation = annotationEvents[i];
-        if (annotation.replay && 
+        if (annotation.replay &&
             annotation.guard(lastTarget, lastReplayEvent)) {
 
           replayLog.debug('annotation event being used', i,
@@ -297,7 +297,7 @@ function simulate(request) {
           annotation.replay(lastTarget, lastReplayEvent);
         }
       }
-    } catch(e) {
+    } catch (e) {
       replayLog.error('error when replaying annotation events:', e);
     }
 
@@ -314,7 +314,7 @@ function simulate(request) {
 
     // make sure replay matches recording
     snapshotReplay(target);
-    if (lastReplaySnapshot){
+    if (lastReplaySnapshot) {
       var replayDeltas = getDeltas(lastReplaySnapshot.before,
                                    lastReplaySnapshot.after);
       // check if these deltas match the deltas from the last simulated event
@@ -329,7 +329,7 @@ function simulate(request) {
     resnapshotBefore(target);
   }
 
-  lastReplayEvent = eventData
+  lastReplayEvent = eventData;
 
   var eventType = getEventType(eventName);
   var defaultProperties = getEventProps(eventName);
@@ -395,7 +395,7 @@ function simulate(request) {
   target.dispatchEvent(oEvent);
   dispatchingEvent = false;
 
-  replayLog.debug('[' + id + '] dispatchEvent', eventName, options, target, 
+  replayLog.debug('[' + id + '] dispatchEvent', eventName, options, target,
                   oEvent);
 
   port.postMessage({type: 'ack', value: true});
@@ -422,7 +422,7 @@ function updateEvent(request) {
   }
 }
 
-function snapshotReplay(target){
+function snapshotReplay(target) {
   replayLog.log('snapshot target:', target);
   if (params.localSnapshot) {
     lastReplaySnapshot = curReplaySnapshot;
@@ -441,7 +441,7 @@ function snapshotReplay(target){
   }
 }
 
-function resnapshotBefore(target){
+function resnapshotBefore(target) {
   if (params.localSnapshot)
     curReplaySnapshot.before = snapshotNode(target);
   else
@@ -465,10 +465,10 @@ function fixDeltas(recordDeltas, replayDeltas, recordEvent, snapshot) {
   for (var i = 0, ii = replayDeltasNotMatched.length; i < ii; ++i) {
     var delta = replayDeltasNotMatched[i];
     replayLog.debug('unmatched replay delta', delta);
-    
+
     if (delta.type == 'Property is different.') {
       var divProp = delta.divergingProp;
-      addComment('replay delta', divProp + ':' + delta.orig.prop[divProp] + 
+      addComment('replay delta', divProp + ':' + delta.orig.prop[divProp] +
                  '->' + delta.changed.prop[divProp]);
 
       if (params.replaying.strategy == ReplayStrategy.FORCED) {

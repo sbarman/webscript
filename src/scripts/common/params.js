@@ -125,17 +125,17 @@ var params = null;
     replaying: {
       saveReplay: true,
       delayEvents: false,
-      cancelUnknownEvents: false,
+      cancelUnknownEvents: true,
       skipCascadingEvents: true,
       dummyCascadingEvents: false,
-      eventTimeout: 60,
-      strategy: ReplayStrategy.FORCED 
+      eventTimeout: 0,
+      strategy: ReplayStrategy.FORCED
     },
     server: 'http://sbarman.webfactional.com/api/',
     //server: "http://127.0.0.1:8000/api/",
     benchmarking: {
-      timeout: 600,
-    },
+      timeout: 600
+    }
   };
 
 })();

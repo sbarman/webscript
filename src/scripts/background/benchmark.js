@@ -37,10 +37,10 @@ var Benchmarker = (function BenchmarkerClosure() {
                                    function(replay) {
             var benchmarkRun = {
               benchmark: benchmark,
-              errrors: "",
+              errrors: '',
               successful: replay.events.length == replay.index,
               events_executed: replay.index
-            }
+            };
             scriptServer.saveBenchmarkRun(benchmarkRun);
             runBenchmark(benchmarks, index + 1);
           });
@@ -49,7 +49,7 @@ var Benchmarker = (function BenchmarkerClosure() {
       runBenchmark(benchmarks, 0);
     },
     runBenchmark: function _runBenchmark(events, success_condition, cont) {
-      var replay = new Replay(events, this.panel, this.ports, 
+      var replay = new Replay(events, this.panel, this.ports,
                               this.record, this.scriptServer);
       controller.replay = replay;
 
@@ -64,7 +64,7 @@ var Benchmarker = (function BenchmarkerClosure() {
         cont(replay);
       });
     }
-  }
+  };
 
   return Benchmarker;
 })();
