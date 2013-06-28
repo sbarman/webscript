@@ -113,7 +113,7 @@ var params = null;
           'textContent', 'className', 'childElementCount', 'scrollHeight',
           'scrollWidth', 'clientHeight', 'clientWidth', 'clientTop',
           'clientLeft', 'offsetHeight', 'offsetWidth', 'offsetTop',
-          'offsetLeft', 'text', 'valueAsNumber', 'id', 'class'],
+          'offsetLeft', 'text', 'valueAsNumber', 'id', 'class', 'xpath'],
       depth: 2,
       optimization: 2
     },

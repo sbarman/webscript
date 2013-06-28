@@ -23,6 +23,9 @@ var Benchmarker = (function BenchmarkerClosure() {
       var scriptServer = this.scriptServer;
       var benchmarker = this;
 
+      params.replaying.eventTimeout = 60;
+      this.controller.updateParams();
+
       function runBenchmark(benchmarks, index) {
         if (index >= benchmarks.length)
           return;

@@ -24,6 +24,7 @@ var lastReplayEvent; // last event replayed
 var lastReplaySnapshot; // snapshop taken before the event is replayed
 var curReplaySnapshot; // snapshot taken before the next event is replayed
 var accumulatedDeltas = [];
+var dispatchingEvent = false;
 
 // loggers
 var log = getLog('content');
@@ -65,9 +66,11 @@ function recordEvent(eventData) {
   var dispatchType = getEventType(type);
 
   // cancel the affects of events which are not extension generated
-  if (recording == RecordState.REPLAYING && !eventData.extensionGenerated &&
-      params.replaying.cancelUnknownEvents) {
+//  if (recording == RecordState.REPLAYING && !eventData.extensionGenerated &&
+//      params.replaying.cancelUnknownEvents) {
 
+  if (recording == RecordState.REPLAYING && !dispatchingEvent &&
+      params.replaying.cancelUnknownEvents) {
     recordLog.debug('[' + id + '] cancel event:', type, dispatchType,
                   eventData);
     eventData.stopImmediatePropagation();
@@ -270,6 +273,14 @@ function simulate(request) {
   }
 
   var target = xPathToNode(eventData.target);
+  // lets try to dispatch this event a little bit in the future, in case the
+  // future in the case the page needs to change
+  if (!target) {
+    setTimeout(function() {
+      simulate(request);
+    }, 500);
+    return;
+  }
 
   // make sure the deltas from the last event actually happened
   if (params.synthesis.enabled && lastReplayEvent) {
@@ -323,6 +334,10 @@ function simulate(request) {
   var eventType = getEventType(eventName);
   var defaultProperties = getEventProps(eventName);
 
+//  if (eventType == 'focus' || eventType == 'mousedown' ||
+//      eventType == 'keydown')
+//    target.focus();
+
   if (!eventType) {
     replayLog.error("can't find event type ", eventName);
     return;
@@ -375,10 +390,11 @@ function simulate(request) {
     oEvent.cascadingOrigin = eventData.cascadingOrigin;
   }
 
-  oEvent.isTrusted = true;
-
   // this does the actual event simulation
+  dispatchingEvent = true;
   target.dispatchEvent(oEvent);
+  dispatchingEvent = false;
+
   replayLog.debug('[' + id + '] dispatchEvent', eventName, options, target, 
                   oEvent);
 
@@ -456,7 +472,8 @@ function fixDeltas(recordDeltas, replayDeltas, recordEvent, snapshot) {
                  '->' + delta.changed.prop[divProp]);
 
       if (params.replaying.strategy == ReplayStrategy.FORCED) {
-        element[divProp] = delta.orig.prop[divProp];
+        if (element)
+          element[divProp] = delta.orig.prop[divProp];
       }
     }
 
@@ -476,7 +493,8 @@ function fixDeltas(recordDeltas, replayDeltas, recordEvent, snapshot) {
         replayLog.debug('generating compensation event:', delta);
         generateCompensation(recordEvent, delta);
       } else if (params.replaying.strategy == ReplayStrategy.FORCED) {
-        element[divProp] = delta.changed.prop[divProp];
+        if (element)
+          element[divProp] = delta.changed.prop[divProp];
       }
     }
   }

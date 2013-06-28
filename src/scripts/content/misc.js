@@ -84,9 +84,12 @@ function xPathToNode(xpath) {
   var nodes = xPathToNodes(xpath);
   //if we don't successfully find nodes, let's alert
   if (nodes.length != 1)
-    throw 'xpath has more than 1 node';
+    getLog('misc').error("xpath doesn't return strictly one node", xpath);
 
-  return nodes[0];
+  if (nodes.length >= 1)
+    return nodes[0];
+  else
+    return null;
 }
 
 
