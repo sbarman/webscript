@@ -120,7 +120,7 @@ var params = null;
     recording: {
       allEventProps: true,
       delayEvents: false,
-      delay: 5000
+      delay: 0
     },
     replaying: {
       saveReplay: true,

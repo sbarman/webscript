@@ -613,6 +613,7 @@ var Replay = (function ReplayClosure() {
       this.tabMapping = {};
       this.replayState = ReplayState.REPLAYING;
       this.timeoutInfo = {startTime: 0, index: -1};
+      this.lastReplayPort = null;
     },
     setNextTimeout: function _setNextTimeout(time) {
       if (typeof time == 'undefined')
@@ -687,10 +688,22 @@ var Replay = (function ReplayClosure() {
         clearTimeout(handle);
         this.timeoutHandle = null;
       }
+
+      var port = this.lastReplayPort;
+      if (port)
+        port.postMessage({type: 'pauseReplay', value: null});
     },
     restart: function _restart() {
-      if (this.timeoutHandle == null)
+      if (this.timeoutHandle == null) {
         this.setNextTimeout(0);
+
+        var replayState = this.replayState;
+        if (replayState == ReplayState.REPLAY_ACK) {
+          this.replayState = ReplayState.REPLAYING;
+        } else if (replayState == ReplayState.REPLAY_ONE_ACK) {
+          this.replayState == ReplayState.REPLAY_ONE;
+        }
+      }
     },
     replayOne: function _replayOne() {
       this.replayState = ReplayState.REPLAY_ONE;
@@ -954,6 +967,8 @@ var Replay = (function ReplayClosure() {
       }
 
       // we have hopefully found a matching port, lets dispatch to that port
+      this.lastReplayPort = replayPort;
+
       var type = msg.value.type;
 
       if (replayState == ReplayState.WAIT_ACK) {

@@ -25,6 +25,7 @@ var lastReplaySnapshot; // snapshop taken before the event is replayed
 var curReplaySnapshot; // snapshot taken before the next event is replayed
 var accumulatedDeltas = [];
 var dispatchingEvent = false;
+var retryTimeout = null;
 
 // loggers
 var log = getLog('content');
@@ -236,6 +237,9 @@ function captureNodeReply(target) {
 // replay an event from an event message
 function simulate(request) {
 
+  // since we are simulating a new event, lets clear out any retries 
+  clearRetry();
+
   var eventData = request.value;
   var eventName = eventData.type;
 
@@ -276,9 +280,7 @@ function simulate(request) {
   // lets try to dispatch this event a little bit in the future, in case the
   // future in the case the page needs to change
   if (!target) {
-    setTimeout(function() {
-      simulate(request);
-    }, 500);
+    setRetry(request, 500);
     return;
   }
 
@@ -413,6 +415,20 @@ function simulate(request) {
   }
 }
 
+function clearRetry() {
+  if (retryTimeout) {
+    clearTimeout(retryTimeout);
+    retryTimeout = null;
+  }
+}
+
+function setRetry(request, timeout) {
+  retryTimeout = setTimeout(function() {
+    simulate(request);
+  }, timeout);
+  return;
+}
+
 function updateEvent(request) {
   var update = request.value;
   if (lastReplayEvent.pageEventId == update.pageEventId) {
@@ -535,29 +551,33 @@ function updateParams(newParams) {
 
 // event handler for messages coming from the background page
 function handleMessage(request) {
-  log.log('[' + id + '] handle message:', request, request.type);
-  if (request.type == 'recording') {
+  var type = request.type;
+
+  log.log('[' + id + '] handle message:', request, type);
+  if (type == 'recording') {
     recording = request.value;
-  } else if (request.type == 'params') {
+  } else if (type == 'params') {
     updateParams(request.value);
-  } else if (request.type == 'event') {
+  } else if (type == 'event') {
     simulate(request);
-  } else if (request.type == 'snapshot') {
+  } else if (type == 'snapshot') {
     port.postMessage({type: 'snapshot', value: snapshot()});
-  } else if (request.type == 'updateDeltas') {
+  } else if (type == 'updateDeltas') {
     updateDeltas();
-  } else if (request.type == 'reset') {
+  } else if (type == 'reset') {
     resetRecord();
-  } else if (request.type == 'resetCompensation') {
+  } else if (type == 'resetCompensation') {
     annotationEvents = {};
-  } else if (request.type == 'url') {
+  } else if (type == 'url') {
     port.postMessage({type: 'url', value: document.URL});
-  } else if (request.type == 'updateEvent') {
+  } else if (type == 'updateEvent') {
     updateEvent(request);
-  } else if (request.type == 'capture') {
+  } else if (type == 'capture') {
     captureNode();
-  } else if (request.type == 'cancelCapture') {
+  } else if (type == 'cancelCapture') {
     cancelCaptureNode();
+  } else if (type == 'pauseReplay') {
+    clearRetry();
   } else {
     log.error('cannot handle message:', request);
   }
