@@ -7,12 +7,6 @@ var RecordState = {
   REPLAYING: 2
 };
 
-var ReplayStrategy = {
-  DEFAULT: 0,
-  COMPENSATION: 1,
-  FORCED: 2
-};
-
 function lcs(x, y) {
   var s, i, j, m, n,
     lcs = [], row = [], c = [],

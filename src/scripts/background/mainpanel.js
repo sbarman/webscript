@@ -597,13 +597,9 @@ var Replay = (function ReplayClosure() {
       replayLog.log('starting replay');
       this.pause();
       this.record.startReplayRecording();
-
       this.ports.sendToAll({type: 'resetCompensation', value: null});
 
-      var replay = this;
-      this.timeoutHandle = setTimeout(function() {
-        replay.guts();
-      }, this.getNextTime());
+      this.setNextTimeout();
     },
     reset: function _reset() {
       this.timeoutHandle = null;
@@ -625,19 +621,20 @@ var Replay = (function ReplayClosure() {
       }, time);
     },
     getNextTime: function _getNextTime() {
-      var timing = params.timing;
+      var timing = params.replaying.timingStrategy;
+
       var index = this.index;
       var events = this.events;
       var waitTime = 0;
 
       if (index == 0 || index == events.length) {
         waitTime = 1000;
-      } else if (timing == 0) {
+      } else if (timing == TimingStrategy.MIMIC) {
         waitTime = events[index].waitTime;
         if (waitTime > 10000)
           waitTime = 10000;
-      } else {
-        waitTime = timing;
+      } else if (timing == TimingStrategy.SPEED) {
+        waitTime = 0;
       }
       replayLog.log('wait time:', waitTime);
       return waitTime;
@@ -690,8 +687,13 @@ var Replay = (function ReplayClosure() {
       }
 
       var port = this.lastReplayPort;
-      if (port)
-        port.postMessage({type: 'pauseReplay', value: null});
+      if (port) {
+        try {
+          port.postMessage({type: 'pauseReplay', value: null});
+        } catch (e) {
+          replayLog.error('sending to a disconnected port:', e);
+        }
+      }
     },
     restart: function _restart() {
       if (this.timeoutHandle == null) {
@@ -887,14 +889,15 @@ var Replay = (function ReplayClosure() {
           this.replayState = ReplayState.REPLAYING;
           this.index++;
           if (replayState == ReplayState.REPLAY_ACK)
-            this.setNextTimeout(0);
+            this.setNextTimeout();
           else
             this.pause();
 
+          this.lastReplayPort = null;
           replayLog.log('found replay ack');
         // no ack, try again in one second
         } else {
-          this.setNextTimeout(1000);
+          this.setNextTimeout(params.replaying.defaultWait);
 
           replayLog.log('continue waiting for replay ack');
         }
@@ -945,7 +948,7 @@ var Replay = (function ReplayClosure() {
           replayPort = newPort;
           replayLog.log('tab already seen, found port:', replayPort);
         } else {
-          this.setNextTimeout();
+          this.setNextTimeout(params.replaying.defaultWait);
           replayLog.log('tab already seen, no port found');
           return;
         }
@@ -960,7 +963,7 @@ var Replay = (function ReplayClosure() {
             var newTabId = newTab.id;
             replay.tabMapping[tab] = newTabId;
             replay.ports.tabIdToTab[newTabId] = newTab;
-            replay.setNextTimeout(4000);
+            replay.setNextTimeout(params.replaying.defaultWaitNewTab);
           }
         );
         return;
@@ -975,7 +978,7 @@ var Replay = (function ReplayClosure() {
         var ackReturn = this.ports.getAck(this.ackVar);
         if (ackReturn == null || ackReturn != true) {
           replayPort.postMessage(msg);
-          this.setNextTimeout(1000);
+          this.setNextTimeout(params.replaying.defaultWait);
 
           replayLog.log('continue waiting for wait ack');
         }
@@ -1005,12 +1008,13 @@ var Replay = (function ReplayClosure() {
               // we probably navigated away from the page so lets skip all
               // events that use this same port
               while (index < events.length && events[index].port == port) {
+                replayLog.log('skipping event:', index);
                 ++index;
               }
               this.index = index;
             }
           }
-          this.setNextTimeout();
+          this.setNextTimeout(0);
         }
       } else {
         throw 'unknown replay state';

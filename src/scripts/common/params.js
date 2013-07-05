@@ -5,6 +5,17 @@
 
 var params = null;
 
+var ReplayStrategy = {
+  DEFAULT: 0,
+  COMPENSATION: 1,
+  FORCED: 2
+};
+
+var TimingStrategy = {
+  MIMIC: 0,
+  SPEED : 1,
+};
+
 (function() {
   // List of all events and whether or not we should capture them
   var events = {
@@ -98,8 +109,6 @@ var params = null;
     user: 'sbarman',
     simultaneous: false, // this is probably broken now
     localSnapshot: true,
-    timing: 0,
-    outline: true,
     events: events,
     defaultProps: defaultProps,
     logging: {
@@ -125,11 +134,14 @@ var params = null;
     replaying: {
       saveReplay: true,
       delayEvents: false,
-      cancelUnknownEvents: true,
+      cancelUnknownEvents: false,
       skipCascadingEvents: true,
       dummyCascadingEvents: false,
       eventTimeout: 0,
-      strategy: ReplayStrategy.FORCED
+      strategy: ReplayStrategy.FORCED,
+      timingStrategy: TimingStrategy.MIMIC,
+      defaultWait: 100,
+      defaultWaitNewTab: 4000
     },
     server: 'http://sbarman.webfactional.com/api/',
     //server: "http://127.0.0.1:8000/api/",

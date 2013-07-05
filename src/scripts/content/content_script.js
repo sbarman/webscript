@@ -280,7 +280,7 @@ function simulate(request) {
   // lets try to dispatch this event a little bit in the future, in case the
   // future in the case the page needs to change
   if (!target) {
-    setRetry(request, 500);
+    setRetry(request, params.replaying.defaultWait);
     return;
   }
 
