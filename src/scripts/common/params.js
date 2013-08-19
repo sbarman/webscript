@@ -129,7 +129,9 @@ var TimingStrategy = {
     recording: {
       allEventProps: true,
       delayEvents: false,
-      delay: 0
+      delay: 0,
+      cancelUnrecordedEvents: false,
+      listenToAllEvents: false
     },
     replaying: {
       saveReplay: true,
@@ -141,7 +143,8 @@ var TimingStrategy = {
       strategy: ReplayStrategy.FORCED,
       timingStrategy: TimingStrategy.MIMIC,
       defaultWait: 100,
-      defaultWaitNewTab: 4000
+      defaultWaitNewTab: 4000,
+      highlightTarget: true
     },
     server: 'http://sbarman.webfactional.com/api/',
     //server: "http://127.0.0.1:8000/api/",

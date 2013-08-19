@@ -66,12 +66,15 @@ function recordEvent(eventData) {
   var type = eventData.type;
   var dispatchType = getEventType(type);
 
-  // cancel the affects of events which are not extension generated
-//  if (recording == RecordState.REPLAYING && !eventData.extensionGenerated &&
-//      params.replaying.cancelUnknownEvents) {
+  var shouldRecord = params.events[dispatchType][type];
 
-  if (recording == RecordState.REPLAYING && !dispatchingEvent &&
-      params.replaying.cancelUnknownEvents) {
+  // cancel the affects of events which are not extension generated or are not
+  // picked up by the recorder
+  if ((recording == RecordState.REPLAYING && !dispatchingEvent &&
+       params.replaying.cancelUnknownEvents) ||
+      (recording == RecordState.RECORDING && 
+       params.recording.cancelUnrecordedEvents &&
+       !shouldRecord)) {
     recordLog.debug('[' + id + '] cancel event:', type, dispatchType,
                   eventData);
     eventData.stopImmediatePropagation();
@@ -79,6 +82,10 @@ function recordEvent(eventData) {
 
     return false;
   }
+
+  // if we are not recording this type of event, we should exit
+  if (!shouldRecord)
+    return;
 
   // continue recording the event
   recordLog.debug('[' + id + '] process event:', type, dispatchType,
@@ -104,10 +111,14 @@ function recordEvent(eventData) {
   if (params.recording.allEventProps) {
     for (var prop in eventData) {
       try {
-        var type = typeof(eventData[prop]);
+        var data = eventData[prop];
+        var type = typeof(data);
         if (type == 'number' || type == 'boolean' || type == 'string' ||
-            type == 'undefined')
+            type == 'undefined') {
           eventMessage[prop] = eventData[prop];
+        } else if (prop == 'relatedTarget' && isElement(data)) {
+          eventMessage[prop] = {xpath: nodeToXPath(data)};
+        }
       } catch (e) {
         recordLog.error('[' + id + '] error recording property:', prop, e);
       }
@@ -284,6 +295,14 @@ function simulate(request) {
     return;
   }
 
+  if (params.replaying.highlightTarget) {
+    var divId = highlightNode(target);
+    
+    setTimeout(function() {
+      dehighlightNode(divId);
+    }, 100);
+  }
+
   // make sure the deltas from the last event actually happened
   if (params.synthesis.enabled && lastReplayEvent) {
     try {
@@ -360,11 +379,16 @@ function simulate(request) {
   if (eventType == 'Event') {
     oEvent.initEvent(eventName, options.bubbles, options.cancelable);
   } else if (eventType == 'MouseEvent') {
+    var relatedTarget = target;
+
+    if (eventData.relatedTarget)
+      relatedTarget = xPathToNode(eventData.relatedTarget.xpath); 
+
     oEvent.initMouseEvent(eventName, options.bubbles, options.cancelable,
         document.defaultView, options.detail, options.screenX,
         options.screenY, options.clientX, options.clientY,
         options.ctrlKey, options.altKey, options.shiftKey, options.metaKey,
-        options.button, target);
+        options.button, relatedTarget);
   } else if (eventType == 'KeyboardEvent') {
     oEvent.initKeyboardEvent(eventName, options.bubbles, options.cancelable,
         document.defaultView, options.ctrlKey, options.altKey,
@@ -413,6 +437,30 @@ function simulate(request) {
     dummyEvent.extensionGenerated = true;
     document.body.dispatchEvent(dummyEvent);
   }
+}
+
+var highlightCount = 0;
+
+function highlightNode(target) {
+  var boundingBox = target.getBoundingClientRect();
+  var newDiv = $('<div/>');
+  var idName = 'sbarman-hightlight-' + highlightCount
+  newDiv.attr('id', idName);
+  newDiv.css('width', boundingBox.width);
+  newDiv.css('height', boundingBox.height);
+  newDiv.css('top', boundingBox.top);
+  newDiv.css('left', boundingBox.left);
+  newDiv.css('position', 'absolute');
+  newDiv.css('z-index', 1000);
+  newDiv.css('background-color', '#00FF00');
+  newDiv.css('opacity', .4);
+  $(document.body).append(newDiv);
+
+  return idName;
+}
+
+function dehighlightNode(id) {
+  $('#' + id).remove();
 }
 
 function clearRetry() {
@@ -533,6 +581,12 @@ function updateParams(newParams) {
 
   var oldEvents = oldParams.events;
   var events = params.events;
+
+  // if we are listening to all events, then we don't need to do anything since
+  // we should have already added listeners to all events at the very
+  // beginning
+  if (params.recording.listenToAllEvents)
+    return;
 
   for (var eventType in events) {
     var listOfEvents = events[eventType];
