@@ -21,12 +21,10 @@ var TimingStrategy = {
   var events = {
     'Event': {
       //'abort': true,
-      'blur': true,
       'change': true,  // change event occurs before focus is lost (blur)
       'copy': true,
       'cut': true,
       'error': false,
-      'focus': true,
       'input': true,  // input event occurs on every keystroke (or cut / paste)
       'load': false,
       'paste': true,
@@ -36,6 +34,10 @@ var TimingStrategy = {
       'select': true,
       'submit': true,
       'unload': false
+    },
+    'FocusEvent': {
+      'focus': true,
+      'blur': true,
     },
     'MouseEvent': {
       'click': true,
@@ -66,6 +68,13 @@ var TimingStrategy = {
       'cancelable': true,
       'timeStamp': 0
     },
+    'FocusEvent': {
+      'type': true,
+      'bubbles': true,
+      'cancelable': true,
+      'detail': 0,
+      'timeStamp': 0 
+    },
     'MouseEvent': {
       'type': true,
       'bubbles': true,
@@ -92,7 +101,9 @@ var TimingStrategy = {
       'metaKey': false,
       'keyCode': 0,
       'charCode': 0,
-      'timeStamp': 0
+      'timeStamp': 0,
+      'keyIdentifier': "",  // nonstandard to Chrome
+      'keyLocation': 0  // nonstandard to Chrome
     },
     'TextEvent': {
       'type': true,

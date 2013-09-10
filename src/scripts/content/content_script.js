@@ -26,6 +26,8 @@ var curReplaySnapshot; // snapshot taken before the next event is replayed
 var accumulatedDeltas = [];
 var dispatchingEvent = false;
 var retryTimeout = null;
+//var memoizedTargets = []; // used for cascadingEvents where an earlier handler
+//                          // removes the target node from the DOM
 
 // loggers
 var log = getLog('content');
@@ -288,6 +290,16 @@ function simulate(request) {
   }
 
   var target = xPathToNode(eventData.target);
+
+  // check if we already seen this target
+  /*
+  if (!target) {
+    target = getMemoizedTarget(eventData.target); 
+  } else {
+    addMemoizedTarget(eventData.target, target);
+  }
+  */
+
   // lets try to dispatch this event a little bit in the future, in case the
   // future in the case the page needs to change
   if (!target) {
@@ -378,8 +390,24 @@ function simulate(request) {
   var oEvent = document.createEvent(eventType);
   if (eventType == 'Event') {
     oEvent.initEvent(eventName, options.bubbles, options.cancelable);
+  } else if (eventType == 'FocusEvent') {
+    var relatedTarget = null;
+  
+    if (eventData.relatedTarget)
+      relatedTarget = xPathToNode(eventData.relatedTarget.xpath); 
+   
+    /*
+    oEvent = new FocusEvent(eventName, options.bubbles, options.cancelable,
+        document.defaultView, options.detail, relatedTarget);
+    */
+    oEvent.initUIEvent(eventName, options.bubbles, options.cancelable,
+        document.defaultView, options.detail);
+    setEventProp(oEvent, 'relatedTarget', relatedTarget);
+    /*
+    oEvent.relatedTarget = relatedTarget;
+    */
   } else if (eventType == 'MouseEvent') {
-    var relatedTarget = target;
+    var relatedTarget = null;
 
     if (eventData.relatedTarget)
       relatedTarget = xPathToNode(eventData.relatedTarget.xpath); 
@@ -391,16 +419,24 @@ function simulate(request) {
         options.button, relatedTarget);
   } else if (eventType == 'KeyboardEvent') {
     oEvent.initKeyboardEvent(eventName, options.bubbles, options.cancelable,
+        document.defaultView, options.keyIdentifier, options.keyLocation, 
+        options.ctrlKey, options.altKey, options.shiftKey, options.metaKey);
+    
+    var propsToSet = ['charCode', 'keyCode'];
+    /*
+    oEvent.initKeyboardEvent(eventName, options.bubbles, options.cancelable,
         document.defaultView, options.ctrlKey, options.altKey,
         options.shiftKey, options.metaKey, options.keyCode,
         options.charCode);
-
+     
     var propsToSet = ['charCode', 'keyCode', 'shiftKey', 'metaKey',
                       'keyIdentifier', 'which'];
+    */
     for (var i = 0, ii = propsToSet.length; i < ii; ++i) {
       var prop = propsToSet[i];
       setEventProp(oEvent, prop, options[prop]);
     }
+    
   } else if (eventType == 'TextEvent') {
     oEvent.initTextEvent(eventName, options.bubbles, options.cancelable,
         document.defaultView, options.data, options.inputMethod,
@@ -437,6 +473,22 @@ function simulate(request) {
     dummyEvent.extensionGenerated = true;
     document.body.dispatchEvent(dummyEvent);
   }
+}
+
+function addMemoizedTarget(xPath, target) {
+  memoizedTargets.push([xPath, target]);
+
+  if (memoizedTargets.length > 5)
+    memoizedTargets.shift();
+}
+
+function getMemoizedTarget(xPath) {
+  for (var i = memoizedTargets.length - 1; i >= 0; --i) {
+    var t = memoizedTargets[i];
+    if (t[0] === xPath)
+      return t[1];
+  }
+  return null;
 }
 
 var highlightCount = 0;
