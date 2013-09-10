@@ -526,8 +526,6 @@ var Record = (function RecordClosure() {
       if (recordState == RecordState.RECORDING && params.simultaneous)
         this.simultaneousReplayer.updateEvent(eventRequest, portName);
     },
-//    addCapture: function _addCapture(eventRequest, portName) {
-//    },
     clearEvents: function _clearEvents() {
       this.loadedScriptId = null;
       this.events = [];
@@ -537,7 +535,8 @@ var Record = (function RecordClosure() {
       this.ports.sendToAll({type: 'reset', value: null});
     },
     getEvents: function _getEvents() {
-      return this.events.slice(0);
+      return jQuery.extend(true, [], this.events);
+      // return this.events.slice(0);
     },
     getReplayEvents: function _getReplayEvents() {
       return this.replayEvents.slice(0);
@@ -610,6 +609,7 @@ var Replay = (function ReplayClosure() {
       this.replayState = ReplayState.REPLAYING;
       this.timeoutInfo = {startTime: 0, index: -1};
       this.lastReplayPort = null;
+      this.captures = [];
     },
     setNextTimeout: function _setNextTimeout(time) {
       if (typeof time == 'undefined')
@@ -639,7 +639,7 @@ var Replay = (function ReplayClosure() {
       replayLog.log('wait time:', waitTime);
       return waitTime;
     },
-    markCascadingEvents: function _skipCascadingEvents() {
+    markCascadingEvents: function _markCascadingEvents() {
       replayLog.log('marked cascading events');
 
       var events = this.events;
@@ -729,6 +729,8 @@ var Replay = (function ReplayClosure() {
       this.pause();
 
       var record = this.record;
+      var replay = this;
+
       record.stopReplayRecording();
 
       var cont = this.cont;
@@ -739,10 +741,12 @@ var Replay = (function ReplayClosure() {
       setTimeout(function() {
         var replayEvents = record.getReplayEvents();
         var comments = record.getReplayComments();
+        var captures = replay.captures;
         var scriptId = record.getLoadedScriptId();
 
         if (params.replaying.saveReplay && scriptId &&
             replayEvents.length > 0) {
+          scriptServer.saveCaptures(captures, scriptId);
           scriptServer.saveScript('replay ' + scriptId, replayEvents, comments,
                                   params, scriptId);
           replayLog.log('saving replay:', replayEvents);
@@ -751,7 +755,7 @@ var Replay = (function ReplayClosure() {
     },
     saveCapture: function _saveCapture(capture, scriptId) {
       replayLog.log('capture:', capture, scriptId);
-      this.scriptServer.saveCapture(capture, scriptId);
+      this.captures.push(capture);
     },
     findPortInTab: function _findPortInTab(tab, topFrame, snapshot, msg) {
       var ports = this.ports;
@@ -1234,9 +1238,8 @@ var Controller = (function ControllerClosure() {
     },
     saveCapture: function _saveCapture(capture) {
       var replay = this.replay;
-      var id = this.record.getLoadedScriptId();
-      if (replay && id) {
-        replay.saveCapture(capture, id);
+      if (replay) {
+        replay.saveCapture(capture);
       }
     },
     updateParams: function _updateParams() {
@@ -1282,8 +1285,6 @@ function handleMessage(port, request) {
     record.updateEvent(request, port.name);
   } else if (request.type == 'comment') {
     record.addComment(request, port.name);
-  } else if (request.type == 'capture') {
-    record.addCapture(request, port.name);
   } else if (request.type == 'saveCapture') {
     controller.saveCapture(request.value);
   } else if (request.type == 'message') {

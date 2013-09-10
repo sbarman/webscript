@@ -33,22 +33,56 @@ var Benchmarker = (function BenchmarkerClosure() {
         var benchmark = benchmarks[index];
         scriptServer.getScript(benchmark.script.id, true, function(id, events) {
           benchmarker.controller.setLoadedEvents(id, events);
-          benchmarker.runBenchmark(events, benchmark.success_condition,
-                                   function(replay) {
-            var benchmarkRun = {
-              benchmark: benchmark,
-              errrors: '',
-              successful: replay.events.length == replay.index,
-              events_executed: replay.index
-            };
-            scriptServer.saveBenchmarkRun(benchmarkRun);
-            runBenchmark(benchmarks, index + 1);
-          });
+          log.debug('Starting benchmark:', benchmark.script.id, events);
+          
+          benchmarker.runBenchmark(events,
+            function(replay) {
+              var rcaptures = jQuery.parseJSON(benchmark.success_captures);
+              var captures = replay.captures;
+              
+              var correct_captures = [];
+              for (var i = 0, ii = rcaptures.length; i < ii; ++i) {
+                if (i < captures.length) {
+                  var c = rcaptures[i].trim() == captures[i].innerText.trim();
+                  correct_captures.push({
+                      correct: rcaptures[i],
+                      actual: captures[i].innerText,
+                      match: c
+                  });
+                } else {
+                  correct_captures.push({
+                    correct: rcaptures[i],
+                    actual: "",
+                    match: false
+                  });
+                }
+              }
+
+              var success = replay.events.length == replay.index;
+              for (var i = 0, ii = correct_captures.length; i < ii; ++i) {
+                if (!correct_captures[i].match)
+                  success = false;
+              }
+
+              var benchmarkRun = {
+                benchmark: benchmark,
+                errrors: '',
+                events_executed: replay.index,
+                events_total: replay.events.length,
+                successful: success,
+                notes: JSON.stringify(correct_captures)
+              };
+
+              log.debug('Finished benchmark:', benchmarkRun);
+              scriptServer.saveBenchmarkRun(benchmarkRun);
+              runBenchmark(benchmarks, index + 1);
+            }
+          );
         });
       }
       runBenchmark(benchmarks, 0);
     },
-    runBenchmark: function _runBenchmark(events, success_condition, cont) {
+    runBenchmark: function _runBenchmark(events, cont) {
       var replay = new Replay(events, this.panel, this.ports,
                               this.record, this.scriptServer);
       controller.replay = replay;

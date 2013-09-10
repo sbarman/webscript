@@ -334,9 +334,13 @@ var ScriptServer = (function ScriptServerClosure() {
       postMsg['benchmark'] = benchmarkRun.benchmark.id;
       postMsg['successful'] = benchmarkRun.successful;
       postMsg['events_executed'] = benchmarkRun.events_executed;
+      postMsg['events_total'] = benchmarkRun.events_total;
 
       if (benchmarkRun.errors)
         postMsg['errror'] = benchmarkRun.errors;
+
+      if (benchmarkRun.notes)
+        postMsg['notes'] = benchmarkRun.notes;
 
       $.ajax({
         error: function(jqXHR, textStatus, errorThrown) {
@@ -354,6 +358,11 @@ var ScriptServer = (function ScriptServerClosure() {
       });
       return null;
     },
+    saveCaptures: function _saveCaptures(captures, scriptId) {
+      for (var i = 0, ii = captures.length; i < ii; ++i) {
+        this.saveCapture(captures[i], scriptId);
+      }
+    },
     saveCapture: function _saveCapture(capture, scriptId) {
       var scriptServer = this;
       var server = this.server;
@@ -361,6 +370,7 @@ var ScriptServer = (function ScriptServerClosure() {
       var postMsg = {};
       postMsg['script'] = scriptId;
       postMsg['innerHtml'] = capture.innerHtml;
+      postMsg['innerText'] = capture.innerText;
       postMsg['nodeName'] = capture.nodeName;
 
       $.ajax({

@@ -125,7 +125,7 @@ var TimingStrategy = {
     logging: {
       level: 1,
       enabled: ['ports', 'event', 'record', 'replay', 'script', 'background',
-                'content', 'synthesis']
+                'content', 'synthesis', 'benchmark']
     },
     synthesis: {
       enabled: true,

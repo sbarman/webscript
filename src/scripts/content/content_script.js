@@ -268,11 +268,12 @@ function simulate(request) {
   } else if (eventName == 'capture') {
     var target = xPathToNode(eventData.target);
     replayLog.log('found capture node:', target);
+    if (!target)
+      setRetry(request, params.replaying.defaultWait);
 
-    var innerHtml = target.innerHTML;
-    var nodeName = target.nodeName.toLowerCase();
     var msg = {innerHtml: target.innerHTML,
-               nodeName: target.nodeName.toLowerCase()};
+               innerText: target.innerText,
+               nodeName: target.nodeName.toLowerCase()}
 
     port.postMessage({type: 'saveCapture', value: msg});
     port.postMessage({type: 'ack', value: true});
@@ -396,16 +397,9 @@ function simulate(request) {
     if (eventData.relatedTarget)
       relatedTarget = xPathToNode(eventData.relatedTarget.xpath); 
    
-    /*
-    oEvent = new FocusEvent(eventName, options.bubbles, options.cancelable,
-        document.defaultView, options.detail, relatedTarget);
-    */
     oEvent.initUIEvent(eventName, options.bubbles, options.cancelable,
         document.defaultView, options.detail);
     setEventProp(oEvent, 'relatedTarget', relatedTarget);
-    /*
-    oEvent.relatedTarget = relatedTarget;
-    */
   } else if (eventType == 'MouseEvent') {
     var relatedTarget = null;
 
