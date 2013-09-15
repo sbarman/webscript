@@ -268,8 +268,10 @@ function simulate(request) {
   } else if (eventName == 'capture') {
     var target = xPathToNode(eventData.target);
     replayLog.log('found capture node:', target);
-    if (!target)
+    if (!target) {
       setRetry(request, params.replaying.defaultWait);
+      return;
+    }
 
     var msg = {innerHtml: target.innerHTML,
                innerText: target.innerText,

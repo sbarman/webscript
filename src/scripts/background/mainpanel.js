@@ -610,6 +610,7 @@ var Replay = (function ReplayClosure() {
       this.timeoutInfo = {startTime: 0, index: -1};
       this.lastReplayPort = null;
       this.captures = [];
+      this.errors = "";
     },
     setNextTimeout: function _setNextTimeout(time) {
       if (typeof time == 'undefined')
@@ -626,15 +627,29 @@ var Replay = (function ReplayClosure() {
       var index = this.index;
       var events = this.events;
       var waitTime = 0;
+        
+      var defaultTime = events[index].waitTime;
+      if (defaultTime > 10000)
+        defaultTime = 10000;
 
       if (index == 0 || index == events.length) {
         waitTime = 1000;
       } else if (timing == TimingStrategy.MIMIC) {
-        waitTime = events[index].waitTime;
-        if (waitTime > 10000)
-          waitTime = 10000;
+        waitTime = defaultTime
       } else if (timing == TimingStrategy.SPEED) {
         waitTime = 0;
+      } else if (timing == TimingStrategy.SLOWER) {
+        waitTime = defaultTime + 1000;
+      } else if (timing == TimingStrategy.SLOWEST) {
+        waitTime = defaultTime + 3000;
+      } else if (timing == TimingStrategy.FIXED_1) {
+        waitTime = 1000;
+      } else if (timing == TimingStrategy.RANDOM_0_3) {
+        waitTime = Math.round(Math.random() * 3000);
+      } else if (timing == TimingStrategy.PERTURB_0_3) {
+        waitTime = defaultTime + Math.round(Math.random() * 3000);
+      } else {
+        throw "unknown timing strategy";
       }
       replayLog.log('wait time:', waitTime);
       return waitTime;
@@ -733,10 +748,6 @@ var Replay = (function ReplayClosure() {
 
       record.stopReplayRecording();
 
-      var cont = this.cont;
-      if (cont)
-        cont(this);
-
       var scriptServer = this.scriptServer;
       setTimeout(function() {
         var replayEvents = record.getReplayEvents();
@@ -752,6 +763,13 @@ var Replay = (function ReplayClosure() {
           replayLog.log('saving replay:', replayEvents);
         }
       }, 1000);
+
+      if (this.cont) {
+        var replay = this;
+        setTimeout(function() {
+          replay.cont(replay);
+        }, 0);
+      }
     },
     saveCapture: function _saveCapture(capture, scriptId) {
       replayLog.log('capture:', capture, scriptId);
@@ -853,6 +871,8 @@ var Replay = (function ReplayClosure() {
       return newPort;
     },
     guts: function _guts() {
+      try {
+              
       // we have enabled event timeouts
       var eventTimeout = params.replaying.eventTimeout;
       if (eventTimeout > 0) {
@@ -860,15 +880,17 @@ var Replay = (function ReplayClosure() {
         var curTime = new Date().getTime();
 
         // we havent changed events
-        if (timeoutInfo.index == this.index) {
+        var index = this.index;
+        if (timeoutInfo.index == index) {
           if (curTime - timeoutInfo.startTime > eventTimeout * 1000) {
             // lets call the end of this script
             replayLog.log('event ' + index + ': has timed out');
+            this.errors += "event " + index + " has timed out:";
             this.finish();
             return;
           }
         } else {
-          this.timeoutInfo = {startTime: curTime, index: this.index};
+          this.timeoutInfo = {startTime: curTime, index: index};
         }
       }
 
@@ -978,26 +1000,26 @@ var Replay = (function ReplayClosure() {
 
       var type = msg.value.type;
 
-      if (replayState == ReplayState.WAIT_ACK) {
-        var ackReturn = this.ports.getAck(this.ackVar);
-        if (ackReturn == null || ackReturn != true) {
-          replayPort.postMessage(msg);
-          this.setNextTimeout(params.replaying.defaultWait);
+      try {
+        if (replayState == ReplayState.WAIT_ACK) {
+          var ackReturn = this.ports.getAck(this.ackVar);
+          if (ackReturn == null || ackReturn != true) {
+            replayPort.postMessage(msg);
+            this.setNextTimeout(params.replaying.defaultWait);
 
-          replayLog.log('continue waiting for wait ack');
-        }
-      } else if (replayState == ReplayState.REPLAYING ||
-                 replayState == ReplayState.REPLAY_ONE) {
-        this.ports.clearAck();
-        if (type == 'wait') {
-          replayPort.postMessage(msg);
-          this.replayState = ReplayState.WAIT_ACK;
-          this.setNextTimeout(0);
+            replayLog.log('continue waiting for wait ack');
+          }
+        } else if (replayState == ReplayState.REPLAYING ||
+                   replayState == ReplayState.REPLAY_ONE) {
+          this.ports.clearAck();
+          if (type == 'wait') {
+            replayPort.postMessage(msg);
+            this.replayState = ReplayState.WAIT_ACK;
+            this.setNextTimeout(0);
 
-          replayLog.log('start waiting for wait ack');
-        } else {
-          // send message
-          try {
+            replayLog.log('start waiting for wait ack');
+          } else {
+            // send message
             replayPort.postMessage(msg);
             replayLog.log('sent message', msg);
             if (replayState == ReplayState.REPLAYING)
@@ -1006,22 +1028,36 @@ var Replay = (function ReplayClosure() {
               this.replayState = ReplayState.REPLAY_ONE_ACK;
 
             replayLog.log('start waiting for replay ack');
-          } catch (err) {
-            replayLog.error('error:', err.message, err);
-            if (err.message == 'Attempting to use a disconnected port object') {
-              // we probably navigated away from the page so lets skip all
-              // events that use this same port
-              while (index < events.length && events[index].port == port) {
-                replayLog.log('skipping event:', index);
-                ++index;
-              }
-              this.index = index;
-            }
+            this.setNextTimeout(0);
           }
-          this.setNextTimeout(0);
+        } else {
+          throw 'unknown replay state';
         }
-      } else {
-        throw 'unknown replay state';
+      } catch (e) {
+        replayLog.error('error:', e.message, e);
+        if (err.message == 'Attempting to use a disconnected port object') {
+          if (params.replaying.brokenPortStrategy == BrokenPortStrategy.RETRY) {
+            // remove the mapping and try again
+            delete portMapping[port];
+          } else {
+            // we probably navigated away from the page so lets skip all
+            // events that use this same port
+            while (index < events.length && events[index].port == port) {
+              replayLog.log('skipping event:', index);
+              ++index;
+            }
+            this.index = index;
+          }
+        } else {
+          throw e;
+        }
+      }
+      
+
+      } catch (e) {
+        replayLog.error('error:', e.message, e);
+        this.errors += e.toString + ":";
+        this.finish();
       }
     }
   };

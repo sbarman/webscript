@@ -4,6 +4,7 @@
 'use strict';
 
 var params = null;
+var defaultParams = null;
 
 var ReplayStrategy = {
   DEFAULT: 0,
@@ -11,9 +12,19 @@ var ReplayStrategy = {
   FORCED: 2
 };
 
+var BrokenPortStrategy = {
+  RETRY: 0,
+  SKIP: 1
+};
+
 var TimingStrategy = {
   MIMIC: 0,
   SPEED : 1,
+  SLOWER: 2,
+  SLOWEST: 3,
+  FIXED_1: 4,
+  RANDOM_0_3: 5,
+  PERTURB_0_3: 6
 };
 
 (function() {
@@ -116,7 +127,7 @@ var TimingStrategy = {
     }
   };
 
-  params = {
+  defaultParams = {
     user: 'sbarman',
     simultaneous: false, // this is probably broken now
     localSnapshot: true,
@@ -155,13 +166,16 @@ var TimingStrategy = {
       timingStrategy: TimingStrategy.MIMIC,
       defaultWait: 100,
       defaultWaitNewTab: 4000,
-      highlightTarget: true
+      highlightTarget: true,
+      brokenPortStrategy: BrokenPortStrategy.RETRY
     },
     server: 'http://sbarman.webfactional.com/api/',
     //server: "http://127.0.0.1:8000/api/",
     benchmarking: {
-      timeout: 600
+      timeout: 600,
     }
   };
+
+  params = jQuery.extend(true, {}, defaultParams);
 
 })();
