@@ -1,3 +1,0 @@
-[submodule "src/scripts/lib/outline"]
-	path = src/scripts/lib/outline
-	url = git@github.com:andrewchilds/jQuery.DomOutline.git
