@@ -21,12 +21,6 @@ make.js
 Quick Setup
 -------------------
 
-After cloning the repo, you will need to initialize the submodules with the
-following commands
-
-> git submodule init
-> git submodule update
-
 Webscript is Chrome extension. Directions on how to install an unpacked
 extension can be found at:
 
