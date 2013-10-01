@@ -186,7 +186,7 @@ var Panel = (function PanelClosure() {
       });
 
       $('#replay').click(function(eventObject) {
-        controller.replayScript();
+        controller.replayRecordedEvents();
       });
 
       $('#pause').click(function(eventObject) {
@@ -390,7 +390,17 @@ var Record = (function RecordClosure() {
     updateStatus: function _updateStatus(newStatus) {
       if (this.recordState != newStatus) {
         this.recordState = newStatus;
-        this.updateListeners({status: newStatus});
+
+        var text = "";
+        if (newStatus == RecordState.RECORDING)
+          text = 'Recording';
+        else if (newStatus == RecordState.STOPPED)
+          text = 'Stopped';
+        else if (newStatus == RecordState.REPLAYING)
+          text = 'Replaying';
+        else
+          throw "unknown status";
+        this.updateListeners({status: text});
       }
     },
     startRecording: function _startRecording() {
@@ -642,7 +652,7 @@ var Replay = (function ReplayClosure() {
       this.timeoutInfo = {startTime: 0, index: -1};
       this.lastReplayPort = null;
       this.captures = [];
-      this.errors = "";
+      this.debug = [];
     },
     setNextTimeout: function _setNextTimeout(time) {
       if (typeof time == 'undefined')
@@ -766,15 +776,8 @@ var Replay = (function ReplayClosure() {
       if (this.replayState == ReplayState.REPLAY_ACK)
         this.replayState = ReplayState.REPLAYING;
     },
-    addError: function _addError(msg, reset) {
-      var errors = "";
-      if (!reset)
-        errors = this.errors;
-
-      this.errors = errors + msg + '\n';
-    },
-    clearErrors: function _clearErrors() {
-      this.errors = "";
+    addDebug: function _addDebug(msg) {
+      this.debug.push(msg);
     },
     finish: function _finish(errorMsg) {
       replayLog.log('finishing replay');
@@ -784,7 +787,11 @@ var Replay = (function ReplayClosure() {
 
       this.replayState = ReplayState.FINISHED;
       this.pause();
-      this.addError(errorMsg);
+
+      if (errorMsg)
+        this.addDebug('error:' + errorMsg);
+      else
+        this.addDebug('finished normally');
 
       var record = this.record;
       var replay = this;
@@ -828,6 +835,7 @@ var Replay = (function ReplayClosure() {
         return;
 
       var newPort = null;
+
       if (topFrame) {
         replayLog.log('assume port is top level page');
         var topFrame = portInfo.top;
@@ -846,10 +854,12 @@ var Replay = (function ReplayClosure() {
           }
         }
 
-        if (urlFrames.length == 0)
+        if (urlFrames.length == 0) {
+          this.addDebug('no iframes found for page')
           return;
-        else if (urlFrames.length == 1)
+        } else if (urlFrames.length == 1) {
           return ports.getPort(urlFrames[0].portName);
+        }
 
         var allFrameSnapshots = true;
         for (var i = 0, ii = urlFrames.length; i < ii; i++) {
@@ -926,9 +936,8 @@ var Replay = (function ReplayClosure() {
           if (timeoutInfo.index == index) {
             if (curTime - timeoutInfo.startTime > eventTimeout * 1000) {
               // lets call the end of this script
-              replayLog.log('event ' + index + ': has timed out');
-              this.errors += "event " + index + " has timed out:";
-              this.finish("timeout when changing event");
+              replayLog.log('event ' + index + ' has timed out');
+              this.finish('event ' + index + ' has timed out');
               return;
             }
           } else {
@@ -980,6 +989,7 @@ var Replay = (function ReplayClosure() {
         var tabMapping = this.tabMapping;
 
         if (index >= events.length) {
+          this.addDebug('finished script');
           this.finish();
           return;
         }
@@ -1018,6 +1028,7 @@ var Replay = (function ReplayClosure() {
           } else {
             this.setNextTimeout(params.replaying.defaultWait);
             replayLog.log('tab already seen, no port found');
+            this.addDebug('tab already seen, no port found');
             return;
           }
 
@@ -1077,11 +1088,14 @@ var Replay = (function ReplayClosure() {
           }
         } catch (e) {
           replayLog.error('error:', e.message, e);
-          if (err.message == 'Attempting to use a disconnected port object') {
-            if (params.replaying.brokenPortStrategy==BrokenPortStrategy.RETRY) {
+          if (e.message == 'Attempting to use a disconnected port object') {
+            var strategy = params.replaying.brokenPortStrategy;
+            if (strategy == BrokenPortStrategy.RETRY) {
               // remove the mapping and try again
+              this.addDebug('using disconnected port, removing and trying again');
               delete portMapping[port];
-            } else {
+              this.setNextTimeout(0);
+            } else if (strategy == BrokenPortStrategey.SKIP) {
               // we probably navigated away from the page so lets skip all
               // events that use this same port
               while (index < events.length && events[index].port == port) {
@@ -1089,6 +1103,9 @@ var Replay = (function ReplayClosure() {
                 ++index;
               }
               this.index = index;
+              this.setNextTimeout(0);
+            } else {
+              throw "unknown broken port strategy";
             }
           } else {
             throw e;
@@ -1096,7 +1113,7 @@ var Replay = (function ReplayClosure() {
         }
       } catch (e) {
         replayLog.error('error:', e.message, e);
-        this.finish(e.toString);
+        this.finish(e.toString());
       }
     }
   };
@@ -1147,8 +1164,8 @@ var SimultaneousReplay = (function SimultaneousReplayClosure() {
     if (desiredPort) {
       try {
         desiredPort.postMessage(msg);
-      } catch (err) {
-        console.log(err.message);
+      } catch (e) {
+        console.log(e.message);
       }
     }
     //no twin port yet, but we have a twin tab
@@ -1258,7 +1275,7 @@ var Controller = (function ControllerClosure() {
       ctlLog.log('capture');
       this.record.captureNode();
     },
-    replayScript: function() {
+    replayRecordedEvents: function _replayRecording(cont) {
       ctlLog.log('replay');
       this.stop();
       if (this.replay)
@@ -1267,14 +1284,18 @@ var Controller = (function ControllerClosure() {
       var record = this.record;
       var events = record.getEvents();
       var replay = new Replay(events, this.ports, record, this.scriptServer);
+      this.replay = replay;
       
       var listeners = this.listeners;
       for (var i = 0, ii = listeners.length; i < ii; ++i)
         replay.addListener(listeners[i]);
 
-      replay.replay();
-
-      this.replay = replay;
+      replay.replay(cont);
+      return replay;
+    },
+    replayScript: function(scriptId, events, cont) {
+      this.setLoadedEvents(scriptId, events);
+      return this.replayRecordedEvents(cont);
     },
     pause: function() {
       this.replay.pause();
@@ -1313,6 +1334,12 @@ var Controller = (function ControllerClosure() {
       var replay = this.replay;
       if (replay) {
         replay.saveCapture(capture);
+      }
+    },
+    addDebug: function _addDebug(msg) {
+      var replay = this.replay;
+      if (replay) {
+        replay.addDebug(msg);
       }
     },
     updateParams: function _updateParams() {
@@ -1375,8 +1402,8 @@ function handleMessage(port, request) {
     bgLog.log('got ack');
   } else if (request.type == 'url') {
     ports.updateUrl(port, request.value);
-  } else if (request.type == 'error') {
-    // TODO need to do something
+  } else if (request.type == 'debug') {
+    controller.addDebug(request.value);
   }
 }
 

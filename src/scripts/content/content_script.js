@@ -307,6 +307,7 @@ function simulate(request) {
   // future in the case the page needs to change
   if (!target) {
     setRetry(request, params.replaying.defaultWait);
+    port.postMessage({type: 'debug', value: 'no target found'});
     return;
   }
 

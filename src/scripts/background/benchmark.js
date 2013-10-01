@@ -6,11 +6,10 @@
 var Benchmarker = (function BenchmarkerClosure() {
   var log = getLog('benchmark');
 
-  function Benchmarker(ports, record, scriptServer, panel, controller) {
+  function Benchmarker(ports, record, scriptServer, controller) {
     this.ports = ports;
     this.record = record;
     this.scriptServer = scriptServer;
-    this.panel = panel;
     this.controller = controller;
   }
 
@@ -60,17 +59,10 @@ var Benchmarker = (function BenchmarkerClosure() {
       scriptServer.getScript(benchmark.script.id, true, function(id, events) {
         b.controller.setLoadedEvents(id, events);
         log.debug('Starting benchmark:', benchmark.script.id, events);
-          
-        var r = new Replay(events, b.panel, b.ports, b.record, b.scriptServer);
-        controller.replay = r;
 
-        // kill script after timeout period
-        var timeoutId = setTimeout(function() {
-          r.finish();
-        }, params.benchmarking.timeout * 1000);
+        var timeoutId = -1;
 
-        r.replay(function(replay) {
-                
+        var r = b.controller.replayScript(id, events, function(replay) {
           clearTimeout(timeoutId);
           var rcaptures = jQuery.parseJSON(benchmark.success_captures);
           var captures = replay.captures;
@@ -101,7 +93,7 @@ var Benchmarker = (function BenchmarkerClosure() {
 
           var benchmarkRun = {
             benchmark: benchmark,
-            errors: replay.errors.toString(),
+            errors: replay.debug.toString(),
             events_executed: replay.index,
             events_total: replay.events.length,
             successful: success,
@@ -114,6 +106,13 @@ var Benchmarker = (function BenchmarkerClosure() {
           if (cont)
             cont(replay);
         });
+
+        controller.replay = r;
+
+        // kill script after timeout period
+        timeoutId = setTimeout(function() {
+          r.finish();
+        }, params.benchmarking.timeout * 1000);
       });
     }
   };
@@ -123,19 +122,19 @@ var Benchmarker = (function BenchmarkerClosure() {
 
 
 function runBenchmarks(benchmarkList, initList) {
-  var b = new Benchmarker(ports, record, scriptServer, panel, controller);
+  var b = new Benchmarker(ports, record, scriptServer, controller);
   b.runBenchmarks(benchmarkList, initList);
 }
 
 function runAllBenchmarks() {
-  var b = new Benchmarker(ports, record, scriptServer, panel, controller);
+  var b = new Benchmarker(ports, record, scriptServer, controller);
   b.getBenchmarks(function(benchmarks) {
     b.runBenchmarks(benchmarks);
   });
 }
 
 function runBenchmark(name) {
-  var b = new Benchmarker(ports, record, scriptServer, panel, controller);
+  var b = new Benchmarker(ports, record, scriptServer, controller);
   var filteredList = []
   b.getBenchmarks(function(benchmarks) {
     for (var i = 0, ii = benchmarks.length; i < ii; ++i) {
@@ -148,7 +147,7 @@ function runBenchmark(name) {
 }
 
 function runBenchmarkAllTimes(selector, trials) {
-  var b = new Benchmarker(ports, record, scriptServer, panel, controller);
+  var b = new Benchmarker(ports, record, scriptServer, controller);
   b.getBenchmarks(function(benchmarks) {
     var timingStrategies = Object.keys(TimingStrategy);
 

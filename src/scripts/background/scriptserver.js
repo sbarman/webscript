@@ -337,7 +337,7 @@ var ScriptServer = (function ScriptServerClosure() {
       postMsg['events_total'] = benchmarkRun.events_total;
 
       if (benchmarkRun.errors)
-        postMsg['error'] = benchmarkRun.errors;
+        postMsg['errors'] = benchmarkRun.errors;
 
       if (benchmarkRun.notes)
         postMsg['notes'] = benchmarkRun.notes;
