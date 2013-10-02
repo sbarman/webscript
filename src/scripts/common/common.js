@@ -7,6 +7,15 @@ var RecordState = {
   REPLAYING: 2
 };
 
+var ReplayState = {
+  REPLAYING: 1,
+  REPLAY_ONE: 2,
+  REPLAY_ACK: 3,
+  REPLAY_ONE_ACK: 4,
+  WAIT_ACK: 5,
+  STOPPED: 6
+};
+
 function lcs(x, y) {
   var s, i, j, m, n,
     lcs = [], row = [], c = [],

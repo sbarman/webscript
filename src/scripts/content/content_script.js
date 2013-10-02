@@ -139,7 +139,7 @@ function recordEvent(eventData) {
 
   // save the event record
   recordLog.debug('[' + id + '] saving event message:', eventMessage);
-  port.postMessage({type: 'event', value: eventMessage});
+  port.postMessage({type: 'event', value: eventMessage, state: recording});
 
   lastRecordEvent = eventMessage;
 
@@ -194,7 +194,8 @@ function updateDeltas(target) {
         'nodeSnapshot': snapshotNode(lastRecordSnapshot.target),
         'pageEventId': lastRecordEvent.pageEventId,
         'recording': recording
-      }
+      },
+      state: recording
     };
     port.postMessage(update);
   }
