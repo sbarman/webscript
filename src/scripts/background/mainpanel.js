@@ -164,6 +164,8 @@ var Panel = (function PanelClosure() {
         this.updateStatus(msg.status);
       } else if ('reset' in msg) {
         this.clearEvents();
+      } else if ('simulate' in msg) {
+        this.scroll(msg.simulate);
       } else {
         throw "unknown controller update";
       }
@@ -335,6 +337,9 @@ var Panel = (function PanelClosure() {
     },
     updateStatus: function _updateStatus(status) {
       $('#status').text(status);
+    },
+    scroll: function _scroll(id) {
+      $('#' + id).get(0).scrollIntoView();
     },
     resize: function _resize() {
       var total = $(window).height();
@@ -980,8 +985,7 @@ var Replay = (function ReplayClosure() {
         var snapshot = msg.value.snapshot;
 
         this.updateListeners({status: 'Replay ' + index});
-        //$('#status').text('Replay ' + index);
-        $('#' + id).get(0).scrollIntoView();
+        this.updateListeners({simulate: id});
 
         replayLog.log('background replay:', id, msg, port, tab);
 
