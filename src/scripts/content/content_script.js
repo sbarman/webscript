@@ -152,11 +152,6 @@ function recordEvent(eventData) {
       curTime = new Date().getTime();
   }
 
-  if (params.replaying.dummyCascadingEvents && eventData.dummy) {
-    eventData.stopImmediatePropagation();
-    eventData.preventDefault();
-  }
-
   // TODO: special case with mouseover, need to return false
   return true;
 };
@@ -462,16 +457,9 @@ function simulate(request) {
 
   // update panel showing event was sent
   sendAlert('Received Event: ' + eventData.type);
-
-  if (params.replaying.dummyCascadingEvents) {
-    var dummyEvent = document.createEvent(eventType);
-    dummyEvent.initEvent('copy', true, true);
-    dummyEvent.dummy = true;
-    dummyEvent.extensionGenerated = true;
-    document.body.dispatchEvent(dummyEvent);
-  }
 }
 
+/*
 function addMemoizedTarget(xPath, target) {
   memoizedTargets.push([xPath, target]);
 
@@ -487,6 +475,7 @@ function getMemoizedTarget(xPath) {
   }
   return null;
 }
+*/
 
 var highlightCount = 0;
 
