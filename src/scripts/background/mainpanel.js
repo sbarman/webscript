@@ -1086,15 +1086,20 @@ var Replay = (function ReplayClosure() {
           } else {
             throw 'unknown replay state';
           }
-        } catch (e) {
-          replayLog.error('error:', e.message, e);
-          if (e.message == 'Attempting to use a disconnected port object') {
+        } catch (err) {
+          replayLog.error('error:', err.message, err);
+          if (err.message == 'Attempting to use a disconnected port object') {
             var strategy = params.replaying.brokenPortStrategy;
             if (strategy == BrokenPortStrategy.RETRY) {
-              // remove the mapping and try again
-              this.addDebug('using disconnected port, removing and trying again');
-              delete portMapping[port];
-              this.setNextTimeout(0);
+              if (e.cascading) {
+                this.index++;
+                this.setNextTimeout(0);
+              } else {
+                // remove the mapping and try again
+                this.addDebug('using disconnected port, removing and trying again');
+                delete portMapping[port];
+                this.setNextTimeout(0);
+              }
             } else if (strategy == BrokenPortStrategey.SKIP) {
               // we probably navigated away from the page so lets skip all
               // events that use this same port
@@ -1108,12 +1113,12 @@ var Replay = (function ReplayClosure() {
               throw "unknown broken port strategy";
             }
           } else {
-            throw e;
+            throw err;
           }
         }
-      } catch (e) {
-        replayLog.error('error:', e.message, e);
-        this.finish(e.toString());
+      } catch (err) {
+        replayLog.error('error:', err.message, err);
+        this.finish(err.toString());
       }
     }
   };
