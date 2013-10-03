@@ -107,22 +107,18 @@ var PortManager = (function PortManagerClosure() {
         var tabId = portManager.portNameToTabId[portName];
         var portInfo = portManager.tabIdToCurrentPortInfo[tabId];
 
-        // the top level port might have already been disconnected which means
-        // portInfo will be null
-        // if (portInfo != undefined) {
-          if (portInfo.top.portName == portName) {
-            portInfo.top = null;
-            // delete tabIdToCurrentPortInfo[tabId];
-          } else {
-            var frames = portInfo.frames;
-            for (var i = 0, ii = frames.length; i < ii; ++i) {
-              if (frames[i].portName == portName) {
-                frames.splice(i, 1);
-                break;
-              }
+
+        if (portInfo.top.portName == portName) {
+          portInfo.top = null;
+        } else {
+          var frames = portInfo.frames;
+          for (var i = 0, ii = frames.length; i < ii; ++i) {
+            if (frames[i].portName == portName) {
+              frames.splice(i, 1);
+              break;
             }
           }
-        // }
+        }
       });
     },
     getAck: function() {
@@ -593,6 +589,18 @@ var Replay = (function ReplayClosure() {
         listeners[i](msg);
       }
     },
+    getEventsByPort: function _getEventsByPort(events) {
+      var map = {};
+      for (var i = 0, ii = events.length; i < ii; ++i) {
+        var event = events[i];
+        var port = event.port;
+        if (!(port in map))
+          map[port] = [];
+        
+        map[port].push(event);
+      }
+      return map;
+    },
     replay: function _replay(events, scriptId, cont) {
       replayLog.log('starting replay');
 
@@ -602,10 +610,11 @@ var Replay = (function ReplayClosure() {
       this.events = events;
       this.scriptId = scriptId;
       this.cont = cont;
+      this.replayState = ReplayState.REPLAYING;
+      this.eventsByPort = this.getEventsByPort(events);
 
       this.record.startRecording(true);
       this.ports.sendToAll({type: 'resetCompensation', value: null});
-      this.replayState = ReplayState.REPLAYING;
       this.setNextTimeout();
     },
     reset: function _reset() {
@@ -671,7 +680,7 @@ var Replay = (function ReplayClosure() {
       replayLog.log('wait time:', waitTime);
       return waitTime;
     },
-    markCascadingEvents: function _markCascadingEvents() {
+/*    markCascadingEvents: function _markCascadingEvents() {
       replayLog.log('marked cascading events');
 
       var events = this.events;
@@ -711,6 +720,7 @@ var Replay = (function ReplayClosure() {
         }
       }
     },
+*/
     pause: function _pause() {
       var handle = this.timeoutHandle;
       if (handle) {
@@ -718,6 +728,7 @@ var Replay = (function ReplayClosure() {
         this.timeoutHandle = null;
       }
 
+      // tell whatever page was trying to execute the last event to pause
       var port = this.lastReplayPort;
       if (port) {
         try {
@@ -729,14 +740,14 @@ var Replay = (function ReplayClosure() {
     },
     restart: function _restart() {
       if (this.timeoutHandle == null) {
-        this.setNextTimeout(0);
-
         var replayState = this.replayState;
         if (replayState == ReplayState.REPLAY_ACK) {
           this.replayState = ReplayState.REPLAYING;
         } else if (replayState == ReplayState.REPLAY_ONE_ACK) {
           this.replayState == ReplayState.REPLAY_ONE;
         }
+
+        this.setNextTimeout(0);
       }
     },
     replayOne: function _replayOne() {
@@ -762,6 +773,8 @@ var Replay = (function ReplayClosure() {
 
       this.replayState = ReplayState.STOPPED;
       this.pause();
+      this.record.stopRecording();
+      this.updateListeners({status: 'Finished'});
 
       if (errorMsg)
         this.addDebug('error:' + errorMsg);
@@ -770,9 +783,6 @@ var Replay = (function ReplayClosure() {
 
       var record = this.record;
       var replay = this;
-
-      record.stopRecording();
-      this.updateListeners({status: 'Finished'});
 
       var scriptServer = this.scriptServer;
       setTimeout(function() {
@@ -961,7 +971,7 @@ var Replay = (function ReplayClosure() {
           return;
         }
 
-        this.markCascadingEvents();
+//        this.markCascadingEvents();
 
         var events = this.events;
         var index = this.index;
@@ -983,6 +993,7 @@ var Replay = (function ReplayClosure() {
         var topFrame = e.topFrame;
         var iframeIndex = e.iframeIndex;
         var snapshot = msg.value.snapshot;
+        var unseenPort = false;
 
         this.updateListeners({status: 'Replay ' + index});
         this.updateListeners({simulate: id});
@@ -999,11 +1010,11 @@ var Replay = (function ReplayClosure() {
         // we have already seen this tab, find equivalent port for tab
         // for now we will just choose the last port added from this tab
         } else if (tab in tabMapping) {
-          var newPort = this.findPortInTab(tab, topFrame, snapshot, msg);
+          var replayPort = this.findPortInTab(tab, topFrame, snapshot, msg);
 
-          if (newPort) {
-            portMapping[port] = newPort;
-            replayPort = newPort;
+          if (replayPort) {
+            portMapping[port] = replayPort;
+            unseenPort = true;
             replayLog.log('tab already seen, found port:', replayPort);
           } else {
             this.setNextTimeout(params.replaying.defaultWait);
@@ -1011,7 +1022,6 @@ var Replay = (function ReplayClosure() {
             this.addDebug('tab already seen, no port found');
             return;
           }
-
         // need to open new tab
         } else {
           var replay = this;
@@ -1053,7 +1063,13 @@ var Replay = (function ReplayClosure() {
               replayLog.log('start waiting for wait ack');
             } else {
               // send message
-              replayPort.postMessage(msg);
+              if (unseenPort)
+                replayPort.postMessage({type: 'portEvents', 
+                    value: this.eventsByPort[port]});
+
+              var modifiedMsg = {type: msg.type,
+                                 value: {id: id, eventData: msg.value}}
+              replayPort.postMessage(modifiedMsg);
               replayLog.log('sent message', msg);
               if (replayState == ReplayState.REPLAYING)
                 this.replayState = ReplayState.REPLAY_ACK;
@@ -1222,6 +1238,7 @@ var Controller = (function ControllerClosure() {
     // The user started recording
     start: function() {
       ctlLog.log('start');
+/*
       if (params.simultaneous) {
         //make the window in which we will simulataneously replay events
         var record = this.record;
@@ -1239,12 +1256,13 @@ var Controller = (function ControllerClosure() {
           }
         );
       } else {
+*/
         this.record.startRecording();
 
         // Update the UI
         chrome.browserAction.setBadgeBackgroundColor({color: [255, 0, 0, 64]});
         chrome.browserAction.setBadgeText({text: 'ON'});
-      }
+//      }
     },
     stop: function() {
       ctlLog.log('stop');

@@ -57,7 +57,6 @@ var Benchmarker = (function BenchmarkerClosure() {
       var b = this;
 
       scriptServer.getScript(benchmark.script.id, true, function(id, events) {
-        b.controller.setLoadedEvents(id, events);
         log.debug('Starting benchmark:', benchmark.script.id, events);
 
         var timeoutId = -1;

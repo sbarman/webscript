@@ -26,6 +26,8 @@ var curReplaySnapshot; // snapshot taken before the next event is replayed
 var accumulatedDeltas = [];
 var dispatchingEvent = false;
 var retryTimeout = null;
+var portEvents = null;
+var portEventsIdx = 0;
 //var memoizedTargets = []; // used for cascadingEvents where an earlier handler
 //                          // removes the target node from the DOM
 
@@ -55,6 +57,23 @@ function getEventType(type) {
 function getEventProps(type) {
   var eventType = getEventType(type);
   return params.defaultProps[eventType];
+}
+
+function markReplayEvents(eventData) {
+  if (!dispatchingEvent)
+    return;
+
+  if (portEventsIdx == null || portEventsIdx >= portEvents.length)
+    return;
+
+  var eventObject = portEvents[portEventsIdx];
+  var eventRecord = eventObject.msg.value;
+  if (eventRecord.type == eventData.type) {
+    eventObject.replayed = true;
+    portEventsIdx++;
+  } else {
+    portEventsIdx = null;
+  }
 }
 
 // create an event record given the data from the event handler
@@ -88,6 +107,8 @@ function recordEvent(eventData) {
   // if we are not recording this type of event, we should exit
   if (!shouldRecord)
     return;
+
+  markReplayEvents(eventData);
 
   // continue recording the event
   recordLog.debug('[' + id + '] process event:', type, dispatchType,
@@ -243,14 +264,33 @@ function captureNodeReply(target) {
 // Replaying code
 // ***************************************************************************
 
+function setPortEvents(events) {
+  portEvents = events;
+}
+
 // replay an event from an event message
 function simulate(request) {
-
   // since we are simulating a new event, lets clear out any retries 
   clearRetry();
 
-  var eventData = request.value;
+  var msg = request.value;
+  var id = msg.id;
+  var eventData = msg.eventData;
   var eventName = eventData.type;
+
+  for (var i = 0, ii = portEvents.length; i < ii; ++i) {
+    var e = portEvents[i];
+    if (e.id == id) {
+      portEventsIdx = i;
+      break;
+    }
+  }
+
+  // this event was detected by the recorder, so lets skip it
+  if (portEvents[portEventsIdx].replayed) {
+    port.postMessage({type: 'ack', value: true});
+    return;
+  }
 
   replayLog.debug('simulating:', eventName, eventData);
 
@@ -308,11 +348,7 @@ function simulate(request) {
   }
 
   if (params.replaying.highlightTarget) {
-    var divId = highlightNode(target);
-    
-    setTimeout(function() {
-      dehighlightNode(divId);
-    }, 100);
+    highlightNode(target, 100);
   }
 
   // make sure the deltas from the last event actually happened
@@ -480,7 +516,7 @@ function getMemoizedTarget(xPath) {
 
 var highlightCount = 0;
 
-function highlightNode(target) {
+function highlightNode(target, time) {
   var boundingBox = target.getBoundingClientRect();
   var newDiv = $('<div/>');
   var idName = 'sbarman-hightlight-' + highlightCount
@@ -494,6 +530,12 @@ function highlightNode(target) {
   newDiv.css('background-color', '#00FF00');
   newDiv.css('opacity', .4);
   $(document.body).append(newDiv);
+
+  if (time) {
+    setTimeout(function() {
+      dehighlightNode(idName);
+    }, 100);
+  }
 
   return idName;
 }
@@ -671,6 +713,8 @@ function handleMessage(request) {
     cancelCaptureNode();
   } else if (type == 'pauseReplay') {
     clearRetry();
+  } else if (type == 'portEvents') {
+    setPortEvents(request.value);
   } else {
     log.error('cannot handle message:', request);
   }
