@@ -289,6 +289,7 @@ function simulate(request) {
   // this event was detected by the recorder, so lets skip it
   if (portEvents[portEventsIdx].replayed) {
     port.postMessage({type: 'ack', value: true});
+    accumulatedDeltas = accumulatedDeltas.concat(eventData.deltas);
     return;
   }
 
@@ -318,16 +319,6 @@ function simulate(request) {
     return;
   }
 
-  if (params.replaying.skipCascadingEvents && eventData.cascading) {
-    replayLog.debug('skipping event', eventData);
-    port.postMessage({type: 'ack', value: true});
-
-    if (params.synthesis.enabled)
-      accumulatedDeltas = accumulatedDeltas.concat(eventData.deltas);
-
-    return;
-  }
-
   var target = xPathToNode(eventData.target);
 
   // check if we already seen this target
@@ -351,9 +342,11 @@ function simulate(request) {
     highlightNode(target, 100);
   }
 
+  snapshotReplay(target);
   // make sure the deltas from the last event actually happened
   if (params.synthesis.enabled && lastReplayEvent) {
-    try {
+/*
+     try {
       var lastTarget = xPathToNode(lastReplayEvent.target);
       // run the compensation events for the last event
       for (var i in annotationEvents) {
@@ -369,7 +362,7 @@ function simulate(request) {
     } catch (e) {
       replayLog.error('error when replaying annotation events:', e);
     }
-
+*/
     var recordDeltas = lastReplayEvent.deltas;
     if (typeof recordDeltas == 'undefined') {
       replayLog.error('no deltas found for last event:', lastReplayEvent);
@@ -382,7 +375,6 @@ function simulate(request) {
     accumulatedDeltas = [];
 
     // make sure replay matches recording
-    snapshotReplay(target);
     if (lastReplaySnapshot) {
       var replayDeltas = getDeltas(lastReplaySnapshot.before,
                                    lastReplaySnapshot.after);
