@@ -124,6 +124,7 @@ function recordEvent(eventData) {
 
   eventMessage = {};
   eventMessage['target'] = nodeToXPath(target);
+  eventMessage['targetSnapshot'] = snapshotNode(target); 
   eventMessage['URL'] = document.URL;
   eventMessage['dispatchType'] = dispatchType;
   eventMessage['nodeName'] = nodeName;
