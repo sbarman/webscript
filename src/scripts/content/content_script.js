@@ -268,6 +268,28 @@ function setPortEvents(events) {
   portEvents = events;
 }
 
+function getLastEventReplayed() {
+  var lastEventId = "";
+  for (var i = 0, ii = portEvents.length; i < ii; ++i) {
+    var e = portEvents[i];
+    if (!e.replayed) {
+      return lastEventId;
+    }
+    lastEventId = e.id;
+  }
+  return lastEventId;
+}
+
+function getPortEventIndex(id) {
+  for (var i = 0, ii = portEvents.length; i < ii; ++i) {
+    var e = portEvents[i];
+    if (e.id == id) {
+      return i;
+    }
+  }
+  return -1;
+}
+
 // replay an event from an event message
 function simulate(request) {
   // since we are simulating a new event, lets clear out any retries 
@@ -278,13 +300,7 @@ function simulate(request) {
   var eventData = msg.eventData;
   var eventName = eventData.type;
 
-  for (var i = 0, ii = portEvents.length; i < ii; ++i) {
-    var e = portEvents[i];
-    if (e.id == id) {
-      portEventsIdx = i;
-      break;
-    }
-  }
+  portEventsIdx = getPortEventIndex(id);
 
   // this event was detected by the recorder, so lets skip it
   if (portEvents[portEventsIdx].replayed) {
@@ -302,8 +318,11 @@ function simulate(request) {
     var script = eval(eventData.script);
     script(element, eventData);
     return;
-  } else if (eventName == 'capture') {
-    var target = xPathToNode(eventData.target);
+  }
+
+  var target = getTarget(eventData);
+  
+  if (eventName == 'capture') {
     replayLog.log('found capture node:', target);
     if (!target) {
       setRetry(request, params.replaying.defaultWait);
@@ -318,8 +337,6 @@ function simulate(request) {
     port.postMessage({type: 'ack', value: true});
     return;
   }
-
-  var target = xPathToNode(eventData.target);
 
   // check if we already seen this target
   /*
