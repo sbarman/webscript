@@ -214,14 +214,17 @@ function recordEvent(eventData) {
   }
 
   setTimeout(function() {
-    recordLog.debug('Need to record something');
-/*
-    var eventEnd = {
-      type: 'eventEnd',
-      event: eventMessage['pageEventId']
+    var update = {
+      type: 'updateEvent',
+      value: {
+        'endEventId': lastRecordEvent.pageEventId,
+        'pageEventId': eventMessage.pageEventId,
+        'recording': recording
+      },
+      state: recording
     };
-    port.postMessage({type: 'event', value: eventEnd, state: recording});
-*/
+    port.postMessage(update);
+    recordLog.debug('Need to record something');
   }, 0);
 
 
