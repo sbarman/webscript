@@ -1055,6 +1055,7 @@ var Replay = (function ReplayClosure() {
           } else if (replayState == ReplayState.REPLAYING ||
                      replayState == ReplayState.REPLAY_ONE) {
             this.ports.clearAck();
+/*
             if (type == 'wait') {
               replayPort.postMessage(msg);
               this.replayState = ReplayState.WAIT_ACK;
@@ -1062,15 +1063,15 @@ var Replay = (function ReplayClosure() {
 
               replayLog.log('start waiting for wait ack');
             } else {
+*/ 
+            if (msg.type == 'event') {
               // send message
               if (unseenPort)
                 replayPort.postMessage({type: 'portEvents', 
                     value: this.eventsByPort[port]});
 
-              var modifiedMsg = {type: msg.type,
-                                 value: {id: id, eventData: msg.value}}
-              replayPort.postMessage(modifiedMsg);
-              replayLog.log('sent message', msg);
+              replayPort.postMessage({type: 'event', value: [e]});
+              replayLog.log('sent message', e);
               if (replayState == ReplayState.REPLAYING)
                 this.replayState = ReplayState.REPLAY_ACK;
               else

@@ -23,7 +23,6 @@ var curRecordSnapshot; // snapshot (before and after) the current event
 var lastReplayEvent; // last event replayed
 var lastReplaySnapshot; // snapshop taken before the event is replayed
 var curReplaySnapshot; // snapshot taken before the next event is replayed
-var accumulatedDeltas = [];
 var dispatchingEvent = false;
 var retryTimeout = null;
 var portEvents = null;
@@ -121,7 +120,6 @@ function recordEvent(eventData) {
   var target = eventData.target;
   var nodeName = target.nodeName.toLowerCase();
 
-
   // deal with all the replay mess that we can't do in simulate
   if (recording == RecordState.REPLAYING) {
 
@@ -216,11 +214,14 @@ function recordEvent(eventData) {
   }
 
   setTimeout(function() {
+    recordLog.debug('Need to record something');
+/*
     var eventEnd = {
       type: 'eventEnd',
       event: eventMessage['pageEventId']
     };
     port.postMessage({type: 'event', value: eventEnd, state: recording});
+*/
   }, 0);
 
 
@@ -341,169 +342,151 @@ function getPortEventIndex(id) {
   return -1;
 }
 
+// needed since some event properties are marked as read only
+function setEventProp(e, prop, value) {
+  Object.defineProperty(e, prop, {value: value});
+  if (e.prop != value) {
+    Object.defineProperty(e, prop, {get: function() {value}});
+    Object.defineProperty(e, prop, {value: value});
+  }
+}
+
 // replay an event from an event message
 function simulate(request) {
-  // since we are simulating a new event, lets clear out any retries 
+  // since we are simulating new events, lets clear out any retries 
   clearRetry();
 
-  var msg = request.value;
-  var id = msg.id;
-  var eventData = msg.eventData;
-  var eventName = eventData.type;
+  var events = request.value;
+  for (var i = 0, ii = events.length; i < ii; ++i) {
+    var eventRecord = events[i];
+    var msg = eventRecord.msg;
+    var id = eventRecord.id;
+    var eventData = msg.value;
+    var eventName = eventData.type;
 
-  portEventsIdx = getPortEventIndex(id);
+    portEventsIdx = getPortEventIndex(id);
 
-  // this event was detected by the recorder, so lets skip it
-  if (portEvents[portEventsIdx].replayed) {
-    port.postMessage({type: 'ack', value: true});
-    accumulatedDeltas = accumulatedDeltas.concat(eventData.deltas);
-    return;
-  }
+    // this event was detected by the recorder, so lets skip it
+    if (portEvents[portEventsIdx].replayed) {
+      // port.postMessage({type: 'ack', value: true});
+      continue;
+    }
 
-  replayLog.debug('simulating:', eventName, eventData);
+    replayLog.debug('simulating:', eventName, eventData);
 
-  if (eventName == 'wait') {
-    checkWait(eventData);
-    return;
-  } else if (eventName == 'custom') {
-    var script = eval(eventData.script);
-    script(element, eventData);
-    return;
-  }
+/*
+    if (eventName == 'wait') {
+      replayLog.debug('checking wait:', eventData);
+      var result = eval(eventData.condition);
+      port.postMessage({type: 'ack', value: result});
+      return;
+    } else if (eventName == 'custom') {
+      var script = eval(eventData.script);
+      script(element, eventData);
+      return;
+    }
+*/
 
-  var target = getTarget(eventData);
-  
-  if (eventName == 'capture') {
-    replayLog.log('found capture node:', target);
+    var target = getTarget(eventData);
+
+    // lets try to dispatch this event a little bit in the future, in case the
+    // future in the case the page needs to change
     if (!target) {
-      setRetry(request, params.replaying.defaultWait);
+      setRetry(request, i, params.replaying.defaultWait);
+      port.postMessage({type: 'debug', value: 'no target found'});
+      return;
+    }
+    
+    if (params.replaying.highlightTarget) {
+      highlightNode(target, 100);
+    }
+
+    if (eventName == 'capture') {
+      replayLog.log('found capture node:', target);
+
+      var msg = {innerHtml: target.innerHTML,
+                 innerText: target.innerText,
+                 nodeName: target.nodeName.toLowerCase()}
+
+      port.postMessage({type: 'saveCapture', value: msg});
+      //port.postMessage({type: 'ack', value: true});
+      continue;
+    }
+
+    var eventType = getEventType(eventName);
+    var defaultProperties = getEventProps(eventName);
+
+    if (!eventType) {
+      replayLog.error("can't find event type ", eventName);
       return;
     }
 
-    var msg = {innerHtml: target.innerHTML,
-               innerText: target.innerText,
-               nodeName: target.nodeName.toLowerCase()}
+    var options = jQuery.extend({}, defaultProperties, eventData);
 
-    port.postMessage({type: 'saveCapture', value: msg});
-    port.postMessage({type: 'ack', value: true});
-    return;
-  }
-
-  // check if we already seen this target
-  /*
-  if (!target) {
-    target = getMemoizedTarget(eventData.target); 
-  } else {
-    addMemoizedTarget(eventData.target, target);
-  }
-  */
-
-  // lets try to dispatch this event a little bit in the future, in case the
-  // future in the case the page needs to change
-  if (!target) {
-    setRetry(request, params.replaying.defaultWait);
-    port.postMessage({type: 'debug', value: 'no target found'});
-    return;
-  }
-
-  if (params.replaying.highlightTarget) {
-    highlightNode(target, 100);
-  }
-
-  var eventType = getEventType(eventName);
-  var defaultProperties = getEventProps(eventName);
-
-//  if (eventType == 'focus' || eventType == 'mousedown' ||
-//      eventType == 'keydown')
-//    target.focus();
-
-  if (!eventType) {
-    replayLog.error("can't find event type ", eventName);
-    return;
-  }
-
-  var options = jQuery.extend({}, defaultProperties, eventData);
-
-  // needed since some event properties are marked as read only
-  function setEventProp(e, prop, value) {
-    Object.defineProperty(e, prop, {value: value});
-    if (e.prop != value) {
-      Object.defineProperty(e, prop, {get: function() {value}});
-      Object.defineProperty(e, prop, {value: value});
-    }
-  }
-
-  var oEvent = document.createEvent(eventType);
-  if (eventType == 'Event') {
-    oEvent.initEvent(eventName, options.bubbles, options.cancelable);
-  } else if (eventType == 'FocusEvent') {
-    var relatedTarget = null;
-  
-    if (eventData.relatedTarget)
-      relatedTarget = xPathToNode(eventData.relatedTarget.xpath); 
-   
-    oEvent.initUIEvent(eventName, options.bubbles, options.cancelable,
-        document.defaultView, options.detail);
-    setEventProp(oEvent, 'relatedTarget', relatedTarget);
-  } else if (eventType == 'MouseEvent') {
-    var relatedTarget = null;
-
-    if (eventData.relatedTarget)
-      relatedTarget = xPathToNode(eventData.relatedTarget.xpath); 
-
-    oEvent.initMouseEvent(eventName, options.bubbles, options.cancelable,
-        document.defaultView, options.detail, options.screenX,
-        options.screenY, options.clientX, options.clientY,
-        options.ctrlKey, options.altKey, options.shiftKey, options.metaKey,
-        options.button, relatedTarget);
-  } else if (eventType == 'KeyboardEvent') {
-    oEvent.initKeyboardEvent(eventName, options.bubbles, options.cancelable,
-        document.defaultView, options.keyIdentifier, options.keyLocation, 
-        options.ctrlKey, options.altKey, options.shiftKey, options.metaKey);
+    var oEvent = document.createEvent(eventType);
+    if (eventType == 'Event') {
+      oEvent.initEvent(eventName, options.bubbles, options.cancelable);
+    } else if (eventType == 'FocusEvent') {
+      var relatedTarget = null;
     
-    var propsToSet = ['charCode', 'keyCode'];
-    /*
-    oEvent.initKeyboardEvent(eventName, options.bubbles, options.cancelable,
-        document.defaultView, options.ctrlKey, options.altKey,
-        options.shiftKey, options.metaKey, options.keyCode,
-        options.charCode);
+      if (eventData.relatedTarget)
+        relatedTarget = xPathToNode(eventData.relatedTarget.xpath); 
      
-    var propsToSet = ['charCode', 'keyCode', 'shiftKey', 'metaKey',
-                      'keyIdentifier', 'which'];
-    */
-    for (var i = 0, ii = propsToSet.length; i < ii; ++i) {
-      var prop = propsToSet[i];
-      setEventProp(oEvent, prop, options[prop]);
+      oEvent.initUIEvent(eventName, options.bubbles, options.cancelable,
+          document.defaultView, options.detail);
+      setEventProp(oEvent, 'relatedTarget', relatedTarget);
+    } else if (eventType == 'MouseEvent') {
+      var relatedTarget = null;
+
+      if (eventData.relatedTarget)
+        relatedTarget = xPathToNode(eventData.relatedTarget.xpath); 
+
+      oEvent.initMouseEvent(eventName, options.bubbles, options.cancelable,
+          document.defaultView, options.detail, options.screenX,
+          options.screenY, options.clientX, options.clientY,
+          options.ctrlKey, options.altKey, options.shiftKey, options.metaKey,
+          options.button, relatedTarget);
+    } else if (eventType == 'KeyboardEvent') {
+      // TODO: nonstandard initKeyboardEvent
+      oEvent.initKeyboardEvent(eventName, options.bubbles, options.cancelable,
+          document.defaultView, options.keyIdentifier, options.keyLocation, 
+          options.ctrlKey, options.altKey, options.shiftKey, options.metaKey);
+      
+      var propsToSet = ['charCode', 'keyCode'];
+
+      for (var i = 0, ii = propsToSet.length; i < ii; ++i) {
+        var prop = propsToSet[i];
+        setEventProp(oEvent, prop, options[prop]);
+      }
+      
+    } else if (eventType == 'TextEvent') {
+      oEvent.initTextEvent(eventName, options.bubbles, options.cancelable,
+          document.defaultView, options.data, options.inputMethod,
+          options.locale);
+    } else {
+      replayLog.error('unknown type of event');
     }
-    
-  } else if (eventType == 'TextEvent') {
-    oEvent.initTextEvent(eventName, options.bubbles, options.cancelable,
-        document.defaultView, options.data, options.inputMethod,
-        options.locale);
-  } else {
-    replayLog.error('unknown type of event');
+
+    // used to detect extension generated events
+    oEvent.extensionGenerated = true;
+    if (eventData.cascading) {
+      oEvent.cascading = eventData.cascading;
+      oEvent.cascadingOrigin = eventData.cascadingOrigin;
+    }
+
+    // this does the actual event simulation
+    dispatchingEvent = true;
+    target.dispatchEvent(oEvent);
+    dispatchingEvent = false;
+
+    replayLog.debug('[' + id + '] dispatchEvent', eventName, options, target,
+                    oEvent);
+
+    // update panel showing event was sent
+    sendAlert('Dispatched event: ' + eventData.type);
   }
-
-  // used to detect extension generated events
-  oEvent.extensionGenerated = true;
-  if (eventData.cascading) {
-    oEvent.cascading = eventData.cascading;
-    oEvent.cascadingOrigin = eventData.cascadingOrigin;
-  }
-
-  // this does the actual event simulation
-  dispatchingEvent = true;
-  target.dispatchEvent(oEvent);
-  dispatchingEvent = false;
-
-  replayLog.debug('[' + id + '] dispatchEvent', eventName, options, target,
-                  oEvent);
-
   port.postMessage({type: 'ack', value: true});
   replayLog.debug('[' + id + '] sent ack');
-
-  // update panel showing event was sent
-  sendAlert('Received Event: ' + eventData.type);
 }
 
 /*
@@ -653,12 +636,6 @@ function fixDeltas(recordDeltas, replayDeltas, recordEvent, snapshot) {
       }
     }
   }
-}
-
-function checkWait(eventData) {
-  replayLog.debug('checking wait:', eventData);
-  var result = eval(eventData.condition);
-  port.postMessage({type: 'ack', value: result});
 }
 
 // ***************************************************************************
