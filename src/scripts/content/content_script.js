@@ -376,7 +376,6 @@ function simulate(request) {
     }
 
     replayLog.debug('simulating:', eventName, eventData);
-
 /*
     if (eventName == 'wait') {
       replayLog.debug('checking wait:', eventData);
@@ -457,8 +456,8 @@ function simulate(request) {
       
       var propsToSet = ['charCode', 'keyCode'];
 
-      for (var i = 0, ii = propsToSet.length; i < ii; ++i) {
-        var prop = propsToSet[i];
+      for (var j = 0, jj = propsToSet.length; j < jj; ++j) {
+        var prop = propsToSet[j];
         setEventProp(oEvent, prop, options[prop]);
       }
       
