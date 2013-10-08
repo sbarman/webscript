@@ -1070,8 +1070,22 @@ var Replay = (function ReplayClosure() {
                 replayPort.postMessage({type: 'portEvents', 
                     value: this.eventsByPort[port]});
 
-              replayPort.postMessage({type: 'event', value: [e]});
-              replayLog.log('sent message', e);
+              var eventGroup = [];
+              var endEvent = msg.value.endEventId;
+              if (endEvent) {
+                var t = this.index;
+                var events = this.events;
+                while (t < events.length && 
+                       endEvent >= events[t].msg.value.pageEventId) {
+                  eventGroup.push(events[t]);
+                  t++;
+                }
+              } else {
+                eventGroup = [e];
+              }
+
+              replayPort.postMessage({type: 'event', value: eventGroup});
+              replayLog.log('sent message', eventGroup);
               if (replayState == ReplayState.REPLAYING)
                 this.replayState = ReplayState.REPLAY_ACK;
               else
