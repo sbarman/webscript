@@ -59,21 +59,21 @@ function getEventProps(type) {
   return params.defaultProps[eventType];
 }
 
-function markReplayEvents(eventData) {
+function getMatchingEvent(eventData) {
   if (!dispatchingEvent)
-    return;
+    return null;
 
   if (portEventsIdx == null || portEventsIdx >= portEvents.length)
-    return;
+    return null;
 
   var eventObject = portEvents[portEventsIdx];
   var eventRecord = eventObject.msg.value;
   if (eventRecord.type == eventData.type) {
-    eventObject.replayed = true;
     portEventsIdx++;
-  } else {
-    portEventsIdx = null;
+    return eventObject;
   }
+
+  return null;
 }
 
 // create an event record given the data from the event handler
@@ -91,24 +91,27 @@ function recordEvent(eventData) {
 
   // cancel the affects of events which are not extension generated or are not
   // picked up by the recorder
-  if ((recording == RecordState.REPLAYING && !dispatchingEvent &&
-       params.replaying.cancelUnknownEvents) ||
-      (recording == RecordState.RECORDING && 
-       params.recording.cancelUnrecordedEvents &&
-       !shouldRecord)) {
-    recordLog.debug('[' + id + '] cancel event:', type, dispatchType,
+  if (recording == RecordState.REPLAYING && !dispatchingEvent &&
+      params.replaying.cancelUnknownEvents) {
+    recordLog.debug('[' + id + '] cancel unknown event during replay:',
+         type, dispatchType, eventData);
+    eventData.stopImmediatePropagation();
+    eventData.preventDefault();
+    return false;
+  }
+  
+  if (recording == RecordState.RECORDING && 
+      params.recording.cancelUnrecordedEvents && !shouldRecord) {
+    recordLog.debug('[' + id + '] cancel unrecorded event:', type, dispatchType,
                   eventData);
     eventData.stopImmediatePropagation();
     eventData.preventDefault();
-
     return false;
   }
 
   // if we are not recording this type of event, we should exit
   if (!shouldRecord)
-    return;
-
-  markReplayEvents(eventData);
+    return true;
 
   // continue recording the event
   recordLog.debug('[' + id + '] process event:', type, dispatchType,
@@ -117,6 +120,44 @@ function recordEvent(eventData) {
   var properties = getEventProps(type);
   var target = eventData.target;
   var nodeName = target.nodeName.toLowerCase();
+
+
+  // deal with all the replay mess that we can't do in simulate
+  if (recording == RecordState.REPLAYING) {
+
+    var replayEvent = getMatchingEvent(eventData);
+    if (replayEvent) {
+      replayEvent.replayed = true;
+      replayEvent = replayEvent.msg.value;
+
+      snapshotReplay(target);
+
+      // make sure the deltas from the last event actually happened
+      if (params.synthesis.enabled && lastReplayEvent) {
+        var recordDeltas = lastReplayEvent.deltas;
+        if (typeof recordDeltas == 'undefined') {
+          recordLog.error('no deltas found for last event:', lastReplayEvent);
+          recordDeltas = [];
+        }
+
+        // make sure replay matches recording
+        if (lastReplaySnapshot) {
+          var replayDeltas = getDeltas(lastReplaySnapshot.before,
+                                       lastReplaySnapshot.after);
+          // check if these deltas match the last simulated event
+          // and correct for unmatched deltas
+          fixDeltas(recordDeltas, replayDeltas, lastReplayEvent,
+                     lastReplaySnapshot.after);
+        }
+
+        //annotation events may have changed the effects of the last event
+        //have to make sure that anything associated with this event isn't
+        //from annotation events of last event
+        resnapshotBefore(target);
+      }
+      lastReplayEvent = replayEvent;
+    }
+  }
 
   // deal with snapshotting the DOM, calculating the deltas, and sending
   // updates
@@ -359,56 +400,6 @@ function simulate(request) {
   if (params.replaying.highlightTarget) {
     highlightNode(target, 100);
   }
-
-  snapshotReplay(target);
-  // make sure the deltas from the last event actually happened
-  if (params.synthesis.enabled && lastReplayEvent) {
-/*
-     try {
-      var lastTarget = xPathToNode(lastReplayEvent.target);
-      // run the compensation events for the last event
-      for (var i in annotationEvents) {
-        var annotation = annotationEvents[i];
-        if (annotation.replay &&
-            annotation.guard(lastTarget, lastReplayEvent)) {
-
-          replayLog.debug('annotation event being used', i,
-                          annotation.recordNodes, annotation.replayNodes);
-          annotation.replay(lastTarget, lastReplayEvent);
-        }
-      }
-    } catch (e) {
-      replayLog.error('error when replaying annotation events:', e);
-    }
-*/
-    var recordDeltas = lastReplayEvent.deltas;
-    if (typeof recordDeltas == 'undefined') {
-      replayLog.error('no deltas found for last event:', lastReplayEvent);
-      recordDeltas = [];
-    }
-
-    // if we skipped any events, we need to add those deltas to the
-    // deltas of the last event
-    recordDeltas = recordDeltas.concat(accumulatedDeltas);
-    accumulatedDeltas = [];
-
-    // make sure replay matches recording
-    if (lastReplaySnapshot) {
-      var replayDeltas = getDeltas(lastReplaySnapshot.before,
-                                   lastReplaySnapshot.after);
-      // check if these deltas match the deltas from the last simulated event
-      // and correct for unmatched deltas
-      fixDeltas(recordDeltas, replayDeltas, lastReplayEvent,
-                 lastReplaySnapshot.after);
-    }
-
-    //annotation events may have changed the effects of the last event
-    //have to make sure that anything associated with this event isn't
-    //from annotation events of last event
-    resnapshotBefore(target);
-  }
-
-  lastReplayEvent = eventData;
 
   var eventType = getEventType(eventName);
   var defaultProperties = getEventProps(eventName);
