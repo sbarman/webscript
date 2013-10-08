@@ -215,6 +215,15 @@ function recordEvent(eventData) {
       curTime = new Date().getTime();
   }
 
+  setTimeout(function() {
+    var eventEnd = {
+      type: 'eventEnd',
+      event: eventMessage['pageEventId']
+    };
+    port.postMessage({type: 'event', value: eventEnd, state: recording});
+  }, 0);
+
+
   // TODO: special case with mouseover, need to return false
   return true;
 };
