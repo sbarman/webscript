@@ -47,7 +47,10 @@ function xPathToNodes(xpath) {
   } catch (e) {
     getLog('misc').error('xPath throws error when evaluated', xpath);
   }
+  return [];
+}
 
+function simpleXPathToNode(xpath) {
   // error was thrown, attempt to just walk down the dom tree
   var currentNode = document.documentElement;
   var paths = xpath.split('/');

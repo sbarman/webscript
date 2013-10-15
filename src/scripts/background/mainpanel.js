@@ -1070,13 +1070,16 @@ var Replay = (function ReplayClosure() {
                 replayPort.postMessage({type: 'portEvents', 
                     value: this.eventsByPort[port]});
 
+              // TODO: we assume that events together are all from the same
+              // port
               var eventGroup = [];
               var endEvent = msg.value.endEventId;
               if (endEvent) {
                 var t = this.index;
                 var events = this.events;
                 while (t < events.length && 
-                       endEvent >= events[t].msg.value.pageEventId) {
+                       endEvent >= events[t].msg.value.pageEventId &&
+                       port == events[t].port) {
                   eventGroup.push(events[t]);
                   t++;
                 }
@@ -1441,9 +1444,9 @@ function handleMessage(port, request) {
 
 
 // Attach the event handlers to their respective events
-chrome.extension.onMessage.addListener(handleIdMessage);
+chrome.runtime.onMessage.addListener(handleIdMessage);
 
-chrome.extension.onConnect.addListener(function(port) {
+chrome.runtime.onConnect.addListener(function(port) {
   ports.connectPort(new Port(port));
 });
 
@@ -1452,7 +1455,7 @@ chrome.extension.onConnect.addListener(function(port) {
 $(window).unload(function() {
   controller.stop();
   chrome.browserAction.setBadgeText({text: ''});
-  chrome.extension.onMessage.removeListener(handleMessage);
+  chrome.runtime.onMessage.removeListener(handleMessage);
 });
 
 $(window).resize(function() {

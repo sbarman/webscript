@@ -162,8 +162,7 @@ function recordEvent(eventData) {
   updateDeltas(target);
 
   eventMessage = {};
-  eventMessage['target'] = nodeToXPath(target);
-  eventMessage['targetSnapshot'] = snapshotNode(target); 
+  eventMessage['target'] = saveTargetInfo(target);
   eventMessage['URL'] = document.URL;
   eventMessage['dispatchType'] = dispatchType;
   eventMessage['nodeName'] = nodeName;
@@ -180,7 +179,7 @@ function recordEvent(eventData) {
             type == 'undefined') {
           eventMessage[prop] = eventData[prop];
         } else if (prop == 'relatedTarget' && isElement(data)) {
-          eventMessage[prop] = {xpath: nodeToXPath(data)};
+          eventMessage[prop] = saveTargetInfo(data);
         }
       } catch (e) {
         recordLog.error('[' + id + '] error recording property:', prop, e);
@@ -224,7 +223,6 @@ function recordEvent(eventData) {
       state: recording
     };
     port.postMessage(update);
-    recordLog.debug('Need to record something');
   }, 0);
 
 
@@ -305,14 +303,14 @@ function captureNodeReply(target) {
 
   var eventMessage = {};
   eventMessage['type'] = 'capture';
-  eventMessage['target'] = nodeToXPath(target);
+  eventMessage['target'] = saveTargetInfo(target);
   eventMessage['URL'] = document.URL;
   eventMessage['nodeName'] = target.nodeName.toLowerCase();
   eventMessage['timestamp'] = new Date().getTime();
   eventMessage['recordState'] = recording;
 
   log.log('capturing:', target, eventMessage);
-  port.postMessage({type: 'event', value: eventMessage});
+  port.postMessage({type: 'event', value: eventMessage, state: recording});
 }
 
 // ***************************************************************************
@@ -389,7 +387,7 @@ function simulate(request) {
     }
 */
 
-    var target = getTarget(eventData);
+    var target = getTarget(eventData.target);
 
     // lets try to dispatch this event a little bit in the future, in case the
     // future in the case the page needs to change
@@ -432,7 +430,7 @@ function simulate(request) {
       var relatedTarget = null;
     
       if (eventData.relatedTarget)
-        relatedTarget = xPathToNode(eventData.relatedTarget.xpath); 
+        relatedTarget = getTarget(eventData.relatedTarget); 
      
       oEvent.initUIEvent(eventName, options.bubbles, options.cancelable,
           document.defaultView, options.detail);
@@ -441,7 +439,7 @@ function simulate(request) {
       var relatedTarget = null;
 
       if (eventData.relatedTarget)
-        relatedTarget = xPathToNode(eventData.relatedTarget.xpath); 
+        relatedTarget = getTarget(eventData.relatedTarget); 
 
       oEvent.initMouseEvent(eventName, options.bubbles, options.cancelable,
           document.defaultView, options.detail, options.screenX,
@@ -600,7 +598,7 @@ function fixDeltas(recordDeltas, replayDeltas, recordEvent, snapshot) {
   replayLog.info('record deltas not matched: ', recordDeltasNotMatched);
   replayLog.info('replay deltas not matched: ', replayDeltasNotMatched);
 
-  var element = xPathToNode(recordEvent.target);
+  var element = getTarget(recordEvent.target);
 
   for (var i = 0, ii = replayDeltasNotMatched.length; i < ii; ++i) {
     var delta = replayDeltasNotMatched[i];
@@ -733,7 +731,7 @@ value.top = (self == top);
 value.URL = document.URL;
 
 // Add all the other handlers
-chrome.extension.sendMessage({type: 'getId', value: value}, function(resp) {
+chrome.runtime.sendMessage({type: 'getId', value: value}, function(resp) {
   id = resp.value;
   port = new Port(id);
   port.addListener(handleMessage);

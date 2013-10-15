@@ -5,7 +5,7 @@
 
 var Port = (function PortClosure() {
   function Port(id) {
-    this.port = chrome.extension.connect({name: id});
+    this.port = chrome.runtime.connect({name: id});
   }
 
   Port.prototype = {

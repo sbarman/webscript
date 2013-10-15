@@ -1124,7 +1124,8 @@ function compareNodes(origNode, changedNode) {
         });
       }
     }
-
+    
+    /*
     // check the children
     var children1 = origNode.children;
     var children2 = changedNode.children;
@@ -1157,6 +1158,7 @@ function compareNodes(origNode, changedNode) {
         deltas = deltas.concat(newDivergences);
       }
     }
+    */
     return deltas;
   // at least one node isn't a DOM node
   } else {
