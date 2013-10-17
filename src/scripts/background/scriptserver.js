@@ -342,6 +342,9 @@ var ScriptServer = (function ScriptServerClosure() {
       if (benchmarkRun.notes)
         postMsg['notes'] = benchmarkRun.notes;
 
+      if (benchmarkRun.log)
+        postMsg['log'] = benchmarkRun.log;
+
       $.ajax({
         error: function(jqXHR, textStatus, errorThrown) {
           scriptLog.log(jqXHR, textStatus, errorThrown);

@@ -162,7 +162,7 @@ function recordEvent(eventData) {
   updateDeltas(target);
 
   eventMessage = {};
-  eventMessage['target'] = saveTargetInfo(target);
+  eventMessage['target'] = saveTargetInfo(target, recording);
   eventMessage['URL'] = document.URL;
   eventMessage['dispatchType'] = dispatchType;
   eventMessage['nodeName'] = nodeName;
@@ -179,7 +179,7 @@ function recordEvent(eventData) {
             type == 'undefined') {
           eventMessage[prop] = eventData[prop];
         } else if (prop == 'relatedTarget' && isElement(data)) {
-          eventMessage[prop] = saveTargetInfo(data);
+          eventMessage[prop] = saveTargetInfo(data, recording);
         }
       } catch (e) {
         recordLog.error('[' + id + '] error recording property:', prop, e);
@@ -303,10 +303,10 @@ function captureNodeReply(target) {
 
   var eventMessage = {};
   eventMessage['type'] = 'capture';
-  eventMessage['target'] = saveTargetInfo(target);
+  eventMessage['target'] = saveTargetInfo(target, recording);
   eventMessage['URL'] = document.URL;
   eventMessage['nodeName'] = target.nodeName.toLowerCase();
-  eventMessage['timestamp'] = new Date().getTime();
+  eventMessage['timeStamp'] = new Date().getTime();
   eventMessage['recordState'] = recording;
 
   log.log('capturing:', target, eventMessage);
@@ -373,6 +373,7 @@ function simulate(request) {
       continue;
     }
 
+    addBenchmarkLog('simulating:' + eventName);
     replayLog.debug('simulating:', eventName, eventData);
 /*
     if (eventName == 'wait') {
@@ -606,8 +607,8 @@ function fixDeltas(recordDeltas, replayDeltas, recordEvent, snapshot) {
 
     if (delta.type == 'Property is different.') {
       var divProp = delta.divergingProp;
-      addComment('replay delta', divProp + ':' + delta.orig.prop[divProp] +
-                 '->' + delta.changed.prop[divProp]);
+//      addComment('replay delta', divProp + ':' + delta.orig.prop[divProp] +
+//                 '->' + delta.changed.prop[divProp]);
 
       if (params.replaying.strategy == ReplayStrategy.FORCED) {
         if (element)
@@ -624,8 +625,8 @@ function fixDeltas(recordDeltas, replayDeltas, recordEvent, snapshot) {
 
     if (delta.type == 'Property is different.') {
       var divProp = delta.divergingProp;
-      addComment('record delta', divProp + ':' + delta.orig.prop[divProp] +
-                 '->' + delta.changed.prop[divProp]);
+//      addComment('record delta', divProp + ':' + delta.orig.prop[divProp] +
+//                 '->' + delta.changed.prop[divProp]);
 
       if (params.replaying.strategy == ReplayStrategy.COMPENSATION) {
         replayLog.debug('generating compensation event:', delta);

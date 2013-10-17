@@ -172,8 +172,8 @@ function generateCompensation(eventMessage, delta) {
 
     log.log('new annotation event:', name, prop, newNode.toString());
     sendAlert(name + ' ' + prop + '\n' + newNode.toString());
-    addComment('annotation create', name + ':' + prop + ':' +
-               newNode.toString());
+//    addComment('annotation create', name + ':' + prop + ':' +
+//               newNode.toString());
 
     // log all the examples so far
     for (var j in examples) {
@@ -852,8 +852,8 @@ function makeFunction(targetProp, node, RHSFunction, typeOfNode, typeOfEvent) {
       if (newVal)
         element[targetProp] = newVal;
       log.log('after compensation:', element[targetProp]);
-      addComment('annotation execute', typeOfNode + ':' + typeOfEvent + ':' +
-                 targetProp + ':' + oldVal + ':' + newVal);
+//      addComment('annotation execute', typeOfNode + ':' + typeOfEvent + ':' +
+//                 targetProp + ':' + oldVal + ':' + newVal);
     }
   };
   return compFunction;

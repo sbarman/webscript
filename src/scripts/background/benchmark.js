@@ -96,7 +96,8 @@ var Benchmarker = (function BenchmarkerClosure() {
             events_executed: replay.index,
             events_total: replay.events.length,
             successful: success,
-            notes: note + ":" + JSON.stringify(correct_captures)
+            notes: note + ":" + JSON.stringify(correct_captures),
+            log: replay.benchmarkLog
           };
 
           log.debug('Finished benchmark:', benchmarkRun);

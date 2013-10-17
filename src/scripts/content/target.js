@@ -5,12 +5,13 @@ var saveTargetInfo;
 (function() {
   var log = getLog('target');
 
-  saveTargetInfo = function _saveTargetInfo(target) {
+  saveTargetInfo = function _saveTargetInfo(target, recording) {
     var targetInfo = {};
     targetInfo.xpath = nodeToXPath(target);
     targetInfo.snapshot = snapshotNode(target);
-    targetInfo.branch = snapshotBranch(target);
-
+    if (recording == RecordState.RECORDING) {
+      targetInfo.branch = snapshotBranch(target);
+    }
     return targetInfo;
   }
 
@@ -30,7 +31,7 @@ var saveTargetInfo;
 
       var targets = xPathToNodes('//' + xpath);
    
-      if (targets.length > 0) {
+      if (targets.length > 1) {
         log.warn('multiple targets found:', targets);
         return targets;
       }
@@ -84,7 +85,7 @@ var saveTargetInfo;
   }
 
   getTarget = function(targetInfo) {
-    var targets = getTargetSuffix(targetInfo);
+    var targets = getTargetSimple(targetInfo);
     if (!targets) {
       log.debug('No target found');
       return null

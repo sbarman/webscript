@@ -114,12 +114,20 @@ function isElement(obj) {
 // Server functions
 // ***************************************************************************
 
+/*
 function addComment(name, value) {
   port.postMessage({type: 'comment', value: {name: name, value: value}});
 }
+*/
 
 //function for sending an alert that the user will see
 function sendAlert(msg) {
-  port.postMessage({type: 'message', value: msg});
+  port.postMessage({type: 'alert', value: msg});
 }
+
+//function for adding to benchmark log
+function addBenchmarkLog(msg) {
+  port.postMessage({type: 'benchmarkLog', value: msg});
+}
+
 

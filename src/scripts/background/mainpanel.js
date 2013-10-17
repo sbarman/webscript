@@ -630,6 +630,10 @@ var Replay = (function ReplayClosure() {
       this.scriptId = null;
       this.events = [];
       this.debug = [];
+      this.benchmarkLog = "";
+    },
+    addBenchmarkLog: function _addBenchmarkLog(text) {
+      this.benchmarkLog += text + '\n';
     },
     getStatus: function _getStatus() {
       return this.replayState;
@@ -1416,7 +1420,7 @@ function handleMessage(port, request) {
       replay.record.addComment(request, port.name);
   } else if (request.type == 'saveCapture') {
     controller.saveCapture(request.value);
-  } else if (request.type == 'message') {
+  } else if (request.type == 'alert') {
     panel.addMessage('[' + port.name + '] ' + request.value);
   } else if (request.type == 'getRecording') {
     var recStatus = record.getStatus();
@@ -1439,6 +1443,8 @@ function handleMessage(port, request) {
     ports.updateUrl(port, request.value);
   } else if (request.type == 'debug') {
     controller.addDebug(request.value);
+  } else if (request.type == 'benchmarkLog') {
+    replay.addBenchmarkLog(request.value);
   }
 }
 
