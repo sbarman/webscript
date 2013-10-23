@@ -13,7 +13,7 @@ var PortManager = (function PortManagerClosure() {
     this.portNameToTabId = {};
     this.portNameToPortInfo = {};
     this.tabIdToPortNames = {};
-    this.tabIdToCurrentPortInfo = {};
+    this.tabIdToTabInfo = {};
     this.portToSnapshot = {};
     this.tabIdToTab = {};
     this.ack = null;
@@ -31,7 +31,15 @@ var PortManager = (function PortManagerClosure() {
       return this.portNameToTabId[portName];
     },
     getTabInfo: function(tab) {
-      return this.tabIdToCurrentPortInfo[tab];
+      var tabInfo = this.tabIdToTabInfo[tab];
+      var ret = {};
+      ret.frames = tabInfo.frames
+
+      var topFrames = tabInfo.top;
+      if (topFrames.length > 0)
+        ret.top = topFrames[topFrames.length -1];
+     
+      return ret;      
     },
     getTabFromTabId: function(tabId) {
       return this.tabIdToTab[tabId];
@@ -60,26 +68,24 @@ var PortManager = (function PortManagerClosure() {
       this.tabIdToTab[tabId] = sender.tab;
       this.portNameToTabId[portName] = tabId;
       this.portNameToPortInfo[portName] = value;
-
-      var tabIdToPortNames = this.tabIdToPortNames;
-      if (!(tabId in tabIdToPortNames))
-        tabIdToPortNames[tabId] = [];
-
-      tabIdToPortNames[tabId].push(portName);
-
       value.portName = portName;
 
-      if (value.top) {
-        this.tabIdToCurrentPortInfo[tabId] = {top: value, frames: []};
-      } else {
-        var tabIdToCurrentPortInfo = this.tabIdToCurrentPortInfo;
+      var portNames = this.tabIdToPortNames[tabId];
+      if (!portNames) {
+        portNames = [];
+        this.tabIdToPortNames[tabId] = portNames;
+      }
+      portNames.push(portName);
 
-        if (!tabIdToCurrentPortInfo[tabId]) {
-          portLog.error("can't find mapping in tabIdToCurrentPortInfo:", tabId);
-          tabIdToCurrentPortInfo[tabId] = {top: null, frames: []};
-        }
-        var portInfo = tabIdToCurrentPortInfo[tabId];
-        portInfo.frames.push(value);
+      var tabInfo = this.tabIdToTabInfo[tabId];
+      if (!tabInfo) {
+        tabInfo = {top: [], frames: []};
+        this.tabIdToTabInfo[tabId] = tabInfo;
+      }
+      if (value.top) {
+        tabInfo.top.push(value);
+      } else {
+        tabInfo.frames.push(value);
       }
       return portName;
     },
@@ -103,22 +109,27 @@ var PortManager = (function PortManagerClosure() {
           throw "Can't find port";
         }
 
-        var tabIdToCurrentPortInfo = portManager.tabIdToCurrentPortInfo;
+        var portInfo = portManager.portNameToPortInfo[portName];
         var tabId = portManager.portNameToTabId[portName];
-        var portInfo = portManager.tabIdToCurrentPortInfo[tabId];
+        var tabInfo = portManager.tabIdToTabInfo[tabId];
 
+        var frames;
+        if (portInfo.top)
+          var frames = tabInfo.top;
+        else
+          var frames = tabInfo.frames;
 
-        if (portInfo.top.portName == portName) {
-          portInfo.top = null;
-        } else {
-          var frames = portInfo.frames;
-          for (var i = 0, ii = frames.length; i < ii; ++i) {
-            if (frames[i].portName == portName) {
-              frames.splice(i, 1);
-              break;
-            }
+        var removed = false;
+        for (var i = 0, ii = frames.length; i < ii; ++i) {
+          if (frames[i].portName == portName) {
+            frames.splice(i, 1);
+            removed = true;
+            break;
           }
         }
+
+        if (!removed)
+          throw "Can't find frame in tabInfo";
       });
     },
     getAck: function() {
@@ -358,19 +369,25 @@ var Record = (function RecordClosure() {
 
   function Record(ports) {
     this.ports = ports;
-    this.events = [];
-    this.comments = [];
-    this.commentCounter = 0;
     this.recordState = RecordState.STOPPED;
     // this.simultaneousReplayer = null;
-    this.lastTime = 0;
-    this.scriptId = null;
-    this.capturing = false;
-
     this.listeners = [];
+
+    this.reset();
   }
 
   Record.prototype = {
+    reset: function _reset() {
+      this.scriptId = null;
+      this.events = [];
+      this.comments = [];
+      this.commentCounter = 0;
+      this.lastTime = 0;
+      this.capturing = false;
+
+      this.updateListeners({reset: true});
+      this.ports.sendToAll({type: 'reset', value: null});
+    },
     /*
     setSimultaneousReplayer: function(simultaneousReplayer) {
       this.simultaneousReplayer = simultaneousReplayer;
@@ -533,14 +550,6 @@ var Record = (function RecordClosure() {
 //      if (recordState == RecordState.RECORDING && params.simultaneous)
 //        this.simultaneousReplayer.updateEvent(eventRequest, portName);
     },
-    clearEvents: function _clearEvents() {
-      this.scriptId = null;
-      this.events = [];
-      this.comments = [];
-
-      this.updateListeners({reset: true});
-      this.ports.sendToAll({type: 'reset', value: null});
-    },
     getEvents: function _getEvents() {
       return jQuery.extend(true, [], this.events);
     },
@@ -548,7 +557,7 @@ var Record = (function RecordClosure() {
       return this.comments.slice(0);
     },
     setEvents: function _setEvents(events) {
-      this.clearEvents();
+      this.reset();
       this.events = events;
       for (var i = 0, ii = events.length; i < ii; ++i) {
         this.updateListeners({event: events[i]});
@@ -631,6 +640,8 @@ var Replay = (function ReplayClosure() {
       this.events = [];
       this.debug = [];
       this.benchmarkLog = "";
+
+      this.record.reset();
     },
     addBenchmarkLog: function _addBenchmarkLog(text) {
       this.benchmarkLog += text + '\n';
@@ -815,7 +826,7 @@ var Replay = (function ReplayClosure() {
       replayLog.log('capture:', capture, scriptId);
       this.captures.push(capture);
     },
-    findPortInTab: function _findPortInTab(tab, topFrame, snapshot, msg) {
+    findPortInTab: function _findPortInTab(tab, isTop, snapshot, msg) {
       var ports = this.ports;
       var newTabId = this.tabMapping[tab];
       var portInfo = ports.getTabInfo(newTabId);
@@ -826,14 +837,15 @@ var Replay = (function ReplayClosure() {
 
       var newPort = null;
 
-      if (topFrame) {
+      if (isTop) {
         replayLog.log('assume port is top level page');
         var topFrame = portInfo.top;
-        var commonUrl = lcs(topFrame.URL, msg.value.URL);
-
-        var commonRatio = commonUrl.length / msg.value.URL.length;
-        if (commonRatio > .8)
-          newPort = ports.getPort(topFrame.portName);
+        if (topFrame) {
+          var commonUrl = lcs(topFrame.URL, msg.value.URL);
+          var commonRatio = commonUrl.length / msg.value.URL.length;
+          if (commonRatio > .8)
+            newPort = ports.getPort(topFrame.portName);
+        }
       } else {
         replayLog.log('try to find port in one of the iframes');
         var frames = portInfo.frames;
@@ -913,9 +925,19 @@ var Replay = (function ReplayClosure() {
       replayLog.log('found port:', newPort);
       return newPort;
     },
+    checkReplayed: function _checkReplayed(e) {
+      var id = e.id;
+      var recordedEvents = this.record.events;
+      for (var i = recordedEvents.length - 1; i >= 0; --i) {
+        var recordedEvent = recordedEvents[i];
+        if (recordedEvent.msg.value.recordId == id)
+          return true;
+      }
+      return false;
+    },
     checkTimeout: function _checkTimeout() {
       var eventTimeout = params.replaying.eventTimeout;
-      if (eventTimeout > 0) {
+      if (eventTimeout != null && eventTimeout > 0) {
         var timeoutInfo = this.timeoutInfo;
         var curTime = new Date().getTime();
 
@@ -923,9 +945,6 @@ var Replay = (function ReplayClosure() {
         var index = this.index;
         if (timeoutInfo.index == index) {
           if (curTime - timeoutInfo.startTime > eventTimeout * 1000) {
-            // lets call the end of this script
-            replayLog.log('event ' + index + ' has timed out');
-            this.finish('event ' + index + ' has timed out');
             return true;
           }
         } else {
@@ -936,8 +955,13 @@ var Replay = (function ReplayClosure() {
     },
     guts: function _guts() {
       try {
-        if (this.checkTimeout())
+        if (this.checkTimeout()) {
+          // lets call the end of this script
+          var msg = 'event ' + this.index + ' has times out';
+          replayLog.log(msg);
+          this.finish(msg);
           return;
+        }
 
         var replayState = this.replayState;
 
@@ -969,7 +993,6 @@ var Replay = (function ReplayClosure() {
           // no ack, try again in one second
           } else {
             this.setNextTimeout(params.replaying.defaultWait);
-
             replayLog.log('continue waiting for replay ack');
           }
           return;
@@ -989,6 +1012,15 @@ var Replay = (function ReplayClosure() {
         }
 
         var e = events[index];
+
+        if (this.checkReplayed(e)) {
+          this.replayState = ReplayState.REPLAYING;
+          this.index++;
+          replayLog.debug('skipping event: ' + e.id);
+          this.setNextTimeout();
+          return;
+        }
+
         var msg = e.msg;
         var port = e.port;
         var tab = e.tab;
@@ -1296,7 +1328,7 @@ var Controller = (function ControllerClosure() {
     },
     reset: function() {
       ctlLog.log('reset');
-      this.record.clearEvents();
+      this.record.reset();
     },
     capture: function() {
       ctlLog.log('capture');

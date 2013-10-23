@@ -27,8 +27,7 @@ var dispatchingEvent = false;
 var retryTimeout = null;
 var portEvents = null;
 var portEventsIdx = 0;
-//var memoizedTargets = []; // used for cascadingEvents where an earlier handler
-//                          // removes the target node from the DOM
+var timeoutInfo = {startTime: 0, startIndex: 0, request: null};
 
 // loggers
 var log = getLog('content');
@@ -119,12 +118,17 @@ function recordEvent(eventData) {
   var properties = getEventProps(type);
   var target = eventData.target;
   var nodeName = target.nodeName.toLowerCase();
+      
+  eventMessage = {};
 
   // deal with all the replay mess that we can't do in simulate
   if (recording == RecordState.REPLAYING) {
+    addBenchmarkLog('recorded: ' + type);
 
     var replayEvent = getMatchingEvent(eventData);
     if (replayEvent) {
+      eventMessage.recordId = replayEvent.id;
+
       replayEvent.replayed = true;
       replayEvent = replayEvent.msg.value;
 
@@ -161,7 +165,6 @@ function recordEvent(eventData) {
   // updates
   updateDeltas(target);
 
-  eventMessage = {};
   eventMessage['target'] = saveTargetInfo(target, recording);
   eventMessage['URL'] = document.URL;
   eventMessage['dispatchType'] = dispatchType;
@@ -352,13 +355,31 @@ function setEventProp(e, prop, value) {
   }
 }
 
+function checkTimeout(request, startIndex) {
+  var timeout = params.replaying.targetTimeout;
+  if (timeout != null && timeout > 0) {
+    var curTime = new Date().getTime();
+
+    // we havent changed event
+    if (timeoutInfo.request == request &&
+        timeoutInfo.startIndex == startIndex) {
+      if (curTime - timeoutInfo.startTime > timeout * 1000)
+        return true;
+    } else {
+      timeoutInfo = {startTime: curTime, startIndex: startIndex, 
+                     request:request};
+    }
+  }
+  return false;
+}
+
 // replay an event from an event message
-function simulate(request) {
+function simulate(request, startIndex) {
   // since we are simulating new events, lets clear out any retries 
   clearRetry();
 
   var events = request.value;
-  for (var i = 0, ii = events.length; i < ii; ++i) {
+  for (var i = startIndex, ii = events.length; i < ii; ++i) {
     var eventRecord = events[i];
     var msg = eventRecord.msg;
     var id = eventRecord.id;
@@ -373,8 +394,8 @@ function simulate(request) {
       continue;
     }
 
-    addBenchmarkLog('simulating:' + eventName);
     replayLog.debug('simulating:', eventName, eventData);
+    addBenchmarkLog('simulating: ' + eventName);
 /*
     if (eventName == 'wait') {
       replayLog.debug('checking wait:', eventData);
@@ -388,11 +409,31 @@ function simulate(request) {
     }
 */
 
-    var target = getTarget(eventData.target);
+    var targetInfo = eventData.target;
+    var target = getTarget(targetInfo);
+    if (params.benchmarking.targetInfo) {
+      var actualTargets = getTargetFunction(targetInfo);
+      addBenchmarkLog('num targets: ' + actualTargets.length);
+
+      for (var strategy in targetFunctions) {
+        var strategyTargets = targetFunctions[strategy](targetInfo);
+        var common = actualTargets.filter(function(t) {
+          return strategyTargets.indexOf(t) != -1;
+        });
+        addBenchmarkLog('comparison: ' + strategy + ',' + 
+                        strategyTargets.length + ',' + common.length);
+      }
+    }
 
     // lets try to dispatch this event a little bit in the future, in case the
     // future in the case the page needs to change
     if (!target) {
+      if (eventName != 'capture' && checkTimeout(request, i)) {
+        replayLog.log('timeout finding target, skip event: ', request, i);
+        // we timed out with this target, so lets skip the event
+        i++;
+      }
+
       setRetry(request, i, params.replaying.defaultWait);
       port.postMessage({type: 'debug', value: 'no target found'});
       return;
@@ -410,7 +451,6 @@ function simulate(request) {
                  nodeName: target.nodeName.toLowerCase()}
 
       port.postMessage({type: 'saveCapture', value: msg});
-      //port.postMessage({type: 'ack', value: true});
       continue;
     }
 
@@ -475,13 +515,13 @@ function simulate(request) {
       oEvent.cascadingOrigin = eventData.cascadingOrigin;
     }
 
+    replayLog.debug('[' + id + '] dispatchEvent', eventName, options, target,
+                    oEvent);
+
     // this does the actual event simulation
     dispatchingEvent = true;
     target.dispatchEvent(oEvent);
     dispatchingEvent = false;
-
-    replayLog.debug('[' + id + '] dispatchEvent', eventName, options, target,
-                    oEvent);
 
     // update panel showing event was sent
     sendAlert('Dispatched event: ' + eventData.type);
@@ -545,9 +585,9 @@ function clearRetry() {
   }
 }
 
-function setRetry(request, timeout) {
+function setRetry(request, startIndex, timeout) {
   retryTimeout = setTimeout(function() {
-    simulate(request);
+    simulate(request, startIndex);
   }, timeout);
   return;
 }
@@ -682,7 +722,7 @@ function handleMessage(request) {
   } else if (type == 'params') {
     updateParams(request.value);
   } else if (type == 'event') {
-    simulate(request);
+    simulate(request, 0);
   } else if (type == 'snapshot') {
     port.postMessage({type: 'snapshot', value: snapshot()});
   } else if (type == 'updateDeltas') {
@@ -725,7 +765,7 @@ function addListenersForRecording() {
 // added to the page. We will remove the unwanted handlers once params is
 // updated
 addListenersForRecording();
-
+  
 // need to check if we are in an iframe
 var value = {};
 value.top = (self == top);
