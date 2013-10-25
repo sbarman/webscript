@@ -791,6 +791,12 @@ var pollUrlId = window.setInterval(function() {
   }
 }, 1000);
 
+/*
+var s = document.createElement('script');
+s.src = chrome.extension.getURL("scripts/content/injected.js");
+s.onload = function() {
+    this.parentNode.removeChild(this);
+};
+(document.head||document.documentElement).appendChild(s);
+*/
 })();
-
-

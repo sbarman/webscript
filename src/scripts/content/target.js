@@ -101,10 +101,13 @@ var saveTargetInfo;
     if (className) {
       //xPathToNodes("//*[@class='" + className + "']");
 
-      var classes = className.split(' ');
+      var classes = className.trim().replace(':', '\\:').split(' ');
       var selector = "";
-      for (var i = 0, ii = classes.length; i < ii; ++i)
-        selector += '.' + classes[i];
+      for (var i = 0, ii = classes.length; i < ii; ++i) {
+        var className = classes[i];
+        if (className)
+          selector += '.' + classes[i];
+      }
 
       return $.makeArray($(selector));
     }
@@ -114,7 +117,7 @@ var saveTargetInfo;
   function getTargetId(targetInfo) {
     var id = targetInfo.snapshot.prop.id;
     if (id) {
-      var selector = "#" + id;
+      var selector = "#" + id.trim().replace(':', '\\:');
       return $.makeArray($(selector));
     }
     return [];
