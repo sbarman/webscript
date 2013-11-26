@@ -6,9 +6,9 @@
 var params = null;
 var defaultParams = null;
 
-var ReplayStrategy = {
-  DEFAULT: 0,
-  COMPENSATION: 1,
+var Compensation = {
+  NONE: 0,
+  SYNTH: 1,
   FORCED: 2
 };
 
@@ -24,7 +24,13 @@ var TimingStrategy = {
   SLOWEST: 3,
   FIXED_1: 4,
   RANDOM_0_3: 5,
-  PERTURB_0_3: 6
+  PERTURB_0_3: 6,
+  PERTURB: 7
+};
+
+var TimeoutStrategy = {
+  ERROR: 0,
+  SKIP: 1
 };
 
 (function() {
@@ -163,15 +169,18 @@ var TimingStrategy = {
       dummyCascadingEvents: false,
       eventTimeout: null,
       targetTimeout: 15,
-      strategy: ReplayStrategy.FORCED,
+      compensation: Compensation.FORCED,
       timingStrategy: TimingStrategy.MIMIC,
       defaultWait: 100,
       defaultWaitNewTab: 4000,
       highlightTarget: true,
-      brokenPortStrategy: BrokenPortStrategy.RETRY
+      brokenPortStrategy: BrokenPortStrategy.RETRY,
+      atomic: true,
+      cascadeCheck: true,
+      urlSimilarity: 0.8
     },
-    server: 'http://sbarman.webfactional.com/api/',
-    //server: "http://127.0.0.1:8000/api/",
+    //server: 'http://sbarman.webfactional.com/api/',
+    server: "http://127.0.0.1:8000/api/",
     benchmarking: {
       timeout: 600,
       targetInfo: true

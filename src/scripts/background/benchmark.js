@@ -90,13 +90,15 @@ var Benchmarker = (function BenchmarkerClosure() {
               success = false;
           }
 
+          var time = replay.time;
+
           var benchmarkRun = {
             benchmark: benchmark,
             errors: replay.debug.toString(),
             events_executed: replay.index,
             events_total: replay.events.length,
             successful: success,
-            notes: note + ":" + JSON.stringify(correct_captures),
+            notes: note + ":" + time + ':' + JSON.stringify(correct_captures),
             log: replay.benchmarkLog
           };
 
@@ -171,6 +173,64 @@ function runBenchmarkAllTimes(selector, trials) {
             })();
           }
         }
+      }
+    }
+
+    b.runBenchmarks(benchmarkList, initList, notes);
+  });
+}
+
+function runBenchmarkPaper(ids) {
+  var b = new Benchmarker(ports, record, scriptServer, controller);
+  b.getBenchmarks(function(benchmarks) {
+    var timingStrategies = Object.keys(TimingStrategy);
+
+    var benchmarkList = [];
+    var initList = [];
+    var notes = [];
+
+    for (var i = 0, ii = benchmarks.length; i < ii; ++i) {
+      var benchmark = benchmarks[i];
+      if (ids.indexOf(benchmark.id) != -1) {
+        // add basic replay
+        benchmarkList.push(benchmark);
+        initList.push(function() {});
+        notes.push('Plain old replay');
+
+        // replay without compensation
+        benchmarkList.push(benchmark);
+        initList.push(function() {
+          params.replaying.compensation = Compensation.NONE;
+        });
+        notes.push('No compensation');
+
+        // replay without atomic events
+        benchmarkList.push(benchmark);
+        initList.push(function() {
+          params.replaying.atomic = false;
+        });
+        notes.push('No atomic events');
+
+        // replay without cascading event check
+        benchmarkList.push(benchmark);
+        initList.push(function() {
+          params.replaying.cascadeCheck = false;
+        });
+        notes.push('No cascading event check');
+
+        // replay as fast as possible
+        benchmarkList.push(benchmark);
+        initList.push(function() {
+          params.replaying.timingStrategy = TimingStrategy.SPEED;
+        });
+        notes.push('Speed timing');
+
+        // replay with perturbed timing
+        benchmarkList.push(benchmark);
+        initList.push(function() {
+          params.replaying.timingStrategy = TimingStrategy.PERTURB;
+        });
+        notes.push('Perturb timing');
       }
     }
 

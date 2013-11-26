@@ -616,6 +616,7 @@ var Replay = (function ReplayClosure() {
       this.pause();
       this.reset();
 
+      this.startTime = new Date().getTime();
       this.events = events;
       this.scriptId = scriptId;
       this.cont = cont;
@@ -689,53 +690,15 @@ var Replay = (function ReplayClosure() {
         waitTime = Math.round(Math.random() * 3000);
       } else if (timing == TimingStrategy.PERTURB_0_3) {
         waitTime = defaultTime + Math.round(Math.random() * 3000);
+      } else if (timing == TimingStrategy.PERTURB) {
+        var scale = 0.7 + (Math.random() * 0.6);
+        waitTime = Math.round(defaultTime * scale);
       } else {
         throw "unknown timing strategy";
       }
       replayLog.log('wait time:', waitTime);
       return waitTime;
     },
-/*    markCascadingEvents: function _markCascadingEvents() {
-      replayLog.log('marked cascading events');
-
-      var events = this.events;
-      var index = this.index;
-
-      // we haven't started replay yet
-      if (index == 0)
-        return;
-
-      var recordedEvents = this.record.getEvents();
-
-      var lastExtGenEvent = -1;
-      for (var i = recordedEvents.length - 1; i >= 0; --i) {
-        var e = recordedEvents[i];
-        var extGen = e.msg.value.extensionGenerated;
-
-        if (extGen) {
-          lastExtGenEvent = i;
-          break;
-        }
-      }
-
-      // no extension generated events recorded, so no cascading events exist
-      if (lastExtGenEvent == -1)
-        return;
-
-      for (var i = lastExtGenEvent + 1, ii = recordedEvents.length,
-               j = index, jj = events.length;
-           i < ii && j < jj; ++i) {
-        var r = recordedEvents[i].msg.value;
-        var e = events[j].msg.value;
-
-        if (r.type == e.type && r.target == e.target) {
-          e.cascading = true;
-          e.cascadingOrigin = index - 1;
-          j++;
-        }
-      }
-    },
-*/
     pause: function _pause() {
       var handle = this.timeoutHandle;
       if (handle) {
@@ -788,6 +751,7 @@ var Replay = (function ReplayClosure() {
 
       this.replayState = ReplayState.STOPPED;
       this.pause();
+      this.time = new Date().getTime() - this.startTime;
       this.record.stopRecording();
       this.updateListeners({status: 'Finished'});
 
@@ -841,9 +805,7 @@ var Replay = (function ReplayClosure() {
         replayLog.log('assume port is top level page');
         var topFrame = portInfo.top;
         if (topFrame) {
-          var commonUrl = lcs(topFrame.URL, msg.value.URL);
-          var commonRatio = commonUrl.length / msg.value.URL.length;
-          if (commonRatio > .8)
+          if (matchUrls(msg.value.URL, topFrame.URL))
             newPort = ports.getPort(topFrame.portName);
         }
       } else {
@@ -998,8 +960,6 @@ var Replay = (function ReplayClosure() {
           return;
         }
 
-//        this.markCascadingEvents();
-
         var events = this.events;
         var index = this.index;
         var portMapping = this.portMapping;
@@ -1013,7 +973,7 @@ var Replay = (function ReplayClosure() {
 
         var e = events[index];
 
-        if (this.checkReplayed(e)) {
+        if (params.replaying.cascadeCheck && this.checkReplayed(e)) {
           this.replayState = ReplayState.REPLAYING;
           this.index++;
           replayLog.debug('skipping event: ' + e.id);
@@ -1110,7 +1070,7 @@ var Replay = (function ReplayClosure() {
               // port
               var eventGroup = [];
               var endEvent = msg.value.endEventId;
-              if (endEvent) {
+              if (params.replaying.atomic && endEvent) {
                 var t = this.index;
                 var events = this.events;
                 while (t < events.length && 

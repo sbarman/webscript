@@ -324,18 +324,6 @@ function setPortEvents(events) {
   portEvents = events;
 }
 
-function getLastEventReplayed() {
-  var lastEventId = "";
-  for (var i = 0, ii = portEvents.length; i < ii; ++i) {
-    var e = portEvents[i];
-    if (!e.replayed) {
-      return lastEventId;
-    }
-    lastEventId = e.id;
-  }
-  return lastEventId;
-}
-
 function getPortEventIndex(id) {
   for (var i = 0, ii = portEvents.length; i < ii; ++i) {
     var e = portEvents[i];
@@ -389,7 +377,7 @@ function simulate(request, startIndex) {
     portEventsIdx = getPortEventIndex(id);
 
     // this event was detected by the recorder, so lets skip it
-    if (portEvents[portEventsIdx].replayed) {
+    if (params.replaying.cascadeCheck && portEvents[portEventsIdx].replayed) {
       // port.postMessage({type: 'ack', value: true});
       continue;
     }
@@ -650,7 +638,7 @@ function fixDeltas(recordDeltas, replayDeltas, recordEvent, snapshot) {
 //      addComment('replay delta', divProp + ':' + delta.orig.prop[divProp] +
 //                 '->' + delta.changed.prop[divProp]);
 
-      if (params.replaying.strategy == ReplayStrategy.FORCED) {
+      if (params.replaying.compensation == Compensation.FORCED) {
         if (element)
           element[divProp] = delta.orig.prop[divProp];
       }
@@ -668,10 +656,10 @@ function fixDeltas(recordDeltas, replayDeltas, recordEvent, snapshot) {
 //      addComment('record delta', divProp + ':' + delta.orig.prop[divProp] +
 //                 '->' + delta.changed.prop[divProp]);
 
-      if (params.replaying.strategy == ReplayStrategy.COMPENSATION) {
+      if (params.replaying.compensation == Compensation.SYNTH) {
         replayLog.debug('generating compensation event:', delta);
         generateCompensation(recordEvent, delta);
-      } else if (params.replaying.strategy == ReplayStrategy.FORCED) {
+      } else if (params.replaying.compensation == Compensation.FORCED) {
         if (element)
           element[divProp] = delta.changed.prop[divProp];
       }

@@ -14,7 +14,7 @@ var ScriptServer = (function ScriptServerClosure() {
 
       function saveEvent(i) {
         if (i >= events.length) {
-          scriptLog.log('Done saving');
+          scriptLog.log('Done saving script ' + scriptId);
           return;
         }
 
