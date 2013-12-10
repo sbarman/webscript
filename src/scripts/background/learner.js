@@ -153,7 +153,7 @@ var Learner = (function LearnerClosure() {
           l.successes++;
         l.runScript();
       });
-      
+
       // kill script after timeout period
       timeoutId = setTimeout(function() {
         r.finish();
@@ -172,7 +172,7 @@ var Learner = (function LearnerClosure() {
       var lastIncChange = this.lastIncChange;
       var state = this.searchState;
       for (var i = lastIncChange + 1, ii = state.length; i < ii; ++i) {
-        state[i] = 0
+        state[i] = 0;
       }
       this.lastDecChange = this.lastIncChange;
     },
@@ -199,7 +199,7 @@ var Learner = (function LearnerClosure() {
       }
       if (divIndex == -1)
         throw "can't find diverging event";
-      
+
       var state = this.searchState;
       for (var i = divIndex; i >= 0; --i) {
         if (state[i] == 0) {
@@ -218,5 +218,5 @@ var Learner = (function LearnerClosure() {
 
 function runLearner(id) {
   var l = new Learner(ports, record, scriptServer, controller);
-  l.search(id); 
+  l.search(id);
 }

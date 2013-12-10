@@ -12,10 +12,10 @@ var snapshotBranch = null;
 
   function getProperties(node, props) {
     if (props == 'all')
-      props = Object.keys(node)
+      props = Object.keys(node);
     else if (!props)
-      props = []
-    
+      props = [];
+
     var mapping = {};
     for (var i = 0, ii = props.length; i < ii; ++i) {
       var prop = props[i];
@@ -73,7 +73,7 @@ var snapshotBranch = null;
           if (!(childNodeName in ignoreTags)) {
             var newPath = xpath + '/' + childNodeName + '[' +
                           childrenTags[childNodeName] + ']';
-            var child = cloneNode(child, newPath, false, []); 
+            var child = cloneNode(child, newPath, false, []);
             children.push(child);
           }
         }
@@ -84,7 +84,7 @@ var snapshotBranch = null;
 
   function cloneBranch(node) {
     var path = [];
-    var props = ['className', 'id'] 
+    var props = ['className', 'id'];
     while (node != null) {
       path.push(cloneNode(node, nodeToXPath(node), true, props));
       node = node.parentElement;

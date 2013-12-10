@@ -40,7 +40,7 @@ var Benchmarker = (function BenchmarkerClosure() {
         benchmarker.updateParams();
 
         var benchmark = benchmarks[index];
-        var note = "";
+        var note = '';
         if (notes)
           note = notes[index];
 
@@ -65,7 +65,7 @@ var Benchmarker = (function BenchmarkerClosure() {
           clearTimeout(timeoutId);
           var rcaptures = jQuery.parseJSON(benchmark.success_captures);
           var captures = replay.captures;
-          
+
           var correct_captures = [];
           for (var i = 0, ii = rcaptures.length; i < ii; ++i) {
             if (i < captures.length) {
@@ -78,7 +78,7 @@ var Benchmarker = (function BenchmarkerClosure() {
             } else {
               correct_captures.push({
                 correct: rcaptures[i],
-                actual: "",
+                actual: '',
                 match: false
               });
             }
@@ -98,7 +98,7 @@ var Benchmarker = (function BenchmarkerClosure() {
             events_executed: replay.index,
             events_total: replay.events.length,
             successful: success,
-            notes: note + ":" + time + ':' + JSON.stringify(correct_captures),
+            notes: note + ':' + time + ':' + JSON.stringify(correct_captures),
             log: replay.benchmarkLog
           };
 
@@ -137,7 +137,7 @@ function runAllBenchmarks() {
 
 function runBenchmark(name) {
   var b = new Benchmarker(ports, record, scriptServer, controller);
-  var filteredList = []
+  var filteredList = [];
   b.getBenchmarks(function(benchmarks) {
     for (var i = 0, ii = benchmarks.length; i < ii; ++i) {
       var benchmark = benchmarks[i];
@@ -160,7 +160,7 @@ function runBenchmarkAllTimes(selector, trials) {
     for (var i = 0, ii = benchmarks.length; i < ii; ++i) {
       var benchmark = benchmarks[i];
       if (selector(benchmark)) {
-        for(var j = 0, jj = timingStrategies.length; j < jj; ++j) {
+        for (var j = 0, jj = timingStrategies.length; j < jj; ++j) {
           for (var k = 0; k < trials; ++k) {
             benchmarkList.push(benchmark);
             (function() {

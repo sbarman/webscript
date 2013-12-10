@@ -97,8 +97,8 @@ function recordEvent(eventData) {
     eventData.preventDefault();
     return false;
   }
-  
-  if (recording == RecordState.RECORDING && 
+
+  if (recording == RecordState.RECORDING &&
       params.recording.cancelUnrecordedEvents && !shouldRecord) {
     recordLog.debug('[' + id + '] cancel unrecorded event:', type, dispatchType,
                   eventData);
@@ -118,7 +118,7 @@ function recordEvent(eventData) {
   var properties = getEventProps(type);
   var target = eventData.target;
   var nodeName = target.nodeName.toLowerCase();
-      
+
   eventMessage = {};
 
   // deal with all the replay mess that we can't do in simulate
@@ -354,8 +354,8 @@ function checkTimeout(request, startIndex) {
       if (curTime - timeoutInfo.startTime > timeout * 1000)
         return true;
     } else {
-      timeoutInfo = {startTime: curTime, startIndex: startIndex, 
-                     request:request};
+      timeoutInfo = {startTime: curTime, startIndex: startIndex,
+                     request: request};
     }
   }
   return false;
@@ -363,7 +363,7 @@ function checkTimeout(request, startIndex) {
 
 // replay an event from an event message
 function simulate(request, startIndex) {
-  // since we are simulating new events, lets clear out any retries 
+  // since we are simulating new events, lets clear out any retries
   clearRetry();
 
   var events = request.value;
@@ -408,7 +408,7 @@ function simulate(request, startIndex) {
         var common = actualTargets.filter(function(t) {
           return strategyTargets.indexOf(t) != -1;
         });
-        addBenchmarkLog('comparison: ' + strategy + ',' + 
+        addBenchmarkLog('comparison: ' + strategy + ',' +
                         strategyTargets.length + ',' + common.length);
       }
     }
@@ -426,7 +426,7 @@ function simulate(request, startIndex) {
       port.postMessage({type: 'debug', value: 'no target found'});
       return;
     }
-    
+
     if (params.replaying.highlightTarget) {
       highlightNode(target, 100);
     }
@@ -436,7 +436,7 @@ function simulate(request, startIndex) {
 
       var msg = {innerHtml: target.innerHTML,
                  innerText: target.innerText,
-                 nodeName: target.nodeName.toLowerCase()}
+                 nodeName: target.nodeName.toLowerCase()};
 
       port.postMessage({type: 'saveCapture', value: msg});
       continue;
@@ -457,10 +457,10 @@ function simulate(request, startIndex) {
       oEvent.initEvent(eventName, options.bubbles, options.cancelable);
     } else if (eventType == 'FocusEvent') {
       var relatedTarget = null;
-    
+
       if (eventData.relatedTarget)
-        relatedTarget = getTarget(eventData.relatedTarget); 
-     
+        relatedTarget = getTarget(eventData.relatedTarget);
+
       oEvent.initUIEvent(eventName, options.bubbles, options.cancelable,
           document.defaultView, options.detail);
       setEventProp(oEvent, 'relatedTarget', relatedTarget);
@@ -468,7 +468,7 @@ function simulate(request, startIndex) {
       var relatedTarget = null;
 
       if (eventData.relatedTarget)
-        relatedTarget = getTarget(eventData.relatedTarget); 
+        relatedTarget = getTarget(eventData.relatedTarget);
 
       oEvent.initMouseEvent(eventName, options.bubbles, options.cancelable,
           document.defaultView, options.detail, options.screenX,
@@ -478,16 +478,16 @@ function simulate(request, startIndex) {
     } else if (eventType == 'KeyboardEvent') {
       // TODO: nonstandard initKeyboardEvent
       oEvent.initKeyboardEvent(eventName, options.bubbles, options.cancelable,
-          document.defaultView, options.keyIdentifier, options.keyLocation, 
+          document.defaultView, options.keyIdentifier, options.keyLocation,
           options.ctrlKey, options.altKey, options.shiftKey, options.metaKey);
-      
+
       var propsToSet = ['charCode', 'keyCode'];
 
       for (var j = 0, jj = propsToSet.length; j < jj; ++j) {
         var prop = propsToSet[j];
         setEventProp(oEvent, prop, options[prop]);
       }
-      
+
     } else if (eventType == 'TextEvent') {
       oEvent.initTextEvent(eventName, options.bubbles, options.cancelable,
           document.defaultView, options.data, options.inputMethod,
@@ -511,7 +511,7 @@ function simulate(request, startIndex) {
     for (var prop in oEvent) {
       var data = oEvent[prop];
       var type = typeof(data);
-      
+
       if (type == 'number' || type == 'boolean' || type == 'string' ||
           type == 'undefined') {
         detail[prop] = data;
@@ -556,7 +556,7 @@ var highlightCount = 0;
 function highlightNode(target, time) {
   var boundingBox = target.getBoundingClientRect();
   var newDiv = $('<div/>');
-  var idName = 'sbarman-hightlight-' + highlightCount
+  var idName = 'sbarman-hightlight-' + highlightCount;
   newDiv.attr('id', idName);
   newDiv.css('width', boundingBox.width);
   newDiv.css('height', boundingBox.height);
@@ -765,7 +765,7 @@ function addListenersForRecording() {
 // added to the page. We will remove the unwanted handlers once params is
 // updated
 addListenersForRecording();
-  
+
 // need to check if we are in an iframe
 var value = {};
 value.top = (self == top);
@@ -792,18 +792,18 @@ var pollUrlId = window.setInterval(function() {
 }, 1000);
 
 function injectScript(path) {
-	// inject code into the pages domain 
+	// inject code into the pages domain
 	var s = document.createElement('script');
 	s.src = chrome.extension.getURL(path);
 	s.onload = function() {
 	  this.parentNode.removeChild(this);
 	};
-	(document.head||document.documentElement).appendChild(s);	
+	(document.head || document.documentElement).appendChild(s);
 }
 // TODO(sbarman): need to wrap these so variables don't escape into the
 // enclosing scope
-injectScript("scripts/common/params.js");
-injectScript("scripts/content/misc.js");
-injectScript("scripts/content/injected.js");
+injectScript('scripts/common/params.js');
+injectScript('scripts/content/misc.js');
+injectScript('scripts/content/injected.js');
 
 })();

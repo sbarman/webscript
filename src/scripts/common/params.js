@@ -19,7 +19,7 @@ var BrokenPortStrategy = {
 
 var TimingStrategy = {
   MIMIC: 0,
-  SPEED : 1,
+  SPEED: 1,
   SLOWER: 2,
   SLOWEST: 3,
   FIXED_1: 4,
@@ -54,7 +54,7 @@ var TimeoutStrategy = {
     },
     'FocusEvent': {
       'focus': true,
-      'blur': true,
+      'blur': true
     },
     'MouseEvent': {
       'click': true,
@@ -90,7 +90,7 @@ var TimeoutStrategy = {
       'bubbles': true,
       'cancelable': true,
       'detail': 0,
-      'timeStamp': 0 
+      'timeStamp': 0
     },
     'MouseEvent': {
       'type': true,
@@ -119,7 +119,7 @@ var TimeoutStrategy = {
       'keyCode': 0,
       'charCode': 0,
       'timeStamp': 0,
-      'keyIdentifier': "",  // nonstandard to Chrome
+      'keyIdentifier': '',  // nonstandard to Chrome
       'keyLocation': 0  // nonstandard to Chrome
     },
     'TextEvent': {
@@ -180,7 +180,7 @@ var TimeoutStrategy = {
       urlSimilarity: 0.8
     },
     //server: 'http://sbarman.webfactional.com/api/',
-    server: "http://127.0.0.1:8000/api/",
+    server: 'http://127.0.0.1:8000/api/',
     benchmarking: {
       timeout: 600,
       targetInfo: true

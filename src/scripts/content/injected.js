@@ -4,10 +4,10 @@
 'use strict';
 
 (function() {
-  
+
   // event we are waiting for
   var scriptEvent = null;
-  
+
   function setEventProp(e, prop, value) {
     Object.defineProperty(e, prop, {value: value});
     if (e.prop != value) {
@@ -15,7 +15,7 @@
       Object.defineProperty(e, prop, {value: value});
     }
   }
-  
+
   var whiteListProps = {
     relatedTarget: true,
     keyCode: true,
@@ -25,18 +25,18 @@
     layerX: true,
     layerY: true
   };
-	
+
   // check if the event handler object is correct
   function checkEvent(event) {
-    
+
     if (scriptEvent && event.type == scriptEvent.type) {
       console.log('[inject] found matching event: ', scriptEvent, event);
-      
+
       for (var prop in scriptEvent) {
         try {
           var scriptData = scriptEvent[prop];
           var eventData = event[prop];
-          
+
           if (scriptData != eventData) {
             console.log('[inject] fixing property: ', prop);
             if (prop in whiteListProps) {
@@ -49,14 +49,14 @@
           recordLog.error('[' + id + '] error recording property:', prop, e);
         }
       }
-      
+
       scriptEvent = null;
     }
 
     // TODO: special case with mouseover, need to return false
     return true;
   };
-  
+
   // Attach the event handlers to their respective events
   function addListenersForRecording() {
     var events = params.events;
@@ -73,15 +73,15 @@
   // event handler for messages from the content script
   function contentScriptUpdate(request) {
 	  scriptEvent = request.detail;
-    
+
     var relatedTarget = scriptEvent.relatedTarget;
 		if (relatedTarget)
       scriptEvent.relatedTarget = simpleXPathToNode(relatedTarget);
-    
+
     console.log('[inject] handle message:', scriptEvent);
 	  return;
   }
-  
+
   document.addEventListener('webscript', contentScriptUpdate, true);
 })();
 
@@ -95,7 +95,7 @@ setTimeout(function() {
      }
 
      var originalGetAllResponseHeaders, originalGetResponseHeader,
-         originalSetRequestHeader, originalSend, originalSendAsBinary, 
+         originalSetRequestHeader, originalSend, originalSendAsBinary,
          originalOverrideMimeType, originalAbort, originalOpen;
      originalGetAllResponseHeaders = window.XMLHttpRequest.prototype.getAllResponseHeaders;
      window.XMLHttpRequest.prototype.getAllResponseHeaders = function() {

@@ -1124,7 +1124,7 @@ function compareNodes(origNode, changedNode) {
         });
       }
     }
-    
+
     /*
     // check the children
     var children1 = origNode.children;
