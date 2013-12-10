@@ -792,13 +792,13 @@ var pollUrlId = window.setInterval(function() {
 }, 1000);
 
 function injectScript(path) {
-	// inject code into the pages domain
-	var s = document.createElement('script');
-	s.src = chrome.extension.getURL(path);
-	s.onload = function() {
-	  this.parentNode.removeChild(this);
-	};
-	(document.head || document.documentElement).appendChild(s);
+  // inject code into the pages domain
+  var s = document.createElement('script');
+  s.src = chrome.extension.getURL(path);
+  s.onload = function() {
+    this.parentNode.removeChild(this);
+  };
+  (document.head || document.documentElement).appendChild(s);
 }
 // TODO(sbarman): need to wrap these so variables don't escape into the
 // enclosing scope

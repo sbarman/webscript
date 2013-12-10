@@ -1106,7 +1106,7 @@ var Replay = (function ReplayClosure() {
                 this.setNextTimeout(0);
               } else {
                 // remove the mapping and try again
-                this.addDebug('using disconnected port, removing and trying again');
+                this.addDebug('using disconnected port, remove and try again');
                 delete portMapping[port];
                 this.setNextTimeout(0);
               }

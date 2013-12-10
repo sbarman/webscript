@@ -72,14 +72,14 @@
 
   // event handler for messages from the content script
   function contentScriptUpdate(request) {
-	  scriptEvent = request.detail;
+    scriptEvent = request.detail;
 
     var relatedTarget = scriptEvent.relatedTarget;
-		if (relatedTarget)
+    if (relatedTarget)
       scriptEvent.relatedTarget = simpleXPathToNode(relatedTarget);
 
     console.log('[inject] handle message:', scriptEvent);
-	  return;
+    return;
   }
 
   document.addEventListener('webscript', contentScriptUpdate, true);
