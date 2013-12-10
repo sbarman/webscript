@@ -187,6 +187,9 @@ var TimeoutStrategy = {
     }
   };
 
-  params = jQuery.extend(true, {}, defaultParams);
+  if (window.jQuery)
+    params = jQuery.extend(true, {}, defaultParams);
+  else
+    params = defaultParams;
 
 })();

@@ -10,7 +10,12 @@
   "background": {
     "page": "pages/background.html"
   },
-  "web_accessible_resources": ["scripts/content/injected.js"],
+  "web_accessible_resources": [
+    "scripts/content/injected.js",
+    "scripts/common/params.js",
+    "scripts/common/logging.js",
+    "scripts/content/misc.js"
+  ],
   "content_scripts": [
     {
       "matches": ["<all_urls>"],

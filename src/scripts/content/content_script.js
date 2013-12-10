@@ -506,6 +506,21 @@ function simulate(request, startIndex) {
     replayLog.debug('[' + id + '] dispatchEvent', eventName, options, target,
                     oEvent);
 
+    // send the update to the inject script
+    var detail = {};
+    for (var prop in oEvent) {
+      var data = oEvent[prop];
+      var type = typeof(data);
+      
+      if (type == 'number' || type == 'boolean' || type == 'string' ||
+          type == 'undefined') {
+        detail[prop] = data;
+      } else if (prop == 'relatedTarget' && isElement(data)) {
+        detail[prop] = nodeToXPath(data);
+      }
+    }
+    document.dispatchEvent(new CustomEvent('webscript', {detail: detail}));
+
     // this does the actual event simulation
     dispatchingEvent = true;
     target.dispatchEvent(oEvent);
@@ -643,7 +658,6 @@ function fixDeltas(recordDeltas, replayDeltas, recordEvent, snapshot) {
           element[divProp] = delta.orig.prop[divProp];
       }
     }
-
   }
 
   //the thing below is the stuff that's doing divergence synthesis
@@ -721,8 +735,6 @@ function handleMessage(request) {
     annotationEvents = {};
   } else if (type == 'url') {
     port.postMessage({type: 'url', value: document.URL});
-  } else if (type == 'updateEvent') {
-    updateEvent(request);
   } else if (type == 'capture') {
     captureNode();
   } else if (type == 'cancelCapture') {
@@ -779,12 +791,19 @@ var pollUrlId = window.setInterval(function() {
   }
 }, 1000);
 
-/*
-var s = document.createElement('script');
-s.src = chrome.extension.getURL("scripts/content/injected.js");
-s.onload = function() {
-    this.parentNode.removeChild(this);
-};
-(document.head||document.documentElement).appendChild(s);
-*/
+function injectScript(path) {
+	// inject code into the pages domain 
+	var s = document.createElement('script');
+	s.src = chrome.extension.getURL(path);
+	s.onload = function() {
+	  this.parentNode.removeChild(this);
+	};
+	(document.head||document.documentElement).appendChild(s);	
+}
+// TODO(sbarman): need to wrap these so variables don't escape into the
+// enclosing scope
+injectScript("scripts/common/params.js");
+injectScript("scripts/content/misc.js");
+injectScript("scripts/content/injected.js");
+
 })();
