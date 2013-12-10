@@ -14,7 +14,7 @@ var saveTargetInfo;
       targetInfo.branch = snapshotBranch(target);
     }
     return targetInfo;
-  }
+  };
 
   function getTargetSimple(targetInfo) {
     return xPathToNodes(targetInfo.xpath);
@@ -28,10 +28,10 @@ var saveTargetInfo;
         index++;
 
       if (index > 0)
-        xpath = xpath.slice(index)
+        xpath = xpath.slice(index);
 
       var targets = xPathToNodes('//' + xpath);
-   
+
       if (targets.length > 0) {
         return targets;
       }
@@ -39,13 +39,13 @@ var saveTargetInfo;
       // If we're here, we failed to find the child. Try dropping
       // steadily larger prefixes of the xpath until some portion works.
       // Gives up if only three levels left in xpath.
-      if (xpath.split("/").length < 4){
+      if (xpath.split('/').length < 4) {
         // No more prefixes to reasonably remove, so give up
         return [];
       }
 
-      var index = xpath.indexOf("/");
-      xpathSuffix = xpath.slice(index+1);
+      var index = xpath.indexOf('/');
+      xpathSuffix = xpath.slice(index + 1);
       return helper(xpathSuffix);
     }
 
@@ -83,7 +83,7 @@ var saveTargetInfo;
         targets = xPathToNodes(clone.join('/'));
         if (targets.length > 0)
           return targets;
-      } 
+      }
 
       targets = xPathToNodes(xpathSplit.join('/'));
       if (targets.length > 0)
@@ -102,7 +102,7 @@ var saveTargetInfo;
       //xPathToNodes("//*[@class='" + className + "']");
 
       var classes = className.trim().replace(':', '\\:').split(' ');
-      var selector = "";
+      var selector = '';
       for (var i = 0, ii = classes.length; i < ii; ++i) {
         var className = classes[i];
         if (className)
@@ -117,7 +117,7 @@ var saveTargetInfo;
   function getTargetId(targetInfo) {
     var id = targetInfo.snapshot.prop.id;
     if (id) {
-      var selector = "#" + id.trim().replace(':', '\\:');
+      var selector = '#' + id.trim().replace(':', '\\:');
       return $.makeArray($(selector));
     }
     return [];
@@ -156,13 +156,13 @@ var saveTargetInfo;
     return maxTargets;
   }
 
-  getTargetFunction = getTargetComposite
+  getTargetFunction = getTargetComposite;
 
   getTarget = function(targetInfo) {
     var targets = getTargetFunction(targetInfo);
     if (!targets) {
       log.debug('No target found');
-      return null
+      return null;
     } else if (targets.length > 1) {
       log.debug('Multiple targets found:', targets);
       return targets[0];
@@ -178,6 +178,6 @@ var saveTargetInfo;
     class: getTargetClass,
     id: getTargetId,
     search: getTargetSearch
-  }
+  };
 
-})()
+})();

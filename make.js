@@ -32,7 +32,7 @@ target.lint = function() {
   var LINT_FILES = ['make.js',
                     'src/scripts/background/*.js',
                     'src/scripts/common/*.js',
-                    'src/scripts/content/*.js',
+                    'src/scripts/content/*.js'
                    ];
 
   exec('gjslint --nojsdoc ' + LINT_FILES.join(' '));

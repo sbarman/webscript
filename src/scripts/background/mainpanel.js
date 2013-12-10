@@ -33,13 +33,13 @@ var PortManager = (function PortManagerClosure() {
     getTabInfo: function(tab) {
       var tabInfo = this.tabIdToTabInfo[tab];
       var ret = {};
-      ret.frames = tabInfo.frames
+      ret.frames = tabInfo.frames;
 
       var topFrames = tabInfo.top;
       if (topFrames.length > 0)
-        ret.top = topFrames[topFrames.length -1];
-     
-      return ret;      
+        ret.top = topFrames[topFrames.length - 1];
+
+      return ret;
     },
     getTabFromTabId: function(tabId) {
       return this.tabIdToTab[tabId];
@@ -159,7 +159,7 @@ var Panel = (function PanelClosure() {
 
     var panel = this;
     controller.addListener(function(msg) {
-      panel.controllerUpdate(msg); 
+      panel.controllerUpdate(msg);
     });
   }
 
@@ -174,7 +174,7 @@ var Panel = (function PanelClosure() {
       } else if ('simulate' in msg) {
         this.scroll(msg.simulate);
       } else {
-        throw "unknown controller update";
+        throw 'unknown controller update';
       }
     },
     attachHandlers: function _attachHandlers(controller) {
@@ -409,7 +409,7 @@ var Record = (function RecordClosure() {
       if (this.recordState != newStatus) {
         this.recordState = newStatus;
 
-        var text = "";
+        var text = '';
         if (newStatus == RecordState.RECORDING)
           text = 'Recording';
         else if (newStatus == RecordState.STOPPED)
@@ -417,7 +417,7 @@ var Record = (function RecordClosure() {
         else if (newStatus == RecordState.REPLAYING)
           text = 'Replaying';
         else
-          throw "unknown status";
+          throw 'unknown status';
         this.updateListeners({status: text});
       }
     },
@@ -457,9 +457,9 @@ var Record = (function RecordClosure() {
       var commentList = this.comments;
 
       // order number is the index of the current event + some fraction
-      comment.execution_order = (eventList.length - 1) + (0.01 * 
+      comment.execution_order = (eventList.length - 1) + (0.01 *
           (this.commentCounter + 1));
-      commentList.push(comment)
+      commentList.push(comment);
       this.commentCounter += 1;
     },
     addEvent: function _addEvent(eventRequest, portName) {
@@ -605,7 +605,7 @@ var Replay = (function ReplayClosure() {
         var port = event.port;
         if (!(port in map))
           map[port] = [];
-        
+
         map[port].push(event);
       }
       return map;
@@ -640,7 +640,7 @@ var Replay = (function ReplayClosure() {
       this.scriptId = null;
       this.events = [];
       this.debug = [];
-      this.benchmarkLog = "";
+      this.benchmarkLog = '';
 
       this.record.reset();
     },
@@ -665,11 +665,11 @@ var Replay = (function ReplayClosure() {
       var index = this.index;
       var events = this.events;
       var waitTime = 0;
-       
-      if (index < events.length) 
+
+      if (index < events.length)
         var defaultTime = events[index].waitTime;
       else
-        var defaultTime = 0
+        var defaultTime = 0;
 
       if (defaultTime > 10000)
         defaultTime = 10000;
@@ -677,7 +677,7 @@ var Replay = (function ReplayClosure() {
       if (index == 0 || index == events.length) {
         waitTime = 1000;
       } else if (timing == TimingStrategy.MIMIC) {
-        waitTime = defaultTime
+        waitTime = defaultTime;
       } else if (timing == TimingStrategy.SPEED) {
         waitTime = 0;
       } else if (timing == TimingStrategy.SLOWER) {
@@ -694,7 +694,7 @@ var Replay = (function ReplayClosure() {
         var scale = 0.7 + (Math.random() * 0.6);
         waitTime = Math.round(defaultTime * scale);
       } else {
-        throw "unknown timing strategy";
+        throw 'unknown timing strategy';
       }
       replayLog.log('wait time:', waitTime);
       return waitTime;
@@ -819,7 +819,7 @@ var Replay = (function ReplayClosure() {
         }
 
         if (urlFrames.length == 0) {
-          this.addDebug('no iframes found for page')
+          this.addDebug('no iframes found for page');
           return;
         } else if (urlFrames.length == 1) {
           return ports.getPort(urlFrames[0].portName);
@@ -1059,11 +1059,11 @@ var Replay = (function ReplayClosure() {
 
               replayLog.log('start waiting for wait ack');
             } else {
-*/ 
+*/
             if (msg.type == 'event') {
               // send message
               if (unseenPort)
-                replayPort.postMessage({type: 'portEvents', 
+                replayPort.postMessage({type: 'portEvents',
                     value: this.eventsByPort[port]});
 
               // TODO: we assume that events together are all from the same
@@ -1073,7 +1073,7 @@ var Replay = (function ReplayClosure() {
               if (params.replaying.atomic && endEvent) {
                 var t = this.index;
                 var events = this.events;
-                while (t < events.length && 
+                while (t < events.length &&
                        endEvent >= events[t].msg.value.pageEventId &&
                        port == events[t].port) {
                   eventGroup.push(events[t]);
@@ -1106,7 +1106,7 @@ var Replay = (function ReplayClosure() {
                 this.setNextTimeout(0);
               } else {
                 // remove the mapping and try again
-                this.addDebug('using disconnected port, removing and trying again');
+                this.addDebug('using disconnected port, remove and try again');
                 delete portMapping[port];
                 this.setNextTimeout(0);
               }
@@ -1120,7 +1120,7 @@ var Replay = (function ReplayClosure() {
               this.index = index;
               this.setNextTimeout(0);
             } else {
-              throw "unknown broken port strategy";
+              throw 'unknown broken port strategy';
             }
           } else {
             throw err;
@@ -1301,7 +1301,7 @@ var Controller = (function ControllerClosure() {
 
       var record = this.record;
       var events = record.getEvents();
-      
+
       this.replay.replay(record.getEvents(), record.getScriptId(), cont);
       return replay;
     },
