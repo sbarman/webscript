@@ -3,33 +3,49 @@
 
 'use strict';
 
-
-/*chrome.webRequest.onBeforeRequest.addListener(
+/*
+Add listener on AJAX requests
+chrome.webRequest.onBeforeRequest.addListener(
   function(info) {
     console.log("Cat intercepted: ", info);
   }, {urls: ["<all_urls>"]}
-);*/
+);
+*/
 
 (function() {
+
+  var defaultWidth = 300;
+  var defaultHeight = 400;
+
   var panelWindow = undefined;
 
-  function openMainPanel(hide) {
+  function openMainPanel() {
     // check if panel is already open
     if (typeof panelWindow == 'undefined' || panelWindow.closed) {
-  //    var features = "titlebar=no,menubar=no,location=no," +
-  //                   "resizable=no,scrollbars=no,status=no," +
-  //                   "height=400,width=300";
-  //    panelWindow = window.open("mainpanel.html", "mainpanel",
-  //                              features);
+/*
+      var features = "titlebar=no,menubar=no,location=no," +
+                     "resizable=no,scrollbars=no,status=no," +
+                     "height=400,width=300";
+      panelWindow = window.open("mainpanel.html", "mainpanel",
+                                features);
+*/
 
-      chrome.windows.create({url: chrome.extension.getURL(
-          'pages/mainpanel.html'), width: 300, height: 400, focused: true,
-          type: 'panel'}, function(winInfo) {
-        panelWindow = winInfo;
-      });
+      chrome.windows.getLastFocused(placePanel);
     } else {
       chrome.windows.update(panelWindow.id, {focused: true});
     }
+  }
+
+  function placePanel(focusedWindow) {
+    var windowTop = focusedWindow.top;
+    var windowLeft = focusedWindow.left - defaultWidth;
+
+    chrome.windows.create({url: chrome.extension.getURL(
+        'pages/mainpanel.html'), width: defaultWidth, height: defaultHeight,
+        top: windowTop, left: windowLeft, focused: true, type: 'panel'},
+        function(winInfo) {
+          panelWindow = winInfo;
+        });
   }
 
   chrome.browserAction.onClicked.addListener(function(tab) {
@@ -41,6 +57,14 @@
       panelWindow = undefined;
     }
   });
+
+/*
+  chrome.windows.onFocusChanged.addListener(function(winId) {
+    if (typeof panelWindow == 'object' && panelWindow.id != winId) {
+      ...
+    }
+  }
+*/
 
   openMainPanel();
 })();
