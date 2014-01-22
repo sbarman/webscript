@@ -19,9 +19,9 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["scripts/lib/jquery-1.7.2.js",
-             "scripts/lib/underscore.js",
-             "scripts/lib/outline/jquery.dom-outline-1.0.js",
+      "js": ["lib/jquery-1.7.2.js",
+             "lib/underscore.js",
+             "lib/outline/jquery.dom-outline-1.0.js",
              "scripts/common/common.js",
              "scripts/common/params.js",
              "scripts/common/logging.js",

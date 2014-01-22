@@ -8,6 +8,7 @@ var Panel = (function PanelClosure() {
   function Panel(controller) {
     this.controller = controller;
 
+    this.setup();
     this.loadParams();
     this.attachHandlers(controller);
     this.resize();
@@ -31,6 +32,13 @@ var Panel = (function PanelClosure() {
       } else {
         throw 'unknown controller update';
       }
+    },
+    setup: function _setup() {
+      $('#accordion').accordion({
+        header: 'h3',
+        animate: 100,
+        heightStyle: 'fill'}
+      );
     },
     attachHandlers: function _attachHandlers(controller) {
       $('#start').click(function(eventObject) {
@@ -73,11 +81,13 @@ var Panel = (function PanelClosure() {
         controller.replayOne();
       });
 
+      /*
       $('#paramsDiv').hide(1000);
 
       $('#paramsHide').click(function(eventObject) {
         $('#paramsDiv').toggle(1000);
       });
+      */
 
       $('#save').click(function(eventObject) {
         var name = $('#scriptname').prop('value');
@@ -182,11 +192,20 @@ var Panel = (function PanelClosure() {
 
       for (var prop in eventInfo) {
         if (prop != 'type') {
-          text += '<b>' + prop + ':' + '</b>' + eventInfo[prop] + '<br/>';
+          text += '<b>' + prop + ':' + '</b>' + "<span class='editable'>" + 
+              eventInfo[prop] + '</span>' + '<br/>';
         }
       }
       newDiv.append(text);
       $('#events').append(newDiv);
+
+      newDiv.children('span.editable').editable('http://www.example.com/save.php', { 
+        type      : 'textarea',
+        cancel    : 'Cancel',
+        submit    : 'OK',
+        indicator : '<img src="img/indicator.gif">',
+        tooltip   : 'Click to edit...'
+      });
     },
     addMessage: function _addMessage(message) {
       var newDiv = $('<div/>', {class: 'message wordwrap'});
@@ -203,14 +222,7 @@ var Panel = (function PanelClosure() {
       $('#' + id).get(0).scrollIntoView();
     },
     resize: function _resize() {
-      var total = $(window).height();
-      var header = $('#headerDiv').outerHeight(true);
-      var rest = total - header;
-      var containerHeight = Math.round(.6 * rest);
-      var messagesHeight = rest - containerHeight;
-
-      $('#container').css('height', containerHeight + 'px');
-      $('#messages').css('height', messagesHeight + 'px');
+      $('#accordion').accordion('refresh');
     }
   };
 

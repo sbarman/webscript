@@ -14,7 +14,7 @@ chrome.webRequest.onBeforeRequest.addListener(
 
 (function() {
 
-  var defaultWidth = 300;
+  var defaultWidth = 900;
   var defaultHeight = 400;
 
   var panelWindow = undefined;

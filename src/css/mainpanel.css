@@ -2,6 +2,30 @@ body {
   overflow: hidden;
 }
 
+#left, #center, #right {
+  height: 100%;
+  border: 1px solid #F0F0F0;
+}
+
+#left>div, #center>div, #right>div {
+  margin: 2px;
+}
+
+#left {
+  float: left;
+  width: 33%;
+}
+
+#center { 
+  float: left;
+  width: 33%;
+}
+
+#right {
+  float: left;
+  width: 33%;
+}
+
 #status {
   font: 15px arial, sans-serif;
   border: 1px solid black;
@@ -10,23 +34,10 @@ body {
   height: 25px;
 }
 
-#headerDiv {
-/*  position: fixed; 
-  top: 0px;
-  left: 0px;
-  padding: 5px;  */
-  background-color: white;
-  width: 100%;
-}
-
-#container {
+#events, #messages{
   overflow: auto;
   width: 100%;
-}
-
-#messages {
-  overflow: auto;
-  width: 100%;
+  height: 100%;
 }
 
 #paramsDiv {

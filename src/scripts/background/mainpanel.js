@@ -1255,3 +1255,4 @@ $(window).resize(function() {
 
 ports.sendToAll({type: 'params', value: params});
 controller.stop();
+controller.getScript('test');

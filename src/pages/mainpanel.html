@@ -3,45 +3,57 @@
   </head>
   <body>
     <link rel="stylesheet" href="../css/mainpanel.css">
-    <div id="top">
-      <div id="headerDiv">
-        <input id="start" type="button" value="Start"></input>
-        <input id="stop" type="button" value="Stop"></input>
-        <input id="reset" type="button" value="Reset"></input>
-        <input id="capture" type="button" value="Capture"></input>
-        <br/>
-        <input id="replay" type="button" value="Replay"></input>
-        <input id="pause" type="button" value="Pause"></input>
-        <input id="restart" type="button" value="Restart"></input>
-        <input id="skip" type="button" value="Skip"></input>
-        <input id="resend" type="button" value="Resend"></input>
-        <input id="replayOne" type="button" value="Play 1"></input>
-        <br/>
-        <input id="paramsHide" type="button" value="Params"></input>
-        <br/>
-        <input id="save" type="button" value="Save"></input>
-        <input id="load" type="button" value="Load"></input>
-        <input id="scriptname" type="text" value=""></input>
-        <div id="status">Done</div>
-      </div>
-      <div id="container">
+    <link rel="stylesheet" href="../lib/jquery-ui-1.10.3.custom/css/ui-lightness/jquery-ui-1.10.3.custom.css">
+    <div id="left">
+      <div id="accordion">
+        <h3>Record</h3>
+        <div>
+          <input id="start" type="button" value="Start"></input>
+          <input id="stop" type="button" value="Stop"></input>
+          <input id="reset" type="button" value="Reset"></input>
+          <input id="capture" type="button" value="Capture"></input>
+        </div>
+        <h3>Replay</h3>
+        <div>
+          <input id="replay" type="button" value="Replay"></input>
+          <input id="pause" type="button" value="Pause"></input>
+          <input id="restart" type="button" value="Restart"></input>
+          <input id="skip" type="button" value="Skip"></input>
+          <input id="resend" type="button" value="Resend"></input>
+          <input id="replayOne" type="button" value="Play 1"></input>
+        </div>
+        <h3>Parameters</h3>
         <div id="paramsDiv">
+          <input id="paramsHide" type="button" value="Params"></input>
           <form id="params"></form>
         </div>
-        <div id="events"></div>
+        <h3>Script Server</h3>
+        <div>
+          <input id="save" type="button" value="Save"></input>
+          <input id="load" type="button" value="Load"></input>
+          <input id="scriptname" type="text" value=""></input>
+          <div id="status">Done</div>
+        </div>
       </div>
-      <div id="messages"></div>
-      <script type="text/javascript" src="../scripts/lib/jquery-1.7.2.js"></script>
-      <script type="text/javascript" src="../scripts/common/common.js"></script>
-      <script type="text/javascript" src="../scripts/common/params.js"></script>
-      <script type="text/javascript" src="../scripts/common/logging.js"></script>
-      <script type="text/javascript" src="../scripts/background/scriptserver.js"></script>
-      <script type="text/javascript" src="../scripts/background/port.js"></script>
-      <script type="text/javascript" src="../scripts/background/url.js"></script>
-      <script type="text/javascript" src="../scripts/background/panel.js"></script>
-      <script type="text/javascript" src="../scripts/background/mainpanel.js"></script>
-      <script type="text/javascript" src="../scripts/background/benchmark.js"></script>
-      <script type="text/javascript" src="../scripts/background/learner.js"></script>
     </div>
+    <div id="center">
+      <div id="events"></div>
+    </div>
+    <div id="right">
+      <div id="messages"></div>
+    </div>
+    <script type="text/javascript" src="../lib/jquery-1.7.2.js"></script>
+    <script type="text/javascript" src="../lib/jquery-ui-1.10.3.custom/js/jquery-ui-1.10.3.custom.js"></script>
+    <script type="text/javascript" src="../lib/jquery.jeditable.js"></script>
+    <script type="text/javascript" src="../scripts/common/common.js"></script>
+    <script type="text/javascript" src="../scripts/common/params.js"></script>
+    <script type="text/javascript" src="../scripts/common/logging.js"></script>
+    <script type="text/javascript" src="../scripts/background/scriptserver.js"></script>
+    <script type="text/javascript" src="../scripts/background/port.js"></script>
+    <script type="text/javascript" src="../scripts/background/url.js"></script>
+    <script type="text/javascript" src="../scripts/background/panel.js"></script>
+    <script type="text/javascript" src="../scripts/background/mainpanel.js"></script>
+    <script type="text/javascript" src="../scripts/background/benchmark.js"></script>
+    <script type="text/javascript" src="../scripts/background/learner.js"></script>
   </body>
 </html>
