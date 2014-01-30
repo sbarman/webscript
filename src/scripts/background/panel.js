@@ -39,6 +39,7 @@ var Panel = (function PanelClosure() {
         animate: 100,
         heightStyle: 'fill'}
       );
+      $('#input').autosize();
     },
     attachHandlers: function _attachHandlers(controller) {
       $('#start').click(function(eventObject) {
@@ -106,6 +107,17 @@ var Panel = (function PanelClosure() {
         panel.updateParams();
         return false;
       });
+
+      $('#input').keypress(function(e) {
+        if(e.which == 13 && !e.shiftKey) {
+          var target = $(e.target);
+          var val = target.val();
+          controller.submitInput(val);
+          panel.addMessage(val);
+          target.val("");
+          e.preventDefault();
+        }
+      });
     },
     loadParams: function _loadParams() {
       // create a form based on parameters
@@ -169,37 +181,47 @@ var Panel = (function PanelClosure() {
       this.controller.updateParams();
     },
     addEvent: function _addEvent(eventRecord) {
-      var eventInfo = eventRecord.msg.value;
-      var id = eventRecord.id;
-      var tab = eventRecord.tab;
-      var topURL = eventRecord.topURL;
-      var portName = eventRecord.port;
-      var topFrame = eventRecord.topFrame;
-      var iframeIndex = eventRecord.iframeIndex;
-      var waitTime = eventRecord.waitTime;
+      var eventInfo = eventRecord.value;
+      var id = eventInfo.meta.id;
+      var type = eventInfo.data.type;
+      var xpath = eventInfo.data.target.xpath;
+      var URL = eventInfo.frame.URL;
+      var port = eventInfo.frame.port;
 
+      var eventDiv = $('<div/>', {class: 'event wordwrap', id: id});
+      eventDiv.append('<b>[' + id + ']type:' + '</b>' + type + '<br/>');
+      eventDiv.append('<b>xpath:' + '</b>' + xpath + '<br/>');
+      eventDiv.append('<b>URL:' + '</b>' + URL + '<br/>');
+      eventDiv.append('<b>port:' + '</b>' + port + '<br/>');
 
-      var newDiv = $('<div/>', {class: 'event wordwrap', id: id});
+      function toggle(e) {
+        $(e.target).next().toggle(300);
+      };
 
-      var text = '<b>[' + id + ']type:' + '</b>' + eventInfo.type +
-                 '<br/>' +
-                 '<b>tab:' + '</b>' + tab + '<br/>' +
-                 '<b>topURL:' + '</b>' + topURL + '<br/>' +
-                 '<b>port:' + '</b>' + portName + '<br/>' +
-                 '<b>topFrame:' + '</b>' + topFrame + '<br/>' +
-                 '<b>iframeIndex:' + '</b>' + iframeIndex + '<br/>' +
-                 '<b>waitTime:' + '</b>' + waitTime + '<br/>';
+      for (var cat in eventInfo) {
+        var props = eventInfo[cat];
+        var catDiv = $('<div/>', {class: 'category'});
 
-      for (var prop in eventInfo) {
-        if (prop != 'type') {
-          text += '<b>' + prop + ':' + '</b>' + "<span class='editable'>" + 
-              eventInfo[prop] + '</span>' + '<br/>';
+        var title = $('<div/>', {class: 'catTitle'})
+        title.text(cat);
+        catDiv.append(title);
+
+        var propsDiv =  $('<div/>');
+        for (var key in props) {
+          var propDiv = $('<div/>');
+          var text = '<b>' + key + ':' + '</b>' + "<span class='editable'>" + 
+              props[key] + '</span>' + '<br/>';
+          propDiv.append(text);
+          propsDiv.append(propDiv);
         }
+        catDiv.append(propsDiv);
+        eventDiv.append(catDiv);
+        propsDiv.hide();
+        title.click(toggle);
       }
-      newDiv.append(text);
-      $('#events').append(newDiv);
+      $('#events').append(eventDiv);
 
-      newDiv.children('span.editable').editable('http://www.example.com/save.php', { 
+      eventDiv.children('span.editable').editable('http://www.example.com/save.php', { 
         type      : 'textarea',
         cancel    : 'Cancel',
         submit    : 'OK',

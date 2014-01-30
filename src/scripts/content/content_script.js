@@ -65,8 +65,8 @@ function getMatchingEvent(eventData) {
     return null;
 
   var eventObject = portEvents[portEventsIdx];
-  var eventRecord = eventObject.msg.value;
-  if (eventRecord.type == eventData.type) {
+  var eventRecord = eventObject.value;
+  if (eventRecord.data.type == eventData.type) {
     portEventsIdx++;
     return eventObject;
   }
@@ -76,16 +76,12 @@ function getMatchingEvent(eventData) {
 
 // create an event record given the data from the event handler
 function recordEvent(eventData) {
-  var eventMessage;
-
   // check if we are stopped, then just return
   if (recording == RecordState.STOPPED)
     return true;
 
   var type = eventData.type;
   var dispatchType = getEventType(type);
-
-  var shouldRecord = params.events[dispatchType][type];
 
   // cancel the affects of events which are not extension generated or are not
   // picked up by the recorder
@@ -97,6 +93,8 @@ function recordEvent(eventData) {
     eventData.preventDefault();
     return false;
   }
+
+  var shouldRecord = params.events[dispatchType][type];
 
   if (recording == RecordState.RECORDING &&
       params.recording.cancelUnrecordedEvents && !shouldRecord) {
@@ -119,59 +117,29 @@ function recordEvent(eventData) {
   var target = eventData.target;
   var nodeName = target.nodeName.toLowerCase();
 
-  eventMessage = {};
+  var eventMessage = {
+    frame: {},
+    data: {},
+    timing: {},
+    meta: {}
+  };
 
   // deal with all the replay mess that we can't do in simulate
-  if (recording == RecordState.REPLAYING) {
-    addBenchmarkLog('recorded: ' + type);
-
-    var replayEvent = getMatchingEvent(eventData);
-    if (replayEvent) {
-      eventMessage.recordId = replayEvent.id;
-
-      replayEvent.replayed = true;
-      replayEvent = replayEvent.msg.value;
-
-      snapshotReplay(target);
-
-      // make sure the deltas from the last event actually happened
-      if (params.synthesis.enabled && lastReplayEvent) {
-        var recordDeltas = lastReplayEvent.deltas;
-        if (typeof recordDeltas == 'undefined') {
-          recordLog.error('no deltas found for last event:', lastReplayEvent);
-          recordDeltas = [];
-        }
-
-        // make sure replay matches recording
-        if (lastReplaySnapshot) {
-          var replayDeltas = getDeltas(lastReplaySnapshot.before,
-                                       lastReplaySnapshot.after);
-          // check if these deltas match the last simulated event
-          // and correct for unmatched deltas
-          fixDeltas(recordDeltas, replayDeltas, lastReplayEvent,
-                     lastReplaySnapshot.after);
-        }
-
-        //annotation events may have changed the effects of the last event
-        //have to make sure that anything associated with this event isn't
-        //from annotation events of last event
-        resnapshotBefore(target);
-      }
-      lastReplayEvent = replayEvent;
-    }
-  }
+  if (recording == RecordState.REPLAYING)
+    replayUpdateDeltas(eventData, eventMessage);
 
   // deal with snapshotting the DOM, calculating the deltas, and sending
   // updates
   updateDeltas(target);
 
-  eventMessage['target'] = saveTargetInfo(target, recording);
-  eventMessage['URL'] = document.URL;
-  eventMessage['dispatchType'] = dispatchType;
-  eventMessage['nodeName'] = nodeName;
-  eventMessage['pageEventId'] = pageEventId++;
-  eventMessage['recordState'] = recording;
+  eventMessage.data.target = saveTargetInfo(target, recording);
+  eventMessage.frame.URL = document.URL;
+  eventMessage.meta.dispatchType = dispatchType;
+  eventMessage.meta.nodeName = nodeName;
+  eventMessage.meta.pageEventId = pageEventId++;
+  eventMessage.meta.recordState = recording;
 
+  var e = eventMessage.data;
   // record all properties of the event object
   if (params.recording.allEventProps) {
     for (var prop in eventData) {
@@ -180,9 +148,9 @@ function recordEvent(eventData) {
         var type = typeof(data);
         if (type == 'number' || type == 'boolean' || type == 'string' ||
             type == 'undefined') {
-          eventMessage[prop] = eventData[prop];
+          e[prop] = eventData[prop];
         } else if (prop == 'relatedTarget' && isElement(data)) {
-          eventMessage[prop] = saveTargetInfo(data, recording);
+          e[prop] = saveTargetInfo(data, recording);
         }
       } catch (e) {
         recordLog.error('[' + id + '] error recording property:', prop, e);
@@ -192,13 +160,13 @@ function recordEvent(eventData) {
   } else {
     for (var prop in properties) {
       if (prop in eventData)
-        eventMessage[prop] = eventData[prop];
+        e[prop] = eventData[prop];
     }
   }
 
   // record the actual character, instead of just the charCode
-  if (eventMessage['charCode'])
-    eventMessage['char'] = String.fromCharCode(eventMessage['charCode']);
+  if (e['charCode'])
+    e['char'] = String.fromCharCode(e['charCode']);
 
   // save the event record
   recordLog.debug('[' + id + '] saving event message:', eventMessage);
@@ -219,9 +187,10 @@ function recordEvent(eventData) {
     var update = {
       type: 'updateEvent',
       value: {
-        'endEventId': lastRecordEvent.pageEventId,
-        'pageEventId': eventMessage.pageEventId,
-        'recording': recording
+        meta: {
+          endEventId: lastRecordEvent.meta.pageEventId,
+          pageEventId: eventMessage.meta.pageEventId
+        }
       },
       state: recording
     };
@@ -232,6 +201,45 @@ function recordEvent(eventData) {
   // TODO: special case with mouseover, need to return false
   return true;
 };
+
+// fix deltas that did not occur during replay
+function replayUpdateDeltas(eventData, eventMessage) {
+  var replayEvent = getMatchingEvent(eventData);
+  if (replayEvent) {
+
+    replayEvent.replayed = true;
+    replayEvent = replayEvent.value;
+
+    eventMessage.meta.recordId = replayEvent.meta.id;
+    var target = eventData.target;
+    snapshotReplay(target);
+
+    // make sure the deltas from the last event actually happened
+    if (params.synthesis.enabled && lastReplayEvent) {
+      var recordDeltas = lastReplayEvent.meta.deltas;
+      if (typeof recordDeltas == 'undefined') {
+        recordLog.error('no deltas found for last event:', lastReplayEvent);
+        recordDeltas = [];
+      }
+
+      // make sure replay matches recording
+      if (lastReplaySnapshot) {
+        var replayDeltas = getDeltas(lastReplaySnapshot.before,
+                                     lastReplaySnapshot.after);
+        // check if these deltas match the last simulated event
+        // and correct for unmatched deltas
+        fixDeltas(recordDeltas, replayDeltas, lastReplayEvent,
+                   lastReplaySnapshot.after);
+      }
+
+      //annotation events may have changed the effects of the last event
+      //have to make sure that anything associated with this event isn't
+      //from annotation events of last event
+      resnapshotBefore(target);
+    }
+    lastReplayEvent = replayEvent;
+  }
+}
 
 function resetRecord() {
   lastRecordEvent = null;
@@ -267,10 +275,11 @@ function updateDeltas(target) {
     var update = {
       type: 'updateEvent',
       value: {
-        'deltas': deltas,
-        'nodeSnapshot': snapshotNode(lastRecordSnapshot.target),
-        'pageEventId': lastRecordEvent.pageEventId,
-        'recording': recording
+        meta: {
+          deltas: deltas,
+          nodeSnapshot: snapshotNode(lastRecordSnapshot.target),
+          pageEventId: lastRecordEvent.meta.pageEventId,
+        }
       },
       state: recording
     };
@@ -327,7 +336,7 @@ function setPortEvents(events) {
 function getPortEventIndex(id) {
   for (var i = 0, ii = portEvents.length; i < ii; ++i) {
     var e = portEvents[i];
-    if (e.id == id) {
+    if (e.value.meta.id == id) {
       return i;
     }
   }
@@ -368,10 +377,9 @@ function simulate(request, startIndex) {
 
   var events = request.value;
   for (var i = startIndex, ii = events.length; i < ii; ++i) {
-    var eventRecord = events[i];
-    var msg = eventRecord.msg;
-    var id = eventRecord.id;
-    var eventData = msg.value;
+    var eventRecord = events[i].value;
+    var eventData = eventRecord.data;
+    var id = eventRecord.meta.id;
     var eventName = eventData.type;
 
     portEventsIdx = getPortEventIndex(id);
@@ -642,7 +650,7 @@ function fixDeltas(recordDeltas, replayDeltas, recordEvent, snapshot) {
   replayLog.info('record deltas not matched: ', recordDeltasNotMatched);
   replayLog.info('replay deltas not matched: ', replayDeltasNotMatched);
 
-  var element = getTarget(recordEvent.target);
+  var element = getTarget(recordEvent.data.target);
 
   for (var i = 0, ii = replayDeltasNotMatched.length; i < ii; ++i) {
     var delta = replayDeltasNotMatched[i];
