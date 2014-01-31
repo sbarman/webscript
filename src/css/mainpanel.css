@@ -75,6 +75,10 @@ body {
   background: #F0F0F0;
 }
 
+.catMenu {
+  padding-left: 4px;
+}
+
 .message {
   font: 15px arial, sans-serif;
   border-style: none none solid none;

@@ -198,6 +198,33 @@ var Panel = (function PanelClosure() {
         $(e.target).next().toggle(300);
       };
 
+      function createMenu(obj) {
+        var topDiv =  $('<div/>');
+        for (var key in obj) {
+          var val = obj[key];
+          if (typeof val == 'object' && key != 'snapshot') {
+            var catDiv = $('<div/>');
+            var title = $('<div/>', {class: 'catTitle'})
+            title.text(key);
+            title.click(toggle);
+            var menu = createMenu(val);
+
+            catDiv.append(title);
+            catDiv.append(menu);
+            menu.hide();
+            menu.addClass('catMenu');
+            topDiv.append(catDiv);
+          } else {
+            var propDiv = $('<div/>');
+            var text = '<b>' + key + ':' + '</b>' + "<span class='editable'>" + 
+                val + '</span>' + '<br/>';
+            propDiv.append(text);
+            topDiv.append(propDiv);
+          }
+        }
+        return topDiv;
+      }
+/*
       for (var cat in eventInfo) {
         var props = eventInfo[cat];
         var catDiv = $('<div/>', {class: 'category'});
@@ -219,10 +246,17 @@ var Panel = (function PanelClosure() {
         propsDiv.hide();
         title.click(toggle);
       }
+*/
       $('#events').append(eventDiv);
+      eventDiv.append(createMenu(eventInfo));
 
-      eventDiv.children('span.editable').editable('http://www.example.com/save.php', { 
+      function edited(value, settings) {
+        console.log('edited:', value, settings);
+      }
+
+      eventDiv.find('span.editable').editable(edited, { 
         type      : 'textarea',
+        width     : '100%',
         cancel    : 'Cancel',
         submit    : 'OK',
         indicator : '<img src="img/indicator.gif">',

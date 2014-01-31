@@ -23,13 +23,13 @@ var ScriptServer = (function ScriptServerClosure() {
         var evtMsg = {};
 
         var e = events[i];
-        var msgValue = e.msg.value;
-        evtMsg['event_type'] = msgValue.type;
+        var msgValue = e.value;
+        evtMsg['event_type'] = msgValue.data.type;
         evtMsg['execution_order'] = i;
 
         var parameters = [];
         prop: for (var prop in e) {
-          if (prop == 'msg') {
+          if (prop == 'value') {
             continue prop;
           }
           var propMsg = {};
@@ -173,7 +173,7 @@ var ScriptServer = (function ScriptServerClosure() {
 
           var scriptId = data.id;
           scriptServer.saveEvents(scriptId, events);
-          scriptServer.saveComments(scriptId, comments);
+          //scriptServer.saveComments(scriptId, comments);
           scriptServer.saveParams(scriptId, params);
         },
         contentType: 'application/json',
@@ -278,9 +278,9 @@ var ScriptServer = (function ScriptServerClosure() {
                   var e = serverEvents[i];
                   var serverParams = e.parameters;
                   var event = {};
-                  event.msg = {type: 'event', value: {}};
+                  event.value = {};
 
-                  var msgValue = event.msg.value;
+                  var msgValue = event.value;
 
                   for (var j = 0, jj = serverParams.length; j < jj; ++j) {
                     var p = serverParams[j];
