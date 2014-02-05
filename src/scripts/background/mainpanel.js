@@ -360,6 +360,21 @@ var Record = (function RecordClosure() {
     },
     getScriptId: function _getScriptId() {
       return this.scriptId;
+    },
+    userUpdate: function _userUpdate(eventId, field, value) {
+      function updateProp(obj, path, i) {
+        if (i == path.length - 1)
+          obj[path[i]] = value;
+        else
+          updateProp(obj[path[i]], path, i + 1);
+      }
+
+      var events = this.events;
+      for (var i = events.length - 1; i >= 0; --i) {
+        var value = events[i].value;
+        if (value.meta.id == eventId)
+          updateProp(value, field.split('.'), 0);
+      }
     }
   };
 
@@ -442,10 +457,20 @@ var Replay = (function ReplayClosure() {
     getStatus: function _getStatus() {
       return this.replayState;
     },
+    incrementIndex: function _incrementIndex() {
+      this.index += 1;
+
+      var index = this.index;
+      var events = this.events;
+      if (index < events.length) {
+        var e = events[index].value;
+        this.updateListeners({simulate: e.meta.id});
+      }
+    },
     setNextTimeout: function _setNextTimeout(time) {
       if (typeof time == 'undefined')
         time = this.getNextTime();
-
+       
       var replay = this;
       this.timeoutHandle = setTimeout(function() {
         replay.guts();
@@ -525,7 +550,7 @@ var Replay = (function ReplayClosure() {
       this.restart();
     },
     skip: function _skip() {
-      this.index++;
+      this.incrementIndex();
       this.replayState = ReplayState.REPLAYING;
     },
     resend: function _resend() {
@@ -581,6 +606,7 @@ var Replay = (function ReplayClosure() {
     saveCapture: function _saveCapture(capture, scriptId) {
       replayLog.log('capture:', capture, scriptId);
       this.captures.push(capture);
+      this.updateListeners({capture: capture.innerText.trim()});
     },
     findPortInTab: function _findPortInTab(frame) {
       var ports = this.ports;
@@ -728,7 +754,7 @@ var Replay = (function ReplayClosure() {
           var ackReturn = this.ports.getAck(this.ackVar);
           if (ackReturn != null && ackReturn == true) {
             this.replayState = ReplayState.REPLAYING;
-            this.index++;
+            this.incrementIndex();
             this.setNextTimeout(0);
 
             replayLog.log('found wait ack');
@@ -739,13 +765,13 @@ var Replay = (function ReplayClosure() {
           var ackReturn = this.ports.getAck(this.ackVar);
           // got ack
           if (ackReturn != null && ackReturn == true) {
-            this.replayState = ReplayState.REPLAYING;
-            this.index++;
+            this.incrementIndex();
             if (replayState == ReplayState.REPLAY_ACK)
               this.setNextTimeout();
             else
               this.pause();
 
+            this.replayState = ReplayState.REPLAYING;
             this.lastReplayPort = null;
             replayLog.log('found replay ack');
           // no ack, try again in one second
@@ -771,10 +797,15 @@ var Replay = (function ReplayClosure() {
         var v = e.value;
 
         if (params.replaying.cascadeCheck && this.checkReplayed(v)) {
-          this.replayState = ReplayState.REPLAYING;
-          this.index++;
           replayLog.debug('skipping event: ' + e.id);
-          this.setNextTimeout();
+          this.incrementIndex();
+          if (replayState == ReplayState.REPLAYING)
+            this.setNextTimeout();
+          else if (replayState == ReplayState.REPLAY_ONE)
+            this.pause();
+
+          this.replayState = ReplayState.REPLAYING;
+          this.lastReplayPort = null;
           return;
         }
 
@@ -785,7 +816,6 @@ var Replay = (function ReplayClosure() {
         var newPort = false;
 
         this.updateListeners({status: 'Replay ' + index});
-        this.updateListeners({simulate: meta.id});
 
         replayLog.log('background replay:', meta.id, v, port, tab);
 
@@ -871,7 +901,7 @@ var Replay = (function ReplayClosure() {
               replayLog.log('sent message', eventGroup);
               if (replayState == ReplayState.REPLAYING)
                 this.replayState = ReplayState.REPLAY_ACK;
-              else
+              else if (replayState == ReplayState.REPLAY_ONE)
                 this.replayState = ReplayState.REPLAY_ONE_ACK;
 
               replayLog.log('start waiting for replay ack');
@@ -886,7 +916,7 @@ var Replay = (function ReplayClosure() {
             var strategy = params.replaying.brokenPortStrategy;
             if (strategy == BrokenPortStrategy.RETRY) {
               if (v.data.cascading) {
-                this.index++;
+                this.incrementIndex();
                 this.setNextTimeout(0);
               } else {
                 // remove the mapping and try again
@@ -1147,9 +1177,19 @@ var Controller = (function ControllerClosure() {
       this.record.addListener(callback);
       this.replay.addListener(callback);
     },
+    updateListeners: function _updateListeners(msg) {
+      var listeners = this.listeners;
+      for (var i = 0, ii = listeners.length; i < ii; ++i) {
+        listeners[i](msg);
+      }
+    },
     submitInput: function _submitInput(text) {
       ctlLog.log(text);
     },
+    userUpdate: function _userUpdate(event, field, value) {
+      ctlLog.log('update:', event, field, value);
+      this.record.userUpdate(event, field, value);
+    }
   };
 
   return Controller;

@@ -313,13 +313,19 @@ function cancelCaptureNode() {
 function captureNodeReply(target) {
   recording = RecordState.RECORDING;
 
-  var eventMessage = {};
-  eventMessage['type'] = 'capture';
-  eventMessage['target'] = saveTargetInfo(target, recording);
-  eventMessage['URL'] = document.URL;
-  eventMessage['nodeName'] = target.nodeName.toLowerCase();
-  eventMessage['timeStamp'] = new Date().getTime();
-  eventMessage['recordState'] = recording;
+  var eventMessage = {
+    data: {},
+    frame: {},
+    meta: {},
+    timing: {}
+  };
+
+  eventMessage.data.type = 'capture';
+  eventMessage.data.target = saveTargetInfo(target, recording);
+  eventMessage.data.timeStamp = new Date().getTime();
+  eventMessage.frame.URL = document.URL;
+  eventMessage.meta.nodeName = target.nodeName.toLowerCase();
+  eventMessage.meta.recordState = recording;
 
   log.log('capturing:', target, eventMessage);
   port.postMessage({type: 'event', value: eventMessage, state: recording});

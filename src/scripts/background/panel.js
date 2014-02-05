@@ -29,6 +29,8 @@ var Panel = (function PanelClosure() {
         this.clearEvents();
       } else if ('simulate' in msg) {
         this.scroll(msg.simulate);
+      } else if ('capture' in msg) {
+        this.addMessage(msg.capture);
       } else {
         throw 'unknown controller update';
       }
@@ -198,16 +200,16 @@ var Panel = (function PanelClosure() {
         $(e.target).next().toggle(300);
       };
 
-      function createMenu(obj) {
+      function createMenu(obj, idPrefix) {
         var topDiv =  $('<div/>');
         for (var key in obj) {
           var val = obj[key];
-          if (typeof val == 'object' && key != 'snapshot') {
+          if (typeof val == 'object'/* && key != 'snapshot'*/) {
             var catDiv = $('<div/>');
             var title = $('<div/>', {class: 'catTitle'})
             title.text(key);
             title.click(toggle);
-            var menu = createMenu(val);
+            var menu = createMenu(val, idPrefix + '.'  + key);
 
             catDiv.append(title);
             catDiv.append(menu);
@@ -216,42 +218,29 @@ var Panel = (function PanelClosure() {
             topDiv.append(catDiv);
           } else {
             var propDiv = $('<div/>');
-            var text = '<b>' + key + ':' + '</b>' + "<span class='editable'>" + 
-                val + '</span>' + '<br/>';
-            propDiv.append(text);
+            propDiv.append('<b>' + key + ':' + '</b>');
+            var valSpan = $('<span/>',
+                            {class: 'editable', id: idPrefix + '.' + key});
+            valSpan.text(val);
+            propDiv.append(valSpan);
+            propDiv.append('<br/>');
             topDiv.append(propDiv);
           }
         }
         return topDiv;
       }
-/*
-      for (var cat in eventInfo) {
-        var props = eventInfo[cat];
-        var catDiv = $('<div/>', {class: 'category'});
 
-        var title = $('<div/>', {class: 'catTitle'})
-        title.text(cat);
-        catDiv.append(title);
-
-        var propsDiv =  $('<div/>');
-        for (var key in props) {
-          var propDiv = $('<div/>');
-          var text = '<b>' + key + ':' + '</b>' + "<span class='editable'>" + 
-              props[key] + '</span>' + '<br/>';
-          propDiv.append(text);
-          propsDiv.append(propDiv);
-        }
-        catDiv.append(propsDiv);
-        eventDiv.append(catDiv);
-        propsDiv.hide();
-        title.click(toggle);
-      }
-*/
       $('#events').append(eventDiv);
-      eventDiv.append(createMenu(eventInfo));
+      eventDiv.append(createMenu(eventInfo, id));
 
+      var controller = this.controller;
       function edited(value, settings) {
-        console.log('edited:', value, settings);
+        var id = this.id;
+        var parts = id.split('.');
+        var event = parts[0];
+        var field = parts.slice(1).join('.');
+        controller.userUpdate(event, field, value);
+        return value;
       }
 
       eventDiv.find('span.editable').editable(edited, { 
@@ -259,7 +248,6 @@ var Panel = (function PanelClosure() {
         width     : '100%',
         cancel    : 'Cancel',
         submit    : 'OK',
-        indicator : '<img src="img/indicator.gif">',
         tooltip   : 'Click to edit...'
       });
     },

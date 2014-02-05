@@ -9,6 +9,7 @@ body {
 
 #left>div, #center>div, #right>div {
   margin: 2px;
+  overflow: auto;
 }
 
 #left {
