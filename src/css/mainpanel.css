@@ -42,7 +42,6 @@ body {
 }
 
 #messages{
-  overflow: auto;
   width: 100%;
 }
 
@@ -57,6 +56,10 @@ body {
   outline: none;
   resize: none;
   width: 100%;
+}
+
+#box {
+  height: 100%;
 }
 
 .boxed {

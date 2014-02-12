@@ -131,7 +131,7 @@ var DomOutline = function (options) {
 
     function clickHandler(e) {
         pub.stop();
-        self.opts.onClick(pub.element);
+        self.opts.onClick(pub.element, e);
 
         return false;
     }

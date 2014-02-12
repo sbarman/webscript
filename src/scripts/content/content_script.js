@@ -26,6 +26,7 @@ var curReplaySnapshot; // snapshot taken before the next event is replayed
 var dispatchingEvent = false;
 var retryTimeout = null;
 var portEvents = null;
+var xPathMapping = null;
 var portEventsIdx = 0;
 var timeoutInfo = {startTime: 0, startIndex: 0, request: null};
 
@@ -339,6 +340,10 @@ function setPortEvents(events) {
   portEvents = events;
 }
 
+function setXPathMapping(mapping) {
+  xPathMapping = mapping;
+}
+
 function getPortEventIndex(id) {
   for (var i = 0, ii = portEvents.length; i < ii; ++i) {
     var e = portEvents[i];
@@ -412,6 +417,14 @@ function simulate(request, startIndex) {
 */
 
     var targetInfo = eventData.target;
+    var xpath = targetInfo.xpath;
+
+    var mapping = xPathMapping[xpath];
+    if (mapping && mapping.newVal == '*') {
+      generalizeXPath(targetInfo);
+      return;
+    }
+
     var target = getTarget(targetInfo);
     if (params.benchmarking.targetInfo) {
       var actualTargets = getTargetFunction(targetInfo);
@@ -547,6 +560,108 @@ function simulate(request, startIndex) {
   replayLog.debug('[' + id + '] sent ack');
 }
 
+// ***************************************************************************
+// Generalization code
+// ***************************************************************************
+
+var origTargetInfo;
+var examples;
+var ids;
+
+var exampleOutline = DomOutline({
+    borderWidth: 2,
+    onClick: addExample
+  }
+);
+
+function generalizeXPath(targetInfo) {
+  origTargetInfo = targetInfo;
+  examples = [];
+  ids = [];
+
+  log.log('starting generalization');
+  exampleOutline.start();
+  promptUser('Select a few elements in domain then press enter.',
+    function(response) {
+      generalizeFinish();
+    }
+  );
+}
+
+function addExample(target, event) {
+  var highlightId = highlightNode(target);
+
+  ids.push(highlightId);
+  examples.push(target);
+
+  event.preventDefault();
+  event.stopImmediatePropagation();
+
+  exampleOutline.start();
+}
+
+function generalizeFinish() {
+  for (var i = 0, ii = ids.length; i < ii; ++i)
+    dehighlightNode(ids[i]);
+
+  for (var i = 0, ii = examples.length; i < ii; ++i)
+    log.log(nodeToXPath(examples[i]));
+
+  var first = examples[0];
+  var parts = nodeToXPath(first).split('/');
+
+  var generalizedNodes = null;
+
+  parts: for (var i = parts.length - 1; i >= 0; --i) {
+    var newParts = parts.slice(0);
+    newParts.splice(i, 1, '*');
+    var newXPath = newParts.join('/');
+    var nodes = xPathToNodes(newXPath);
+
+    var isOk = true;
+    for (var j = 0, jj = examples.length; j < jj; ++j) {
+      if (nodes.indexOf(examples[j]) == -1) {
+        isOk = false;
+        continue parts;
+      }
+    }
+
+    generalizedNodes = nodes;
+    break;
+  }
+
+  if (generalizedNodes) {
+    for (var i = 0, ii = generalizedNodes.length; i < ii; ++i) {
+      highlightNode(generalizedNodes[i]);
+    } 
+  }
+
+  ids = [];
+  examples = [];
+  exampleOutline.stop();
+}
+
+// ***************************************************************************
+// Prompt code
+// ***************************************************************************
+
+var promptCallback = null;
+
+function promptUser(text, callback) {
+  if (!promptCallback)
+    log.warn('overwriting old prompt callback');
+
+  promptCallback = callback;
+  port.postMessage({type: 'prompt', value: text});
+}
+
+function promptResponse(text) {
+  if (promptCallback)
+    promptCallback(text);
+
+  promptCallback = null;
+}
+
 /*
 function addMemoizedTarget(xPath, target) {
   memoizedTargets.push([xPath, target]);
@@ -568,14 +683,17 @@ function getMemoizedTarget(xPath) {
 var highlightCount = 0;
 
 function highlightNode(target, time) {
+  var offset = $(target).offset();
   var boundingBox = target.getBoundingClientRect();
   var newDiv = $('<div/>');
   var idName = 'sbarman-hightlight-' + highlightCount;
   newDiv.attr('id', idName);
   newDiv.css('width', boundingBox.width);
   newDiv.css('height', boundingBox.height);
-  newDiv.css('top', boundingBox.top);
-  newDiv.css('left', boundingBox.left);
+  // newDiv.css('top', boundingBox.top);
+  // newDiv.css('left', boundingBox.left);
+  newDiv.css('top', offset.top);
+  newDiv.css('left', offset.left);
   newDiv.css('position', 'absolute');
   newDiv.css('z-index', 1000);
   newDiv.css('background-color', '#00FF00');
@@ -757,6 +875,10 @@ function handleMessage(request) {
     clearRetry();
   } else if (type == 'portEvents') {
     setPortEvents(request.value);
+  } else if (type == 'userUpdates') {
+    setXPathMapping(request.value);
+  } else if (type == 'promptResponse') {
+    promptResponse(request.value);
   } else {
     log.error('cannot handle message:', request);
   }

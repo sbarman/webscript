@@ -114,10 +114,10 @@ var Panel = (function PanelClosure() {
         if(e.which == 13 && !e.shiftKey) {
           var target = $(e.target);
           var val = target.val();
-          controller.submitInput(val);
-          panel.addMessage(val);
           target.val("");
           e.preventDefault();
+
+          panel.answer(val);
         }
       });
     },
@@ -255,6 +255,19 @@ var Panel = (function PanelClosure() {
       var newDiv = $('<div/>', {class: 'message wordwrap'});
       newDiv.text(message);
       $('#messages').prepend(newDiv);
+    },
+    question: function _question(text, callback) {
+      this.addMessage(text);
+      this.questionCallback = callback;
+    },
+    answer: function _answer(val) {
+      this.addMessage(val);
+
+      var callback = this.questionCallback;
+      if (callback) {
+        this.questionCallback = null;
+        callback(val);
+      }
     },
     clearEvents: function _clearEvents() {
       $('#events').empty();

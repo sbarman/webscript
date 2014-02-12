@@ -361,19 +361,33 @@ var Record = (function RecordClosure() {
     getScriptId: function _getScriptId() {
       return this.scriptId;
     },
-    userUpdate: function _userUpdate(eventId, field, value) {
+    userUpdate: function _userUpdate(eventId, field, newVal) {
       function updateProp(obj, path, i) {
         if (i == path.length - 1)
-          obj[path[i]] = value;
+          obj[path[i]] = newVal;
         else
           updateProp(obj[path[i]], path, i + 1);
       }
 
+      function getProp(obj, path, i) {
+        if (i == path.length - 1)
+          return obj[path[i]];
+        else
+          return getProp(obj[path[i]], path, i + 1);
+      }
+
       var events = this.events;
       for (var i = events.length - 1; i >= 0; --i) {
-        var value = events[i].value;
-        if (value.meta.id == eventId)
-          updateProp(value, field.split('.'), 0);
+        var event = events[i];
+        var value = event.value;
+        if (value.meta.id == eventId) {
+          var oldVal = getProp(value, field.split('.'), 0);
+          if (!value.userUpdate)
+            value.userUpdate = [];
+          value.userUpdate.push({eventId: eventId, field: field, oldVal: oldVal,
+                                 newVal: newVal});
+          // updateProp(value, field.split('.'), 0);
+        }
       }
     }
   };
@@ -385,15 +399,26 @@ var Record = (function RecordClosure() {
 var Replay = (function ReplayClosure() {
   var replayLog = getLog('replay');
 
-  function Replay(ports, scriptServer) {
+  function Replay(ports, scriptServer, user) {
     this.ports = ports;
     this.scriptServer = scriptServer;
+    this.user = user;
     this.record = new Record(ports);
     this.listeners = [];
 
     // replay variables
     this.reset();
   }
+
+  function yesNoCheck(response) {
+    if (response == 'yes' || response == 'y')
+      return 'yes';
+    else if (response == 'no' || response == 'n')
+      return 'no';
+
+    return null;
+  }
+
 
   Replay.prototype = {
     addListener: function _addListener(callback) {
@@ -404,6 +429,18 @@ var Replay = (function ReplayClosure() {
       for (var i = 0, ii = listeners.length; i < ii; ++i) {
         listeners[i](msg);
       }
+    },
+    getEvent: function _getEvent(eventId) {
+      var events = this.events;
+      if (!events)
+        return null;
+
+      for (var i = 0, ii = events.length; i < ii; ++i) {
+        var e = events[i];
+        if (e.value.meta.id == eventId)
+          return e
+      }
+      return null;
     },
     getEventsByPort: function _getEventsByPort(events) {
       var map = {};
@@ -430,9 +467,35 @@ var Replay = (function ReplayClosure() {
       this.replayState = ReplayState.REPLAYING;
       this.eventsByPort = this.getEventsByPort(events);
 
+      this.gatherUpdates(events);
+
       this.record.startRecording(true);
       this.ports.sendToAll({type: 'resetCompensation', value: null});
       this.setNextTimeout();
+    },
+    gatherUpdates: function _gatherUpdates(events) {
+      var allUpdates = [];
+      for (var i = 0, ii = events.length; i < ii; ++i) {
+        var e = events[i];
+        var userUpdate = e.value.userUpdate;
+        if (userUpdate)
+          allUpdates = allUpdates.concat(userUpdate);
+      }
+
+      var xPathMapping = {};
+      for (var i = 0, ii = allUpdates.length; i < ii; ++i) {
+        var update = allUpdates[i];
+        if (update.field == 'data.target.xpath') {
+          var e = this.getEvent(update.eventId);
+          var portName = e.value.frame.port;
+
+          if (!xPathMapping[portName])
+            xPathMapping[portName] = {};
+
+          xPathMapping[portName][update.oldVal] = update;
+        }
+      }
+      this.xPathMapping = xPathMapping;
     },
     reset: function _reset() {
       this.timeoutHandle = null;
@@ -843,17 +906,33 @@ var Replay = (function ReplayClosure() {
           }
         // need to open new tab
         } else {
+          var prompt = "Does the page exist? If so select the tab then type " +
+                       "'yes'. Else type 'no'.";
           var replay = this;
-          replayLog.log('need to open new tab');
-          chrome.tabs.create({url: frame.topURL, active: true},
-            function(newTab) {
-              replayLog.log('new tab opened:', newTab);
-              var newTabId = newTab.id;
-              replay.tabMapping[frame.tab] = newTabId;
-              replay.ports.tabIdToTab[newTabId] = newTab;
-              replay.setNextTimeout(params.replaying.defaultWaitNewTab);
+          var user = this.user;
+          user.question(prompt, yesNoCheck, function(answer) {
+            if (answer == 'no') {
+              replayLog.log('need to open new tab');
+              chrome.tabs.create({url: frame.topURL, active: true},
+                function(newTab) {
+                  replayLog.log('new tab opened:', newTab);
+                  var newTabId = newTab.id;
+                  replay.tabMapping[frame.tab] = newTabId;
+                  replay.ports.tabIdToTab[newTabId] = newTab;
+                  replay.setNextTimeout(params.replaying.defaultWaitNewTab);
+                }
+              );
+            } else if (answer == 'yes') {
+              var tabInfo = user.getActivatedTab()
+              chrome.tabs.get(tabInfo.tabId, function(tab) {
+                replayLog.log('mapping tab:', tab);
+                var tabId = tab.id;
+                replay.tabMapping[frame.tab] = tabId;
+                replay.ports.tabIdToTab[tabId] = tab;
+                replay.setNextTimeout(params.replaying.defaultWaitNewTab);
+              });
             }
-          );
+          });
           return;
         }
 
@@ -876,9 +955,13 @@ var Replay = (function ReplayClosure() {
             this.ports.clearAck();
             if (e.type == 'event') {
               // send message
-              if (newPort)
+              if (newPort) {
                 replayPort.postMessage({type: 'portEvents',
                                         value: this.eventsByPort[frame.port]});
+
+                var mapping = this.xPathMapping[frame.port] || {};
+                replayPort.postMessage({type: 'userUpdates', value: mapping});
+              }
 
               // TODO: we assume that events together are all from the same
               // port
@@ -945,7 +1028,7 @@ var Replay = (function ReplayClosure() {
         replayLog.error('error:', err.message, err);
         this.finish(err.toString());
       }
-    }
+    },
   };
 
   return Replay;
@@ -1050,7 +1133,44 @@ var SimultaneousReplay = (function SimultaneousReplayClosure() {
 })();
 */
 
-// Utility functions
+var User = (function UserClosure() {
+  var log = getLog('user');
+
+  function User(panel) {
+    this.panel = panel;
+    this.activeTab = null;
+  }
+
+  User.prototype = {
+    setPanel: function _setPanel(panel) {
+      this.panel = panel;
+    },
+    question: function _question(prompt, validation, callback) {
+      var panel = this.panel;
+      var user = this;
+      panel.question(prompt, function(answer) {
+        var sanitize = validation(answer);
+        if (sanitize)
+          callback(sanitize);
+        else
+          user.question(prompt, validation, callback);
+      });
+    },
+    activatedTab: function _activatedTab(tabInfo) {
+      this.activeTab = tabInfo;
+    },
+    getActivatedTab: function _getActivatedTab() {
+      return this.activeTab;
+    },
+    contentScriptQuestion: function _question(prompt, port) {
+      this.question(prompt, function() {return true;}, function(answer) {
+        port.postMessage({type: 'promptResponse', value: answer});
+      });
+    }
+  };
+
+  return User;
+})();
 
 var Controller = (function ControllerClosure() {
   var ctlLog = getLog('controller');
@@ -1186,9 +1306,9 @@ var Controller = (function ControllerClosure() {
     submitInput: function _submitInput(text) {
       ctlLog.log(text);
     },
-    userUpdate: function _userUpdate(event, field, value) {
-      ctlLog.log('update:', event, field, value);
-      this.record.userUpdate(event, field, value);
+    userUpdate: function _userUpdate(eventId, field, value) {
+      ctlLog.log('update:', eventId, field, value);
+      this.record.userUpdate(eventId, field, value);
     }
   };
 
@@ -1199,10 +1319,12 @@ var Controller = (function ControllerClosure() {
 var ports = new PortManager();
 var scriptServer = new ScriptServer(params.server);
 
+var user = new User(user);
 var record = new Record(ports);
-var replay = new Replay(ports, scriptServer);
+var replay = new Replay(ports, scriptServer, user);
 var controller = new Controller(record, replay, scriptServer, ports);
 var panel = new Panel(controller);
+user.setPanel(panel);
 
 /*
 var simultaneousReplayer = new SimultaneousReplay([], panel, ports);
@@ -1266,6 +1388,8 @@ function handleMessage(port, request) {
     controller.addDebug(request.value);
   } else if (request.type == 'benchmarkLog') {
     replay.addBenchmarkLog(request.value);
+  } else if (request.type == 'prompt') {
+    user.contentScriptQuestion(request.value, port);
   }
 }
 
@@ -1275,6 +1399,14 @@ chrome.runtime.onMessage.addListener(handleIdMessage);
 
 chrome.runtime.onConnect.addListener(function(port) {
   ports.connectPort(new Port(port));
+});
+
+chrome.tabs.getCurrent(function(curTab) {
+  var tabId = curTab.id;
+  chrome.tabs.onActivated.addListener(function(activeInfo) {
+    if (activeInfo.tabId != tabId)
+      user.activatedTab(activeInfo);
+  });
 });
 
 // window is closed so tell the content scripts to stop recording and reset the
@@ -1291,4 +1423,4 @@ $(window).resize(function() {
 
 ports.sendToAll({type: 'params', value: params});
 controller.stop();
-//controller.getScript('test');
+controller.getScript('fbtest');
