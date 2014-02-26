@@ -19,17 +19,17 @@ var PortManager = (function PortManagerClosure() {
   }
 
   PortManager.prototype = {
-    sendToAll: function(message) {
+    sendToAll: function _sendToAll(message) {
       portLog.log('sending to all:', message);
       var ports = this.ports;
       for (var portName in ports) {
         ports[portName].postMessage(message);
       }
     },
-    getTab: function(portName) {
+    getTab: function _getTab(portName) {
       return this.portNameToTabId[portName];
     },
-    getTabInfo: function(tab) {
+    getTabInfo: function _getTabInfo(tab) {
       var tabInfo = this.tabIdToTabInfo[tab];
       var ret = {};
       ret.frames = tabInfo.frames;
@@ -40,22 +40,26 @@ var PortManager = (function PortManagerClosure() {
 
       return ret;
     },
-    getTabFromTabId: function(tabId) {
+    getTabFromTabId: function _getTabFromTabId(tabId) {
       return this.tabIdToTab[tabId];
     },
-    getPort: function(portName) {
+    getPort: function _getPort(portName) {
       return this.ports[portName];
     },
-    getSnapshot: function(portName) {
+    getSnapshot: function _getSnapshot(portName) {
       return this.portToSnapshot[portName];
     },
-    addSnapshot: function(name, snapshot) {
+    addSnapshot: function _addSnapshot(name, snapshot) {
       this.portToSnapshot[name] = snapshot;
     },
-    updateUrl: function(port, url) {
+    updateUrl: function _updateUrl(port, url) {
       this.portNameToPortInfo[port.name].URL = url;
     },
-    getNewId: function(value, sender) {
+    removeTab: function _removeTab(tabId) {
+      delete this.tabIdToPortNames[tabId];
+      delete this.tabIdToTab[tabId];
+    },
+    getNewId: function _getNewId(value, sender) {
       // for some reason, the start page loads the content script but doesn't
       // have a tab id. in this case, don't assign an id
       if (!sender.tab) {
@@ -95,7 +99,7 @@ var PortManager = (function PortManagerClosure() {
       }
       return portName;
     },
-    connectPort: function(port) {
+    connectPort: function _connectPort(port) {
       var portName = port.name;
       var ports = this.ports;
 
@@ -472,7 +476,7 @@ var Replay = (function ReplayClosure() {
     },
     reset: function _reset() {
       this.timeoutHandle = null;
-      this.ackVar = null;
+      this.ack = null;
       this.index = 0;
       this.portMapping = {};
       this.tabMapping = {};
@@ -500,7 +504,8 @@ var Replay = (function ReplayClosure() {
       var events = this.events;
       if (index < events.length) {
         var e = events[index].value;
-        this.updateListeners({simulate: e.meta.id});
+        if (e.meta)
+          this.updateListeners({simulate: e.meta.id});
       }
     },
     setNextTimeout: function _setNextTimeout(time) {
@@ -786,9 +791,10 @@ var Replay = (function ReplayClosure() {
         var replayState = this.replayState;
 
         // check for acks
+        /*
         if (replayState == ReplayState.WAIT_ACK) {
-          var ackReturn = this.ports.getAck(this.ackVar);
-          if (ackReturn != null && ackReturn == true) {
+          var ack = this.ack;
+          if (ack != null && ack == true) {
             this.replayState = ReplayState.REPLAYING;
             this.incrementIndex();
             this.setNextTimeout(0);
@@ -796,11 +802,20 @@ var Replay = (function ReplayClosure() {
             replayLog.log('found wait ack');
             return;
           }
-        } else if (replayState == ReplayState.REPLAY_ACK ||
-                   replayState == ReplayState.REPLAY_ONE_ACK) {
-          var ackReturn = this.ports.getAck(this.ackVar);
-          // got ack
-          if (ackReturn != null && ackReturn == true) {
+        } else 
+        */
+        if (replayState == ReplayState.REPLAY_ACK ||
+            replayState == ReplayState.REPLAY_ONE_ACK) {
+
+          var ack = this.ack;
+          if (!ack) {
+            this.setNextTimeout(params.replaying.defaultWait);
+            replayLog.log('continue waiting for replay ack');
+            return;
+          }
+
+          type = ack.type;
+          if (type == Ack.SUCCESS) {
             this.incrementIndex();
             if (replayState == ReplayState.REPLAY_ACK)
               this.setNextTimeout();
@@ -810,10 +825,19 @@ var Replay = (function ReplayClosure() {
             this.replayState = ReplayState.REPLAYING;
             this.lastReplayPort = null;
             replayLog.log('found replay ack');
-          // no ack, try again in one second
-          } else {
-            this.setNextTimeout(params.replaying.defaultWait);
-            replayLog.log('continue waiting for replay ack');
+          } else if (type == Ack.PARTIAL) {
+            throw "partially executed commands";
+          } else if (type == Ack.GENERALIZE) {
+            this.generalizeScript(ack);
+
+            if (replayState == ReplayState.REPLAY_ACK)
+              this.setNextTimeout();
+            else
+              this.pause();
+
+            this.replayState = ReplayState.REPLAYING;
+            this.lastReplayPort = null;
+            replayLog.log('found replay ack');
           }
           return;
         }
@@ -831,6 +855,67 @@ var Replay = (function ReplayClosure() {
 
         var e = events[index];
         var v = e.value;
+
+        if (e.type == 'beginloop') {
+          console.log('begin loop');
+
+          // reset mappings
+          this.portMapping = jQuery.extend({}, v.portMapping);
+          this.tabMapping = jQuery.extend({}, v.tabMapping);
+          this.record.events = v.recordEvents.slice(0);
+
+          // close new tabs since original state
+          var currentTabIds = Object.keys(this.ports.tabIdToTab);
+          var tabIdToTab = v.tabIdToTab; 
+          for (var i = 0, ii = currentTabIds.length; i < ii; ++i) {
+            var tabId = currentTabIds[i];
+            if (!tabIdToTab[tabId])
+              chrome.tabs.remove(parseInt(tabId));
+          }
+
+          var endIndex = -1;
+          for (var i = index, ii = events.length; i < ii; ++i) {
+            var l = events[i];
+            if (l.type == 'endloop' && l.value.start == e) {
+              endIndex = i;
+              break;
+            }
+          }
+
+          // end the loop and continue
+          if (v.index >= v.nodes.length) {
+            this.index = endIndex;
+            this.incrementIndex();
+            this.setNextTimeout();
+          }
+
+
+          var newTarget = v.nodes[v.index];
+          v.index++;
+
+
+          var generalizeInfo = {
+            orig: v.orig,
+            new: newTarget
+          }
+
+          for (var i = index + 1; i < endIndex; ++i) {
+            events[i].value.generalize = generalizeInfo;
+          }
+
+          //replayPort.postMessage({type: 'portEvents',
+          //                        value: this.eventsByPort[frame.port]});
+
+          this.incrementIndex();
+          this.setNextTimeout();
+          return;
+        } else if (e.type == 'endloop') {
+          console.log('end loop');
+
+          this.index = events.indexOf(v.start);
+          this.setNextTimeout();
+          return;
+        }
 
         if (params.replaying.cascadeCheck && this.checkReplayed(v)) {
           replayLog.debug('skipping event: ' + e.id);
@@ -850,8 +935,6 @@ var Replay = (function ReplayClosure() {
         var port = frame.port;
         var tab = frame.tab;
         var newPort = false;
-
-        this.updateListeners({status: 'Replay ' + index});
 
         replayLog.log('background replay:', meta.id, v, port, tab);
 
@@ -879,6 +962,26 @@ var Replay = (function ReplayClosure() {
           }
         // need to open new tab
         } else {
+          var allTabs = Object.keys(this.ports.tabIdToTab);
+
+          var revMapping = {};
+          for (var t in tabMapping) {
+            revMapping[tabMapping[t]] = true;
+          }
+         
+          var unusedTabs = [];
+          for (var i = 0, ii = allTabs.length; i < ii; ++i) {
+            var tabId = allTabs[i];
+            if (!revMapping[tabId])
+              unusedTabs.push(tabId);
+          }
+
+          if (index != 0 && unusedTabs.length == 1) {
+            tabMapping[frame.tab] = unusedTabs[0];
+            this.setNextTimeout(0);
+            return;
+          }
+
           var prompt = "Does the page exist? If so select the tab then type " +
                        "'yes'. Else type 'no'.";
           var replay = this;
@@ -901,7 +1004,7 @@ var Replay = (function ReplayClosure() {
                 replayLog.log('mapping tab:', tab);
                 var tabId = tab.id;
                 replay.tabMapping[frame.tab] = tabId;
-                replay.ports.tabIdToTab[tabId] = tab;
+                // replay.ports.tabIdToTab[tabId] = tab;
                 replay.setNextTimeout(params.replaying.defaultWaitNewTab);
               });
             }
@@ -915,6 +1018,7 @@ var Replay = (function ReplayClosure() {
         var type = v.data.type;
 
         try {
+          /*
           if (replayState == ReplayState.WAIT_ACK) {
             var ackReturn = this.ports.getAck(this.ackVar);
             if (ackReturn == null || ackReturn != true) {
@@ -923,9 +1027,11 @@ var Replay = (function ReplayClosure() {
 
               replayLog.log('continue waiting for wait ack');
             }
-          } else if (replayState == ReplayState.REPLAYING ||
-                     replayState == ReplayState.REPLAY_ONE) {
-            this.ports.clearAck();
+          } else 
+          */
+          if (replayState == ReplayState.REPLAYING ||
+              replayState == ReplayState.REPLAY_ONE) {
+            this.ack = null;
             if (e.type == 'event') {
               // send message
               if (newPort) {
@@ -1002,6 +1108,36 @@ var Replay = (function ReplayClosure() {
         this.finish(err.toString());
       }
     },
+    receiveAck: function _receiveAck(ack) {
+      this.ack = ack;
+    },
+    generalizeScript: function _generalize(ack) {
+      var eventId = ack.eventId;
+
+      var events = this.events;
+      var e = this.getEvent(eventId);
+      var index = events.indexOf(e);
+
+      var loop = {type: 'beginloop', value: {}};
+      var value = loop.value;
+      value.nodes = ack.nodes;
+      value.orig = ack.orig;
+      value.portMapping = jQuery.extend({}, this.portMapping);
+      value.tabMapping = jQuery.extend({}, this.tabMapping);
+      value.index = 0;
+      value.timing = {waitTime: 0};
+      value.recordEvents = this.record.events.slice(0);
+      value.tabIdToTab = jQuery.extend({}, this.ports.tabIdToTab);
+
+      var endloop = {type: 'endloop', value: {}};
+      value = endloop.value;
+      value.timing = {waitTime: 0};
+      value.start = loop;
+
+      events.splice(index, 0, loop);
+      events.push(endloop);
+      this.index = index;
+    }
   };
 
   return Replay;
@@ -1255,6 +1391,10 @@ chrome.tabs.getCurrent(function(curTab) {
     if (activeInfo.tabId != tabId)
       user.activatedTab(activeInfo);
   });
+});
+
+chrome.tabs.onRemoved.addListener(function(tabId, removeInfo) {
+  ports.removeTab(tabId);
 });
 
 // window is closed so tell the content scripts to stop recording and reset the

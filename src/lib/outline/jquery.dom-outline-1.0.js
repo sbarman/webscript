@@ -159,5 +159,9 @@ var DomOutline = function (options) {
             .unbind('click.' + self.opts.namespace);
     };
 
+    pub.raiseClick = function(e) {
+        clickHandler(e);
+    };
+
     return pub;
 };

@@ -294,26 +294,42 @@ function updateDeltas(target) {
 
 var domOutline = DomOutline({
     borderWidth: 2,
-    onClick: captureNodeReply
+    onClick: onClickCapture
   }
 );
+
+var domOutlineCallback = null;
+
+function startCapture(callback) {
+  domOutlineCallback = callback;
+  domOutline.start();
+}
+
+function cancelCapture() {
+  domOutlineCallback = null;
+  domOutline.stop();
+}
+
+function onClickCapture(node, event) {
+  var callback = domOutlineCallback;
+  if (callback) {
+    domOutlineCallback = null;
+    callback(node, event);
+  }
+}
 
 function captureNode() {
   if (recording == RecordState.RECORDING) {
     log.log('starting node capture');
-    recording = RecordState.STOPPED;
-    domOutline.start();
+    startCapture(captureNodeReply);
   }
 }
 
 function cancelCaptureNode() {
-  recording = RecordState.RECORDING;
-  domOutline.stop();
+  cancelCapture();
 }
 
-function captureNodeReply(target) {
-  recording = RecordState.RECORDING;
-
+function captureNodeReply(target, event) {
   var eventMessage = {
     data: {},
     frame: {},
@@ -330,6 +346,9 @@ function captureNodeReply(target) {
 
   log.log('capturing:', target, eventMessage);
   port.postMessage({type: 'event', value: eventMessage, state: recording});
+  
+  event.preventDefault();
+  event.stopImmediatePropagation();
 }
 
 // ***************************************************************************
@@ -389,6 +408,13 @@ function simulate(request, startIndex) {
   var events = request.value;
   for (var i = startIndex, ii = events.length; i < ii; ++i) {
     var eventRecord = events[i].value;
+    var id = eventRecord.meta.id;
+    portEventsIdx = getPortEventIndex(id);
+    portEvents[portEventsIdx].replayed = false;
+  }
+
+  for (var i = startIndex, ii = events.length; i < ii; ++i) {
+    var eventRecord = events[i].value;
     var eventData = eventRecord.data;
     var id = eventRecord.meta.id;
     var eventName = eventData.type;
@@ -397,7 +423,6 @@ function simulate(request, startIndex) {
 
     // this event was detected by the recorder, so lets skip it
     if (params.replaying.cascadeCheck && portEvents[portEventsIdx].replayed) {
-      // port.postMessage({type: 'ack', value: true});
       continue;
     }
 
@@ -420,8 +445,13 @@ function simulate(request, startIndex) {
     var xpath = targetInfo.xpath;
 
     var mapping = xPathMapping[xpath];
-    if (mapping && mapping.newVal == '*') {
-      generalizeXPath(targetInfo);
+    var generalize = eventRecord.generalize;
+
+    if (generalize && generalize.orig.xpath == xpath) {
+      targetInfo = generalize.new;
+      xpath = generalize.new.xpath;
+    } else if (mapping && mapping.newVal == '*') {
+      generalizeXPath(targetInfo, id);
       return;
     }
 
@@ -556,7 +586,7 @@ function simulate(request, startIndex) {
     // update panel showing event was sent
     sendAlert('Dispatched event: ' + eventData.type);
   }
-  port.postMessage({type: 'ack', value: true});
+  port.postMessage({type: 'ack', value: {type: Ack.SUCCESS}});
   replayLog.debug('[' + id + '] sent ack');
 }
 
@@ -567,20 +597,16 @@ function simulate(request, startIndex) {
 var origTargetInfo;
 var examples;
 var ids;
+var eventId;
 
-var exampleOutline = DomOutline({
-    borderWidth: 2,
-    onClick: addExample
-  }
-);
-
-function generalizeXPath(targetInfo) {
+function generalizeXPath(targetInfo, id) {
   origTargetInfo = targetInfo;
+  eventId = id;
   examples = [];
   ids = [];
 
   log.log('starting generalization');
-  exampleOutline.start();
+  startCapture(addExample);
   promptUser('Select a few elements in domain then press enter.',
     function(response) {
       generalizeFinish();
@@ -597,7 +623,7 @@ function addExample(target, event) {
   event.preventDefault();
   event.stopImmediatePropagation();
 
-  exampleOutline.start();
+  startCapture(addExample);
 }
 
 function generalizeFinish() {
@@ -632,13 +658,28 @@ function generalizeFinish() {
 
   if (generalizedNodes) {
     for (var i = 0, ii = generalizedNodes.length; i < ii; ++i) {
-      highlightNode(generalizedNodes[i]);
+      var idName = highlightNode(generalizedNodes[i]);
+      setTimeout(function() {
+        dehighlightNode(idName);
+      }, 2000);
     } 
   }
 
   ids = [];
   examples = [];
-  exampleOutline.stop();
+  cancelCapture();
+
+  var nodesInfo = [];
+  for (var i = 0, ii = generalizedNodes.length; i < ii; ++i) {
+    nodesInfo.push(saveTargetInfo(generalizedNodes[i]));
+  }
+
+  port.postMessage({type: 'ack', value: {
+    type: Ack.GENERALIZE,
+    nodes: nodesInfo,
+    orig: origTargetInfo,
+    eventId: eventId
+  }});
 }
 
 // ***************************************************************************
@@ -914,8 +955,8 @@ chrome.runtime.sendMessage({type: 'getId', value: value}, function(resp) {
   port.addListener(handleMessage);
 
   // see if recording is going on
-  port.postMessage({type: 'getRecording', value: null});
   port.postMessage({type: 'getParams', value: null});
+  port.postMessage({type: 'getRecording', value: null});
 });
 
 var pollUrlId = window.setInterval(function() {

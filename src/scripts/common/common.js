@@ -16,6 +16,12 @@ var ReplayState = {
   STOPPED: 6
 };
 
+var Ack = {
+  SUCCESS: 1,
+  PARTIAL: 2,
+  GENERALIZE: 3
+}
+
 function lcs(x, y) {
   var s, i, j, m, n,
     lcs = [], row = [], c = [],
