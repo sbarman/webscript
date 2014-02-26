@@ -84,6 +84,15 @@ function recordEvent(eventData) {
   var type = eventData.type;
   var dispatchType = getEventType(type);
 
+  // we are capturing a node from the user
+  if (domOutlineCallback) {
+    if (type == 'click') {
+      domOutline.raiseClick(eventData);
+      return false;
+    }
+    return true;
+  }
+
   // cancel the affects of events which are not extension generated or are not
   // picked up by the recorder
   if (recording == RecordState.REPLAYING && !dispatchingEvent &&
