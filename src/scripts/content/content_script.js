@@ -1,10 +1,10 @@
+
 /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
 
 'use strict';
 
 var port; // port variable to send msgs to content script
-var annotationEvents = {}; // current annotation events used during replay
 
 // closure so global scope won't get dirty
 (function() {
@@ -178,6 +178,13 @@ function recordEvent(eventData) {
   if (e['charCode'])
     e['char'] = String.fromCharCode(e['charCode']);
 
+  for (var e in annotationEvents) {
+    var t = annotationEvents[e];
+    if (t.guard(eventMessage)) {
+      t.record(eventData, eventMessage);
+    }
+  }
+
   // save the event record
   recordLog.debug('[' + id + '] saving event message:', eventMessage);
   port.postMessage({type: 'event', value: eventMessage, state: recording});
@@ -206,7 +213,6 @@ function recordEvent(eventData) {
     };
     port.postMessage(update);
   }, 0);
-
 
   // TODO: special case with mouseover, need to return false
   return true;
@@ -415,12 +421,16 @@ function simulate(request, startIndex) {
   clearRetry();
 
   var events = request.value;
+  portEvents = events;
+  portEventsIdx = 0;
+  /*
   for (var i = startIndex, ii = events.length; i < ii; ++i) {
     var eventRecord = events[i].value;
     var id = eventRecord.meta.id;
     portEventsIdx = getPortEventIndex(id);
     portEvents[portEventsIdx].replayed = false;
   }
+  */
 
   for (var i = startIndex, ii = events.length; i < ii; ++i) {
     var eventRecord = events[i].value;
@@ -591,6 +601,13 @@ function simulate(request, startIndex) {
     dispatchingEvent = true;
     target.dispatchEvent(oEvent);
     dispatchingEvent = false;
+
+    for (var e in annotationEvents) {
+      var t = annotationEvents[e];
+      if (t.guard(eventRecord)) {
+        t.replay(target, eventRecord, events, i);
+      }
+    }
 
     // update panel showing event was sent
     sendAlert('Dispatched event: ' + eventData.type);
@@ -913,8 +930,6 @@ function handleMessage(request) {
     updateDeltas();
   } else if (type == 'reset') {
     resetRecord();
-  } else if (type == 'resetCompensation') {
-    annotationEvents = {};
   } else if (type == 'url') {
     port.postMessage({type: 'url', value: document.URL});
   } else if (type == 'capture') {
@@ -929,6 +944,8 @@ function handleMessage(request) {
     setXPathMapping(request.value);
   } else if (type == 'promptResponse') {
     promptResponse(request.value);
+  } else if (type == 'clipboard') {
+    replayClipboard = request.value;
   } else {
     log.error('cannot handle message:', request);
   }

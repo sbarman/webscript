@@ -447,7 +447,7 @@ var Replay = (function ReplayClosure() {
       this.gatherUpdates(events);
 
       this.record.startRecording(true);
-      this.ports.sendToAll({type: 'resetCompensation', value: null});
+      //this.ports.sendToAll({type: 'resetCompensation', value: null});
       this.setNextTimeout();
     },
     gatherUpdates: function _gatherUpdates(events) {
@@ -488,6 +488,7 @@ var Replay = (function ReplayClosure() {
       this.events = [];
       this.debug = [];
       this.benchmarkLog = '';
+      this.clipboard = null; 
 
       this.record.reset();
     },
@@ -1040,6 +1041,7 @@ var Replay = (function ReplayClosure() {
 
                 var mapping = this.xPathMapping[frame.port] || {};
                 replayPort.postMessage({type: 'userUpdates', value: mapping});
+                replayPort.postMessage({type: 'clipboard', value: this.clipboard});
               }
 
               // TODO: we assume that events together are all from the same
@@ -1110,6 +1112,10 @@ var Replay = (function ReplayClosure() {
     },
     receiveAck: function _receiveAck(ack) {
       this.ack = ack;
+    },
+    setClipboard: function _setClipboard(text) {
+      this.clipboard = text;
+      this.ports.sendToAll({type: 'clipboard', value: text});
     },
     generalizeScript: function _generalize(ack) {
       var eventId = ack.eventId;
@@ -1374,6 +1380,8 @@ function handleMessage(port, request) {
     replay.addBenchmarkLog(request.value);
   } else if (request.type == 'prompt') {
     user.contentScriptQuestion(request.value, port);
+  } else if (request.type == 'clipboard') {
+    replay.setClipboard(request.value);
   }
 }
 
@@ -1411,4 +1419,4 @@ $(window).resize(function() {
 
 ports.sendToAll({type: 'params', value: params});
 controller.stop();
-controller.getScript('fbtest');
+controller.getScript('copytest');
