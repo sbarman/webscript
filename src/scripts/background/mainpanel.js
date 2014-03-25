@@ -1405,6 +1405,19 @@ chrome.tabs.onRemoved.addListener(function(tabId, removeInfo) {
   ports.removeTab(tabId);
 });
 
+var filter = {urls: ['http://*/*', 'https://*/*'], 
+  types: ['main_frame', 'sub_frame', 'script', 'object', 'xmlhttprequest']};
+
+/*
+chrome.webRequest.onBeforeRequest.addListener(function(details) {
+  console.log('before request', details);
+}, filter);
+*/
+
+chrome.webRequest.onCompleted.addListener(function(details) {
+  console.log('completed', details);
+}, filter);
+
 // window is closed so tell the content scripts to stop recording and reset the
 // extension icon
 $(window).unload(function() {

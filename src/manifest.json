@@ -53,6 +53,7 @@
     "webNavigation", // used to listen to load events
     "webRequest",
     "webRequestBlocking",
-    "http://*/"
+    "http://*/*",
+    "https://*/*"
   ]
 }
