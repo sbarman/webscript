@@ -185,16 +185,22 @@ var Panel = (function PanelClosure() {
     addEvent: function _addEvent(eventRecord) {
       var eventInfo = eventRecord.value;
       var id = eventInfo.meta.id;
-      var type = eventInfo.data.type;
-      var xpath = eventInfo.data.target.xpath;
-      var URL = eventInfo.frame.URL;
-      var port = eventInfo.frame.port;
-
+      var type = eventRecord.type;
       var eventDiv = $('<div/>', {class: 'event wordwrap', id: id});
-      eventDiv.append('<b>[' + id + ']type:' + '</b>' + type + '<br/>');
-      eventDiv.append('<b>xpath:' + '</b>' + xpath + '<br/>');
-      eventDiv.append('<b>URL:' + '</b>' + URL + '<br/>');
-      eventDiv.append('<b>port:' + '</b>' + port + '<br/>');
+
+      if (type == 'event' || type == 'capture') {
+        var type = eventInfo.data.type;
+        var xpath = eventInfo.data.target.xpath;
+        var URL = eventInfo.frame.URL;
+        var port = eventInfo.frame.port;
+  
+        eventDiv.append('<b>[' + id + ']type:' + '</b>' + type + '<br/>');
+        eventDiv.append('<b>xpath:' + '</b>' + xpath + '<br/>');
+        eventDiv.append('<b>URL:' + '</b>' + URL + '<br/>');
+        eventDiv.append('<b>port:' + '</b>' + port + '<br/>');
+      } else {
+        eventDiv.append('<b>[' + id + ']type:' + '</b>' + type + '<br/>');
+      }
 
       function toggle(e) {
         $(e.target).next().toggle(300);

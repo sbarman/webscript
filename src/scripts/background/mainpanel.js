@@ -247,49 +247,55 @@ var Record = (function RecordClosure() {
       }
 
       var e = eventRequest.value;
-      var ports = this.ports;
-      var tab = ports.getTab(portName);
-      var portInfo = ports.getTabInfo(tab);
-      // TODO: this is broken, maybe
-      var topURL = portInfo.top.URL;
 
-      var topFrame = false;
-      var iframeIndex = -1;
+      if (portName) {
+        var ports = this.ports;
+        var tab = ports.getTab(portName);
+        var portInfo = ports.getTabInfo(tab);
+        // TODO: this is broken, maybe
+        var topURL = portInfo.top.URL;
 
-      if (portInfo.top.portName == portName) {
-        topFrame == true;
-      } else {
-        var frames = portInfo.frames;
-        for (var i = 0, ii = frames.length; i < ii; ++i) {
-          var frame = frames[i];
-          if (frame.portName == portName) {
-            iframeIndex = i;
-            break;
+        var topFrame = false;
+        var iframeIndex = -1;
+  
+        if (portInfo.top.portName == portName) {
+          topFrame == true;
+        } else {
+          var frames = portInfo.frames;
+          for (var i = 0, ii = frames.length; i < ii; ++i) {
+            var frame = frames[i];
+            if (frame.portName == portName) {
+              iframeIndex = i;
+              break;
+            }
           }
         }
+        var topFrame = (portInfo.top.portName == portName);
+  
+  
+        var time = e.data.timeStamp;
+        var lastTime = this.lastTime;
+        if (lastTime == 0) {
+          var waitTime = 0;
+        } else {
+          var waitTime = time - lastTime;
+        }
+        this.lastTime = time;
+  
+        e.frame.port = portName;
+        e.frame.topURL = topURL;
+        e.frame.topFrame = topFrame;
+        e.frame.iframeIndex = iframeIndex;
+        e.frame.tab = tab;
+        e.timing.waitTime = waitTime;
       }
-      var topFrame = (portInfo.top.portName == portName);
-
-
-      var time = e.data.timeStamp;
-      var lastTime = this.lastTime;
-      if (lastTime == 0) {
-        var waitTime = 0;
-      } else {
-        var waitTime = time - lastTime;
-      }
-      this.lastTime = time;
-
-      e.frame.port = portName;
-      e.frame.topURL = topURL;
-      e.frame.topFrame = topFrame;
-      e.frame.iframeIndex = iframeIndex;
-      e.frame.tab = tab;
-      e.timing.waitTime = waitTime;
 
       recordLog.log('added event:', eventRequest, portName);
 
       var events = this.events;
+      
+      if (!e.meta)
+        e.meta = {};
       e.meta.id = 'event' + events.length;
 
       this.events.push(eventRequest);
@@ -1415,7 +1421,24 @@ chrome.webRequest.onBeforeRequest.addListener(function(details) {
 */
 
 chrome.webRequest.onCompleted.addListener(function(details) {
-  console.log('completed', details);
+  if (record.recordState == RecordState.RECORDING) {
+    console.log('completed', details);
+
+    var e = {type: 'request'};
+    var v = {};
+
+    var data = {};
+    data.method = details.method;
+    data.parentFrameId = details.parentFrameId;
+    data.tabId = details.tabId;
+    data.type = details.type;
+    data.url = details.url;
+
+    v.data = data;
+    e.value = v;
+
+    record.addEvent(e);
+  }
 }, filter);
 
 // window is closed so tell the content scripts to stop recording and reset the
