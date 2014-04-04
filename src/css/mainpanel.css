@@ -41,6 +41,11 @@ body {
   height: 100%;
 }
 
+.selected {
+  outline: cyan solid 2px;
+  margin: 2px;
+}
+
 #messages{
   width: 100%;
 }

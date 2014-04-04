@@ -177,7 +177,8 @@ var TimeoutStrategy = {
       brokenPortStrategy: BrokenPortStrategy.RETRY,
       atomic: true,
       cascadeCheck: true,
-      urlSimilarity: 0.8
+      urlSimilarity: 0.8,
+      defaultUser: false
     },
     //server: 'http://sbarman.webfactional.com/api/',
     server: 'http://127.0.0.1:8000/api/',

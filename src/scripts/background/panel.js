@@ -13,6 +13,10 @@ var Panel = (function PanelClosure() {
     this.attachHandlers(controller);
     this.resize();
 
+    this.events = [];
+    this.selectStart = null;
+    this.selectEvents = null;
+
     var panel = this;
     controller.addListener(function(msg) {
       panel.controllerUpdate(msg);
@@ -44,6 +48,8 @@ var Panel = (function PanelClosure() {
       $('#input').autosize();
     },
     attachHandlers: function _attachHandlers(controller) {
+      var panel = this;
+
       $('#start').click(function(eventObject) {
         controller.start();
       });
@@ -82,6 +88,14 @@ var Panel = (function PanelClosure() {
 
       $('#replayOne').click(function(eventObject) {
         controller.replayOne();
+      });
+
+      $('#loop').click(function(eventObject) {
+        controller.loop(panel.selectEvents);
+      });
+
+      $('#next').click(function(eventObject) {
+        controller.next(panel.selectEvents);
       });
 
       /*
@@ -182,11 +196,64 @@ var Panel = (function PanelClosure() {
       }
       this.controller.updateParams();
     },
+    updateSelectedEvents: function _updateSelectedEvents(e) {
+      var target = e.target;
+      while (target.className.indexOf('event') < 0) {
+        target = target.parentElement;
+      }
+
+      var selectStart = this.selectStart;
+      var selectEvents = this.selectEvents;
+
+      if (!e.shiftKey) {
+        this.selectStart = target.id;
+        this.selectEvents = [target.id];
+      } else {
+        var selectEnd = target.id;
+        if (selectStart && selectStart != selectEnd) {
+
+          var events = this.events;
+          var selectEvents = [];
+          var foundStart = false;
+
+          for (var i = 0, ii = events.length; i < ii; ++i) {
+            var id = events[i].value.meta.id;
+            if (id == selectStart || id == selectEnd) {
+              if (!foundStart) {
+                foundStart = true;
+              } else {
+                selectEvents.push(id);
+                break;
+              }
+            }
+
+            if (foundStart)
+              selectEvents.push(id);
+          }
+          this.selectEvents = selectEvents;
+        }
+      }
+
+      var selectEvents = this.selectEvents;
+      $('.event').removeClass('selected');
+      $('.event').filter(function(index) {
+        return selectEvents.indexOf(this.id) >= 0;
+      }).addClass('selected');
+    },
     addEvent: function _addEvent(eventRecord) {
+      this.events.push(eventRecord);
+
       var eventInfo = eventRecord.value;
       var id = eventInfo.meta.id;
       var type = eventRecord.type;
       var eventDiv = $('<div/>', {class: 'event wordwrap', id: id});
+     
+      var title = $('<div><b>[' + id + ']type:' + '</b>' + type + '</div>');
+      var panel = this;
+      title.click(function(e) {
+        panel.updateSelectedEvents(e);
+      });
+      eventDiv.append(title);
 
       if (type == 'event' || type == 'capture') {
         var type = eventInfo.data.type;
@@ -194,12 +261,10 @@ var Panel = (function PanelClosure() {
         var URL = eventInfo.frame.URL;
         var port = eventInfo.frame.port;
   
-        eventDiv.append('<b>[' + id + ']type:' + '</b>' + type + '<br/>');
+        eventDiv.append('<b>type:' + '</b>' + type + '<br/>');
         eventDiv.append('<b>xpath:' + '</b>' + xpath + '<br/>');
         eventDiv.append('<b>URL:' + '</b>' + URL + '<br/>');
         eventDiv.append('<b>port:' + '</b>' + port + '<br/>');
-      } else {
-        eventDiv.append('<b>[' + id + ']type:' + '</b>' + type + '<br/>');
       }
 
       function toggle(e) {
@@ -277,6 +342,7 @@ var Panel = (function PanelClosure() {
     },
     clearEvents: function _clearEvents() {
       $('#events').empty();
+      this.events = [];
     },
     updateStatus: function _updateStatus(status) {
       $('#status').text(status);

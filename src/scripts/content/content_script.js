@@ -122,6 +122,7 @@ function recordEvent(eventData) {
   // continue recording the event
   recordLog.debug('[' + id + '] process event:', type, dispatchType,
                 eventData);
+  sendAlert('Recorded event: ' + type);
 
   var properties = getEventProps(type);
   var target = eventData.target;
@@ -597,6 +598,9 @@ function simulate(request, startIndex) {
     }
     document.dispatchEvent(new CustomEvent('webscript', {detail: detail}));
 
+    // update panel showing event was sent
+    sendAlert('Dispatched event: ' + eventData.type);
+
     // this does the actual event simulation
     dispatchingEvent = true;
     target.dispatchEvent(oEvent);
@@ -608,9 +612,6 @@ function simulate(request, startIndex) {
         t.replay(target, eventRecord, events, i);
       }
     }
-
-    // update panel showing event was sent
-    sendAlert('Dispatched event: ' + eventData.type);
   }
   port.postMessage({type: 'ack', value: {type: Ack.SUCCESS}});
   replayLog.debug('[' + id + '] sent ack');
@@ -938,9 +939,11 @@ function handleMessage(request) {
     cancelCaptureNode();
   } else if (type == 'pauseReplay') {
     clearRetry();
+/*
   } else if (type == 'portEvents') {
     setPortEvents(request.value);
-  } else if (type == 'userUpdates') {
+*/
+    } else if (type == 'userUpdates') {
     setXPathMapping(request.value);
   } else if (type == 'promptResponse') {
     promptResponse(request.value);

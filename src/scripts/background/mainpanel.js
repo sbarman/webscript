@@ -240,7 +240,7 @@ var Record = (function RecordClosure() {
       commentList.push(comment);
       this.commentCounter += 1;
     },
-    addEvent: function _addEvent(eventRequest, portName) {
+    addEvent: function _addEvent(eventRequest, portName, index) {
       if (this.capturing && eventRequest.value.type == 'capture') {
         this.ports.sendToAll({type: 'cancelCapture', value: null});
         this.capturing = false;
@@ -298,10 +298,15 @@ var Record = (function RecordClosure() {
         e.meta = {};
       e.meta.id = 'event' + events.length;
 
-      this.events.push(eventRequest);
-      this.updateListeners({event: eventRequest});
-
-      this.commentCounter = 0;
+      if (typeof index == 'number') {
+        this.events.splice(index, 0, eventRequest);
+        this.updateListeners({event: eventRequest, index: index});
+      } else {
+        this.events.push(eventRequest);
+        this.updateListeners({event: eventRequest});
+        this.commentCounter = 0;
+      }
+      return e.meta.id;
     },
     updateEvent: function _updateEvent(eventRequest, portName) {
       var updates = eventRequest.value;
@@ -314,7 +319,7 @@ var Record = (function RecordClosure() {
       for (var i = events.length - 1; i >= 0; --i) {
         var e = events[i];
         var value = e.value;
-        if (value.frame.port == portName && 
+        if (e.type == 'event' && value.frame.port == portName && 
             value.meta.pageEventId == pageEventId) {
           for (var type in updates) {
             var typeUpdates = updates[type];
@@ -373,7 +378,45 @@ var Record = (function RecordClosure() {
           // updateProp(value, field.split('.'), 0);
         }
       }
-    }
+    },
+    getEvent: function _getEvent(eventId) {
+      var events = this.events;
+      if (!events)
+        return null;
+
+      for (var i = 0, ii = events.length; i < ii; ++i) {
+        var e = events[i];
+        if (e.value.meta.id == eventId)
+          return e
+      }
+      return null;
+    },
+    addLoop: function _addLoop(eventIds) {
+      var events = this.events;
+
+      var begin = events.indexOf(this.getEvent(eventIds[0]));
+      var e = {type: 'beginloop', value: {data: {}}};
+      var beginEventId = this.addEvent(e, null, begin);
+
+      var end = events.indexOf(this.getEvent(eventIds[eventIds.length - 1]));
+      var e = {type: 'endloop', value: {data: {begin: beginEventId}}};
+      this.addEvent(e, null, end + 1);
+
+      this.setEvents(events);
+    },
+    addNextLoop: function _addNextLoop(eventIds) {
+      var events = this.events;
+
+      var begin = events.indexOf(this.getEvent(eventIds[0]));
+      var e = {type: 'beginnext', value: {data: {}}};
+      var beginEventId = this.addEvent(e, null, begin);
+
+      var end = events.indexOf(this.getEvent(eventIds[eventIds.length - 1]));
+      var e = {type: 'endnext', value: {data: {begin: beginEventId}}};
+      this.addEvent(e, null, end + 1);
+
+      this.setEvents(events);
+    },
   };
 
   return Record;
@@ -425,6 +468,7 @@ var Replay = (function ReplayClosure() {
       }
       return null;
     },
+/*
     getEventsByPort: function _getEventsByPort(events) {
       var map = {};
       for (var i = 0, ii = events.length; i < ii; ++i) {
@@ -437,7 +481,10 @@ var Replay = (function ReplayClosure() {
       }
       return map;
     },
+*/
     replay: function _replay(events, scriptId, cont) {
+      this.record = record;
+
       replayLog.log('starting replay');
 
       this.pause();
@@ -448,7 +495,7 @@ var Replay = (function ReplayClosure() {
       this.scriptId = scriptId;
       this.cont = cont;
       this.replayState = ReplayState.REPLAYING;
-      this.eventsByPort = this.getEventsByPort(events);
+//      this.eventsByPort = this.getEventsByPort(events);
 
       this.gatherUpdates(events);
 
@@ -495,8 +542,6 @@ var Replay = (function ReplayClosure() {
       this.debug = [];
       this.benchmarkLog = '';
       this.clipboard = null; 
-
-      this.record.reset();
     },
     addBenchmarkLog: function _addBenchmarkLog(text) {
       this.benchmarkLog += text + '\n';
@@ -515,6 +560,16 @@ var Replay = (function ReplayClosure() {
           this.updateListeners({simulate: e.meta.id});
       }
     },
+    getNextDomEventIndex: function _getNextDomEventIndex() {
+      var index = this.index;
+      var events = this.events;
+
+      for (var i = index, ii = events.length; i < ii; ++i) {
+        if (events[i].type == 'event')
+          return i;
+      }
+      return events.length;
+    },
     setNextTimeout: function _setNextTimeout(time) {
       if (typeof time == 'undefined')
         time = this.getNextTime();
@@ -527,7 +582,7 @@ var Replay = (function ReplayClosure() {
     getNextTime: function _getNextTime() {
       var timing = params.replaying.timingStrategy;
 
-      var index = this.index;
+      var index = this.getNextDomEventIndex();
       var events = this.events;
       var waitTime = 0;
 
@@ -862,8 +917,9 @@ var Replay = (function ReplayClosure() {
 
         var e = events[index];
         var v = e.value;
+        var type = e.type;
 
-        if (e.type == 'beginloop') {
+        if (type == 'beginloop') {
           console.log('begin loop');
 
           // reset mappings
@@ -914,13 +970,18 @@ var Replay = (function ReplayClosure() {
           //                        value: this.eventsByPort[frame.port]});
 
           this.incrementIndex();
-          this.setNextTimeout();
+          this.setNextTimeout(0);
           return;
-        } else if (e.type == 'endloop') {
-          console.log('end loop');
+        } else if (type == 'endloop') {
+          replayLog.log('end loop');
 
           this.index = events.indexOf(v.start);
-          this.setNextTimeout();
+          this.setNextTimeout(0);
+          return;
+        } else if (type != 'event') {
+          replayLog.log('skipping event:', e);
+          this.incrementIndex();
+          this.setNextTimeout(0);
           return;
         }
 
@@ -969,6 +1030,7 @@ var Replay = (function ReplayClosure() {
           }
         // need to open new tab
         } else {
+          /*
           var allTabs = Object.keys(this.ports.tabIdToTab);
 
           var revMapping = {};
@@ -988,12 +1050,13 @@ var Replay = (function ReplayClosure() {
             this.setNextTimeout(0);
             return;
           }
+          */
 
           var prompt = "Does the page exist? If so select the tab then type " +
                        "'yes'. Else type 'no'.";
           var replay = this;
           var user = this.user;
-          user.question(prompt, yesNoCheck, function(answer) {
+          user.question(prompt, yesNoCheck, 'no', function(answer) {
             if (answer == 'no') {
               replayLog.log('need to open new tab');
               chrome.tabs.create({url: frame.topURL, active: true},
@@ -1042,9 +1105,10 @@ var Replay = (function ReplayClosure() {
             if (e.type == 'event') {
               // send message
               if (newPort) {
+/*
                 replayPort.postMessage({type: 'portEvents',
                                         value: this.eventsByPort[frame.port]});
-
+*/
                 var mapping = this.xPathMapping[frame.port] || {};
                 replayPort.postMessage({type: 'userUpdates', value: mapping});
                 replayPort.postMessage({type: 'clipboard', value: this.clipboard});
@@ -1167,16 +1231,21 @@ var User = (function UserClosure() {
     setPanel: function _setPanel(panel) {
       this.panel = panel;
     },
-    question: function _question(prompt, validation, callback) {
+    question: function _question(prompt, validation, defaultAnswer, callback) {
       var panel = this.panel;
       var user = this;
-      panel.question(prompt, function(answer) {
-        var sanitize = validation(answer);
-        if (sanitize)
-          callback(sanitize);
-        else
-          user.question(prompt, validation, callback);
-      });
+
+      if (params.replaying.defaultUser) {
+        callback(defaultAnswer);
+      } else {
+        panel.question(prompt, function(answer) {
+          var sanitize = validation(answer);
+          if (sanitize)
+            callback(sanitize);
+          else
+            user.question(prompt, validation, callback);
+        });
+      }
     },
     activatedTab: function _activatedTab(tabInfo) {
       this.activeTab = tabInfo;
@@ -1185,7 +1254,7 @@ var User = (function UserClosure() {
       return this.activeTab;
     },
     contentScriptQuestion: function _question(prompt, port) {
-      this.question(prompt, function() {return true;}, function(answer) {
+      this.question(prompt, function() {return true;}, "", function(answer) {
         port.postMessage({type: 'promptResponse', value: answer});
       });
     }
@@ -1260,6 +1329,12 @@ var Controller = (function ControllerClosure() {
     },
     replayOne: function() {
       this.replay.replayOne();
+    },
+    loop: function(eventIds) {
+      this.record.addLoop(eventIds);
+    },
+    next: function(eventIds) {
+      this.record.addNextLoop(eventIds);
     },
     saveScript: function(name) {
       ctlLog.log('saving script');
@@ -1422,7 +1497,7 @@ chrome.webRequest.onBeforeRequest.addListener(function(details) {
 
 chrome.webRequest.onCompleted.addListener(function(details) {
   if (record.recordState == RecordState.RECORDING) {
-    console.log('completed', details);
+    bgLog.log('completed', details);
 
     var e = {type: 'request'};
     var v = {};
@@ -1455,4 +1530,17 @@ $(window).resize(function() {
 
 ports.sendToAll({type: 'params', value: params});
 controller.stop();
-controller.getScript('copytest');
+controller.getScript('googlescholar');
+
+
+function printEvents() {
+  var events = record.events;
+  var text = JSON.stringify(events, null, 2);
+  bgLog.log(text);
+}
+
+function printReplayEvents() {
+  var events = replay.record.events;
+  var text = JSON.stringify(events, null, 2);
+  bgLog.log(text);
+}

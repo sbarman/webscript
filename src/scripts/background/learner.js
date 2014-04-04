@@ -220,3 +220,123 @@ function runLearner(id) {
   var l = new Learner(ports, record, scriptServer, controller);
   l.search(id);
 }
+
+var SimpleDebug = (function SimpleDebugClosure() {
+  var log = getLog('simpledebug');
+
+  function SimpleDebug(orig, removeDeltas, test) {
+    this.orig = orig;
+    this.removeDeltas = removeDeltas;
+    this.test = test;
+  }
+
+  SimpleDebug.prototype = {
+    run: function _run() {
+      this.required = [];
+      this.index = 0;
+
+      this.runTest();
+    },
+    runTest: function _runTest() {
+      var deltas = this.removeDeltas;
+      var index = this.index;
+
+      if (index >= deltas.length) {
+        log.log('finished minimizing:', this.required);
+        return;
+      }
+
+      var cur = jQuery.extend(true, [], this.orig);
+      cur = deltas[index](cur); 
+
+      var test = this.test;
+      var simpleDebug = this;
+
+      test(cur, function(result) {
+        if (!result) {
+          simpleDebug.required.push(index);
+        }
+        simpleDebug.index++;
+        simpleDebug.runTest();
+      });
+    }
+  }
+
+  return SimpleDebug;
+})();
+
+function runSimpleDebug(scriptId) {
+  params.replaying.eventTimeout = 15;
+  params.replaying.defaultUser = true;
+  controller.updateParams();
+
+  scriptServer.getScript(scriptId, true, function(id, events) {
+
+    var expCaptures = [];
+    for (var i = 0, ii = events.length; i < ii; ++i) {
+      var e = events[i];
+      if (e.value.data.type == 'capture') {
+        expCaptures.push(e);
+      }
+    }
+
+    var removeEvents = [];
+    for (var i = 0, ii = events.length; i < ii; ++i) {
+      var e = events[i];
+      if (e.type == 'event') {
+        (function() {
+          var eventId = e.value.meta.id;
+          removeEvents.push(function(origEvents) {
+            for (var j = 0, jj = origEvents.length; j < jj; ++j) {
+              if (origEvents[j].value.meta.id == eventId) {
+                origEvents.splice(j, 1);
+                break;
+              }
+            }
+            return origEvents;
+          });
+        })();
+      }
+    }
+
+    function testScript(scriptEvents, callback) {
+      var timeoutId = -1;
+
+      var r = controller.replayScript(id, scriptEvents, function(replay) {
+        clearTimeout(timeoutId);
+
+        if (replay.index != replay.events.length) {
+          callback(false);
+          return;
+        }
+
+        var captures = replay.captures;
+        for (var i = 0, ii = expCaptures.length; i < ii; ++i) {
+          if (i >= captures.length) {
+            callback(false);
+            return;
+          }
+
+          var c = captures[i];
+          var e = expCaptures[i];
+
+          var eText = e.value.data.target.snapshot.prop.innerText;
+          var cText = c.innerText;
+          if (eText != cText) {
+            callback(false);
+            return;
+          }
+        }
+        callback(true);
+      });
+
+      // kill script after timeout period
+      timeoutId = setTimeout(function() {
+        r.finish();
+      }, 300 * 1000);
+    }
+
+    var debug = new SimpleDebug(events, removeEvents, testScript);
+    debug.run();
+  });
+}
