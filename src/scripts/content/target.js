@@ -128,17 +128,19 @@ var saveTargetInfo;
     var metaInfo = [];
 
     for (var strategy in targetFunctions) {
-      var strategyTargets = targetFunctions[strategy](targetInfo);
-      for (var i = 0, ii = strategyTargets.length; i < ii; ++i) {
-        var t = strategyTargets[i];
-        var targetIndex = targets.indexOf(t);
-        if (targetIndex == -1) {
-          targets.push(t);
-          metaInfo.push([strategy]);
-        } else {
-          metaInfo[targetIndex].push(strategy);
+      try {
+        var strategyTargets = targetFunctions[strategy](targetInfo);
+        for (var i = 0, ii = strategyTargets.length; i < ii; ++i) {
+          var t = strategyTargets[i];
+          var targetIndex = targets.indexOf(t);
+          if (targetIndex == -1) {
+            targets.push(t);
+            metaInfo.push([strategy]);
+          } else {
+            metaInfo[targetIndex].push(strategy);
+          }
         }
-      }
+      } catch (e) {}
     }
 
     var maxStrategies = 0;

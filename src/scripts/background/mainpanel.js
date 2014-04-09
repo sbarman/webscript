@@ -391,31 +391,30 @@ var Record = (function RecordClosure() {
       }
       return null;
     },
-    addLoop: function _addLoop(eventIds) {
+    addGeneralLoop: function _addGeneralLoop(type, eventIds) {
       var events = this.events;
 
       var begin = events.indexOf(this.getEvent(eventIds[0]));
-      var e = {type: 'beginloop', value: {data: {}}};
-      var beginEventId = this.addEvent(e, null, begin);
+      var beginEvent = {type: 'begin' + type, value: {}};
+      beginEvent.value.data = {};
+      beginEvent.value.timing = {waitTime: 0};
+      var beginEventId = this.addEvent(beginEvent, null, begin);
 
       var end = events.indexOf(this.getEvent(eventIds[eventIds.length - 1]));
-      var e = {type: 'endloop', value: {data: {begin: beginEventId}}};
-      this.addEvent(e, null, end + 1);
+      var endEvent = {type: 'end' + type, value: {}};
+      endEvent.value.data = {begin: beginEventId};
+      endEvent.value.timing = {waitTime: 0};
+      var endEventId = this.addEvent(endEvent, null, end + 1);
+
+      beginEvent.value.data.end = endEventId;
 
       this.setEvents(events);
     },
+    addLoop: function _addLoop(eventIds) {
+      this.addGeneralLoop('loop', eventIds);
+    },
     addNextLoop: function _addNextLoop(eventIds) {
-      var events = this.events;
-
-      var begin = events.indexOf(this.getEvent(eventIds[0]));
-      var e = {type: 'beginnext', value: {data: {}}};
-      var beginEventId = this.addEvent(e, null, begin);
-
-      var end = events.indexOf(this.getEvent(eventIds[eventIds.length - 1]));
-      var e = {type: 'endnext', value: {data: {begin: beginEventId}}};
-      this.addEvent(e, null, end + 1);
-
-      this.setEvents(events);
+      this.addGeneralLoop('next', eventIds);
     },
   };
 
@@ -483,8 +482,6 @@ var Replay = (function ReplayClosure() {
     },
 */
     replay: function _replay(events, scriptId, cont) {
-      this.record = record;
-
       replayLog.log('starting replay');
 
       this.pause();
@@ -497,12 +494,13 @@ var Replay = (function ReplayClosure() {
       this.replayState = ReplayState.REPLAYING;
 //      this.eventsByPort = this.getEventsByPort(events);
 
-      this.gatherUpdates(events);
+//      this.gatherUpdates(events);
 
       this.record.startRecording(true);
       //this.ports.sendToAll({type: 'resetCompensation', value: null});
       this.setNextTimeout();
     },
+/*
     gatherUpdates: function _gatherUpdates(events) {
       var allUpdates = [];
       for (var i = 0, ii = events.length; i < ii; ++i) {
@@ -527,6 +525,7 @@ var Replay = (function ReplayClosure() {
       }
       this.xPathMapping = xPathMapping;
     },
+*/
     reset: function _reset() {
       this.timeoutHandle = null;
       this.ack = null;
@@ -542,6 +541,8 @@ var Replay = (function ReplayClosure() {
       this.debug = [];
       this.benchmarkLog = '';
       this.clipboard = null; 
+
+      this.record.reset();
     },
     addBenchmarkLog: function _addBenchmarkLog(text) {
       this.benchmarkLog += text + '\n';
@@ -720,14 +721,14 @@ var Replay = (function ReplayClosure() {
       if (!portInfo)
         return;
 
-      var newPort = null;
+      var port = null;
 
       if (frame.topFrame) {
         replayLog.log('assume port is top level page');
         var topFrame = portInfo.top;
         if (topFrame) {
           if (matchUrls(frame.URL, topFrame.URL))
-            newPort = ports.getPort(topFrame.portName);
+            port = ports.getPort(topFrame.portName);
         }
       } else {
         replayLog.log('try to find port in one of the iframes');
@@ -809,8 +810,8 @@ var Replay = (function ReplayClosure() {
         }
         */
       }
-      replayLog.log('found port:', newPort);
-      return newPort;
+      replayLog.log('found port:', port);
+      return port;
     },
     checkReplayed: function _checkReplayed(e) {
       var id = e.meta.id;
@@ -839,6 +840,89 @@ var Replay = (function ReplayClosure() {
         }
       }
       return false;
+    },
+    getMatchingPort: function _getMatchingPort(eventObj) {
+      var portMapping = this.portMapping;
+      var tabMapping = this.tabMapping;
+
+      var v = eventObj.value;
+      var frame = v.frame;
+      var port = frame.port;
+      var tab = frame.tab;
+
+      // lets find the corresponding port
+      var replayPort = null;
+      // we have already seen this port, reuse existing mapping
+      if (port in portMapping) {
+        replayPort = portMapping[port];
+        replayLog.log('port already seen', replayPort);
+
+      // we have already seen this tab, find equivalent port for tab
+      // for now we will just choose the last port added from this tab
+      } else if (tab in tabMapping) {
+        var replayPort = this.findPortInTab(frame);
+
+        if (replayPort) {
+          portMapping[port] = replayPort;
+          //newPort = true;
+          replayLog.log('tab already seen, found port:', replayPort);
+        } else {
+          this.setNextTimeout(params.replaying.defaultWait);
+          replayLog.log('tab already seen, no port found');
+          this.addDebug('tab already seen, no port found');
+        }
+      // need to open new tab
+      } else {
+        /*
+        var allTabs = Object.keys(this.ports.tabIdToTab);
+
+        var revMapping = {};
+        for (var t in tabMapping) {
+          revMapping[tabMapping[t]] = true;
+        }
+       
+        var unusedTabs = [];
+        for (var i = 0, ii = allTabs.length; i < ii; ++i) {
+          var tabId = allTabs[i];
+          if (!revMapping[tabId])
+            unusedTabs.push(tabId);
+        }
+
+        if (index != 0 && unusedTabs.length == 1) {
+          tabMapping[frame.tab] = unusedTabs[0];
+          this.setNextTimeout(0);
+        }
+        */
+
+        var prompt = "Does the page exist? If so select the tab then type " +
+                     "'yes'. Else type 'no'.";
+        var replay = this;
+        var user = this.user;
+        user.question(prompt, yesNoCheck, 'no', function(answer) {
+          if (answer == 'no') {
+            replayLog.log('need to open new tab');
+            chrome.tabs.create({url: frame.topURL, active: true},
+              function(newTab) {
+                replayLog.log('new tab opened:', newTab);
+                var newTabId = newTab.id;
+                replay.tabMapping[frame.tab] = newTabId;
+                replay.ports.tabIdToTab[newTabId] = newTab;
+                replay.setNextTimeout(params.replaying.defaultWaitNewTab);
+              }
+            );
+          } else if (answer == 'yes') {
+            var tabInfo = user.getActivatedTab()
+            chrome.tabs.get(tabInfo.tabId, function(tab) {
+              replayLog.log('mapping tab:', tab);
+              var tabId = tab.id;
+              replay.tabMapping[frame.tab] = tabId;
+              // replay.ports.tabIdToTab[tabId] = tab;
+              replay.setNextTimeout(params.replaying.defaultWaitNewTab);
+            });
+          }
+        });
+      }
+      return replayPort;
     },
     guts: function _guts() {
       try {
@@ -906,8 +990,6 @@ var Replay = (function ReplayClosure() {
 
         var events = this.events;
         var index = this.index;
-        var portMapping = this.portMapping;
-        var tabMapping = this.tabMapping;
 
         if (index >= events.length) {
           this.addDebug('finished script');
@@ -920,64 +1002,97 @@ var Replay = (function ReplayClosure() {
         var type = e.type;
 
         if (type == 'beginloop') {
-          console.log('begin loop');
+          if (!v.prefixes) {
+            replayLog.log('generalizing next event');
 
-          // reset mappings
-          this.portMapping = jQuery.extend({}, v.portMapping);
-          this.tabMapping = jQuery.extend({}, v.tabMapping);
-          this.record.events = v.recordEvents.slice(0);
+            var nextEventIdx = index + 1;
 
-          // close new tabs since original state
-          var currentTabIds = Object.keys(this.ports.tabIdToTab);
-          var tabIdToTab = v.tabIdToTab; 
-          for (var i = 0, ii = currentTabIds.length; i < ii; ++i) {
-            var tabId = currentTabIds[i];
-            if (!tabIdToTab[tabId])
-              chrome.tabs.remove(parseInt(tabId));
-          }
-
-          var endIndex = -1;
-          for (var i = index, ii = events.length; i < ii; ++i) {
-            var l = events[i];
-            if (l.type == 'endloop' && l.value.start == e) {
-              endIndex = i;
-              break;
+            for (var i = index + 1, ii = events.length; i < ii; ++i) {
+            
+              if (events[nextEventIdx].type == 'event') {
+                var eventType = events[nextEventIdx].value.data.type;
+                if (eventType.indexOf('mouse') != -1 ||
+                    eventType == 'capture') {
+                  nextEventIdx = i;
+                  break;
+                }
+              }
             }
-          }
 
-          // end the loop and continue
-          if (v.index >= v.nodes.length) {
-            this.index = endIndex;
+            var nextEvent = events[nextEventIdx];
+            var port = this.getMatchingPort(nextEvent);
+
+            if (!port)
+              return;
+
+            port.postMessage({type: 'generalize', value: nextEvent});
+            this.replayState = ReplayState.REPLAY_ACK;
+            return;
+          } else {
+            console.log('begin loop');
+  
+            // reset mappings
+            this.portMapping = jQuery.extend({}, v.portMapping);
+            this.tabMapping = jQuery.extend({}, v.tabMapping);
+            this.record.events = v.recordEvents.slice(0);
+  
+            // close new tabs since original state
+            var currentTabIds = Object.keys(this.ports.tabIdToTab);
+            var tabIdToTab = v.tabIdToTab; 
+            for (var i = 0, ii = currentTabIds.length; i < ii; ++i) {
+              var tabId = currentTabIds[i];
+              if (!tabIdToTab[tabId])
+                chrome.tabs.remove(parseInt(tabId));
+            }
+  
+            // end the loop and continue
+            if (v.index >= v.prefixes.length) {
+              this.index = endIndex;
+              this.incrementIndex();
+              this.setNextTimeout();
+            }
+
+            var endEvent = this.getEvent(v.data.end);
+            var endIndex = events.indexOf(endEvent);
+  
+            var newPrefix = v.prefixes[v.index];
+            v.index++;
+  
+            var generalizeInfo = {
+              orig: v.orig,
+              new: newPrefix
+            }
+  
+            for (var i = index + 1; i < endIndex; ++i) {
+              events[i].value.generalize = generalizeInfo;
+            }
+  
+            //replayPort.postMessage({type: 'portEvents',
+            //                        value: this.eventsByPort[frame.port]});
+  
             this.incrementIndex();
-            this.setNextTimeout();
+            this.setNextTimeout(0);
+            return;
           }
+        } else if (type == 'endloop') {
+          replayLog.log('end loop');
 
-
-          var newTarget = v.nodes[v.index];
-          v.index++;
-
-
-          var generalizeInfo = {
-            orig: v.orig,
-            new: newTarget
-          }
-
-          for (var i = index + 1; i < endIndex; ++i) {
-            events[i].value.generalize = generalizeInfo;
-          }
-
-          //replayPort.postMessage({type: 'portEvents',
-          //                        value: this.eventsByPort[frame.port]});
-
+          var beginEvent = this.getEvent(v.data.begin);
+          this.index = events.indexOf(beginEvent);
+          this.setNextTimeout(0);
+          return;
+        } else if (type == 'beginnext') {
+          
+          replayLog.log('skipping event:', e);
           this.incrementIndex();
           this.setNextTimeout(0);
           return;
-        } else if (type == 'endloop') {
+
+        } else if (type == 'endnext') {
           replayLog.log('end loop');
 
           this.index = events.indexOf(v.start);
           this.setNextTimeout(0);
-          return;
         } else if (type != 'event') {
           replayLog.log('skipping event:', e);
           this.incrementIndex();
@@ -998,89 +1113,14 @@ var Replay = (function ReplayClosure() {
           return;
         }
 
-        var frame = v.frame;
         var meta = v.meta;
-        var port = frame.port;
-        var tab = frame.tab;
-        var newPort = false;
+        //var newPort = false;
 
-        replayLog.log('background replay:', meta.id, v, port, tab);
+        replayLog.log('background replay:', meta.id, v);
 
-        // lets find the corresponding port
-        var replayPort = null;
-        // we have already seen this port, reuse existing mapping
-        if (port in portMapping) {
-          replayPort = portMapping[port];
-          replayLog.log('port already seen', replayPort);
-
-        // we have already seen this tab, find equivalent port for tab
-        // for now we will just choose the last port added from this tab
-        } else if (tab in tabMapping) {
-          var replayPort = this.findPortInTab(frame);
-
-          if (replayPort) {
-            portMapping[port] = replayPort;
-            newPort = true;
-            replayLog.log('tab already seen, found port:', replayPort);
-          } else {
-            this.setNextTimeout(params.replaying.defaultWait);
-            replayLog.log('tab already seen, no port found');
-            this.addDebug('tab already seen, no port found');
-            return;
-          }
-        // need to open new tab
-        } else {
-          /*
-          var allTabs = Object.keys(this.ports.tabIdToTab);
-
-          var revMapping = {};
-          for (var t in tabMapping) {
-            revMapping[tabMapping[t]] = true;
-          }
-         
-          var unusedTabs = [];
-          for (var i = 0, ii = allTabs.length; i < ii; ++i) {
-            var tabId = allTabs[i];
-            if (!revMapping[tabId])
-              unusedTabs.push(tabId);
-          }
-
-          if (index != 0 && unusedTabs.length == 1) {
-            tabMapping[frame.tab] = unusedTabs[0];
-            this.setNextTimeout(0);
-            return;
-          }
-          */
-
-          var prompt = "Does the page exist? If so select the tab then type " +
-                       "'yes'. Else type 'no'.";
-          var replay = this;
-          var user = this.user;
-          user.question(prompt, yesNoCheck, 'no', function(answer) {
-            if (answer == 'no') {
-              replayLog.log('need to open new tab');
-              chrome.tabs.create({url: frame.topURL, active: true},
-                function(newTab) {
-                  replayLog.log('new tab opened:', newTab);
-                  var newTabId = newTab.id;
-                  replay.tabMapping[frame.tab] = newTabId;
-                  replay.ports.tabIdToTab[newTabId] = newTab;
-                  replay.setNextTimeout(params.replaying.defaultWaitNewTab);
-                }
-              );
-            } else if (answer == 'yes') {
-              var tabInfo = user.getActivatedTab()
-              chrome.tabs.get(tabInfo.tabId, function(tab) {
-                replayLog.log('mapping tab:', tab);
-                var tabId = tab.id;
-                replay.tabMapping[frame.tab] = tabId;
-                // replay.ports.tabIdToTab[tabId] = tab;
-                replay.setNextTimeout(params.replaying.defaultWaitNewTab);
-              });
-            }
-          });
+        var replayPort = this.getMatchingPort(e);
+        if (!replayPort)
           return;
-        }
 
         // we have hopefully found a matching port, lets dispatch to that port
         this.lastReplayPort = replayPort;
@@ -1104,15 +1144,17 @@ var Replay = (function ReplayClosure() {
             this.ack = null;
             if (e.type == 'event') {
               // send message
-              if (newPort) {
 /*
+              if (newPort) {
+
                 replayPort.postMessage({type: 'portEvents',
                                         value: this.eventsByPort[frame.port]});
-*/
+
                 var mapping = this.xPathMapping[frame.port] || {};
                 replayPort.postMessage({type: 'userUpdates', value: mapping});
-                replayPort.postMessage({type: 'clipboard', value: this.clipboard});
               }
+*/
+              replayPort.postMessage({type: 'clipboard', value: this.clipboard});
 
               // TODO: we assume that events together are all from the same
               // port
@@ -1123,7 +1165,7 @@ var Replay = (function ReplayClosure() {
                 var events = this.events;
                 while (t < events.length &&
                        endEvent >= events[t].value.meta.pageEventId &&
-                       port == events[t].value.frame.port) {
+                       v.frame.port == events[t].value.frame.port) {
                   eventGroup.push(events[t]);
                   t++;
                 }
@@ -1182,37 +1224,28 @@ var Replay = (function ReplayClosure() {
     },
     receiveAck: function _receiveAck(ack) {
       this.ack = ack;
+      if (ack.setTimeout)
+        this.setNextTimeout(0);
     },
     setClipboard: function _setClipboard(text) {
       this.clipboard = text;
       this.ports.sendToAll({type: 'clipboard', value: text});
     },
     generalizeScript: function _generalize(ack) {
-      var eventId = ack.eventId;
+//      var eventId = ack.eventId;
 
       var events = this.events;
-      var e = this.getEvent(eventId);
-      var index = events.indexOf(e);
+      var index = this.index;
+      var e = events[index];
 
-      var loop = {type: 'beginloop', value: {}};
-      var value = loop.value;
-      value.nodes = ack.nodes;
+      var value = e.value;
+      value.prefixes = ack.prefixes;
       value.orig = ack.orig;
       value.portMapping = jQuery.extend({}, this.portMapping);
       value.tabMapping = jQuery.extend({}, this.tabMapping);
       value.index = 0;
-      value.timing = {waitTime: 0};
       value.recordEvents = this.record.events.slice(0);
       value.tabIdToTab = jQuery.extend({}, this.ports.tabIdToTab);
-
-      var endloop = {type: 'endloop', value: {}};
-      value = endloop.value;
-      value.timing = {waitTime: 0};
-      value.start = loop;
-
-      events.splice(index, 0, loop);
-      events.push(endloop);
-      this.index = index;
     }
   };
 
@@ -1530,7 +1563,7 @@ $(window).resize(function() {
 
 ports.sendToAll({type: 'params', value: params});
 controller.stop();
-controller.getScript('googlescholar');
+controller.getScript('googlescholarsimple');
 
 
 function printEvents() {

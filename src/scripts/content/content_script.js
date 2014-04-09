@@ -464,16 +464,19 @@ function simulate(request, startIndex) {
     var targetInfo = eventData.target;
     var xpath = targetInfo.xpath;
 
-    var mapping = xPathMapping[xpath];
+//    var mapping = xPathMapping[xpath];
     var generalize = eventRecord.generalize;
 
-    if (generalize && generalize.orig.xpath == xpath) {
-      targetInfo = generalize.new;
-      xpath = generalize.new.xpath;
-    } else if (mapping && mapping.newVal == '*') {
+    if (generalize && xpath.indexOf(generalize.orig) == 0) {
+      xpath = xpath.replace(generalize.orig, generalize.new);
+      targetInfo = {xpath: xpath};
+    }
+   /*
+    else if (mapping && mapping.newVal == '*') {
       generalizeXPath(targetInfo, id);
       return;
     }
+  */
 
     var target = getTarget(targetInfo);
     if (params.benchmarking.targetInfo) {
@@ -621,14 +624,12 @@ function simulate(request, startIndex) {
 // Generalization code
 // ***************************************************************************
 
-var origTargetInfo;
+var origXPath;
 var examples;
 var ids;
-var eventId;
 
-function generalizeXPath(targetInfo, id) {
-  origTargetInfo = targetInfo;
-  eventId = id;
+function generalizeXPath(eventObj) {
+  origXPath = eventObj.value.data.target.xpath;
   examples = [];
   ids = [];
 
@@ -660,27 +661,32 @@ function generalizeFinish() {
   for (var i = 0, ii = examples.length; i < ii; ++i)
     log.log(nodeToXPath(examples[i]));
 
-  var first = examples[0];
-  var parts = nodeToXPath(first).split('/');
-
+  var parts = origXPath.split('/');
   var generalizedNodes = null;
+  var maxStars = 2;
 
-  parts: for (var i = parts.length - 1; i >= 0; --i) {
-    var newParts = parts.slice(0);
-    newParts.splice(i, 1, '*');
-    var newXPath = newParts.join('/');
-    var nodes = xPathToNodes(newXPath);
+  console.log(origXPath);
 
-    var isOk = true;
-    for (var j = 0, jj = examples.length; j < jj; ++j) {
-      if (nodes.indexOf(examples[j]) == -1) {
-        isOk = false;
-        continue parts;
+  starsloop: for (var numStars = 1; numStars <= maxStars; ++numStars) {
+    partsloop: for (var i = parts.length - numStars; i >= 0; --i) {
+      var newParts = parts.slice(0);
+      for (var k = 0; k < numStars; ++k) {
+        newParts.splice(i + k, 1, '*');
       }
-    }
+      var newXPath = newParts.join('/');
+      console.log(newXPath);
+      var nodes = xPathToNodes(newXPath);
 
-    generalizedNodes = nodes;
-    break;
+      // check to see if xpath is valid
+      for (var j = 0, jj = examples.length; j < jj; ++j) {
+        if (nodes.indexOf(examples[j]) == -1) {
+          continue partsloop;
+        }
+      }
+
+      generalizedNodes = nodes;
+      break starsloop;
+    }
   }
 
   if (generalizedNodes) {
@@ -690,7 +696,17 @@ function generalizeFinish() {
         dehighlightNode(idName);
       }, 2000);
     } 
+  } else {
+    log.error('no nodes found');
+    return;
   }
+
+  console.log(newXPath);
+  console.log(origXPath);
+
+  // find the last occurence of * in xpath to find prefix in original xpath
+  var lastStarIndex = newParts.lastIndexOf('*');
+  var origPrefix = parts.slice(0, lastStarIndex + 1).join('/');
 
   ids = [];
   examples = [];
@@ -698,14 +714,16 @@ function generalizeFinish() {
 
   var nodesInfo = [];
   for (var i = 0, ii = generalizedNodes.length; i < ii; ++i) {
-    nodesInfo.push(saveTargetInfo(generalizedNodes[i]));
+    var newParts = nodeToXPath(generalizedNodes[i]).split('/');
+    var newPrefix = newParts.slice(0, lastStarIndex + 1).join('/');
+    nodesInfo.push(newPrefix);
   }
 
   port.postMessage({type: 'ack', value: {
     type: Ack.GENERALIZE,
-    nodes: nodesInfo,
-    orig: origTargetInfo,
-    eventId: eventId
+    prefixes: nodesInfo,
+    orig: origPrefix,
+    setTimeout: true
   }});
 }
 
@@ -949,6 +967,8 @@ function handleMessage(request) {
     promptResponse(request.value);
   } else if (type == 'clipboard') {
     replayClipboard = request.value;
+  } else if (type == 'generalize') {
+    generalizeXPath(request.value);
   } else {
     log.error('cannot handle message:', request);
   }

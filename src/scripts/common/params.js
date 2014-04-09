@@ -184,7 +184,7 @@ var TimeoutStrategy = {
     server: 'http://127.0.0.1:8000/api/',
     benchmarking: {
       timeout: 600,
-      targetInfo: true
+      targetInfo: false
     }
   };
 
