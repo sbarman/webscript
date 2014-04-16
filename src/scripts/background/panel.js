@@ -348,7 +348,9 @@ var Panel = (function PanelClosure() {
       $('#status').text(status);
     },
     scroll: function _scroll(id) {
-      $('#' + id).get(0).scrollIntoView();
+      var div = $('#' + id);
+      if (div.size() > 0)
+        div.get(0).scrollIntoView();
     },
     resize: function _resize() {
       $('#accordion').accordion('refresh');

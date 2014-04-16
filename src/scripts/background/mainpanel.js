@@ -397,6 +397,7 @@ var Record = (function RecordClosure() {
       var begin = events.indexOf(this.getEvent(eventIds[0]));
       var beginEvent = {type: 'begin' + type, value: {}};
       beginEvent.value.data = {};
+      beginEvent.value.reset = {};
       beginEvent.value.timing = {waitTime: 0};
       var beginEventId = this.addEvent(beginEvent, null, begin);
 
@@ -489,6 +490,9 @@ var Replay = (function ReplayClosure() {
 
       this.startTime = new Date().getTime();
       this.events = events;
+      for (var i = 0, ii = events.length; i < ii; ++i)
+        this.resetEvent(events[i]);
+
       this.scriptId = scriptId;
       this.cont = cont;
       this.replayState = ReplayState.REPLAYING;
@@ -499,6 +503,36 @@ var Replay = (function ReplayClosure() {
       this.record.startRecording(true);
       //this.ports.sendToAll({type: 'resetCompensation', value: null});
       this.setNextTimeout();
+    },
+    subReplay: function _subReplay(events, scriptId, tabMapping, check, cont,
+                                   timeout) {
+      var props = Object.keys(this);
+      var copy = {};
+      for (var i = 0, ii = props.length; i < ii; ++i) {
+        var prop = props[i];
+        copy[prop] = this[prop];
+      }
+
+      var replay = this;
+      this.replay(events, scriptId, function(r) {
+        if (timeout) {
+          clearTimeout(timeoutId);
+        }
+        check(r);
+
+        this.reset();
+        for (var key in copy) {
+          replay[key] = copy[key];
+        }
+        cont(r);
+      });
+      this.tabMapping = tabMapping;
+
+      if (timeout) {
+        var timeoutId = setTimeout(function() {
+          replay.finish();
+        }, timeout);
+      }
     },
 /*
     gatherUpdates: function _gatherUpdates(events) {
@@ -538,9 +572,11 @@ var Replay = (function ReplayClosure() {
       this.captures = [];
       this.scriptId = null;
       this.events = [];
+      this.cont = null;
       this.debug = [];
       this.benchmarkLog = '';
       this.clipboard = null; 
+      this.loopPrefix = [];
 
       this.record.reset();
     },
@@ -591,6 +627,9 @@ var Replay = (function ReplayClosure() {
         var defaultTime = events[index].value.timing.waitTime;
       else
         var defaultTime = 0;
+
+      if (defaultTime > 100 && events[this.index].value.data.type == 'capture')
+        defaultTime = 100;
 
       if (defaultTime > 10000)
         defaultTime = 10000;
@@ -693,7 +732,7 @@ var Replay = (function ReplayClosure() {
 
         if (params.replaying.saveReplay && scriptId &&
             replayEvents.length > 0) {
-          scriptServer.saveCaptures(captures, scriptId);
+          //scriptServer.saveCaptures(captures, scriptId);
           scriptServer.saveScript('replay ' + scriptId, replayEvents, comments,
                                   params, scriptId);
           replayLog.log('saving replay:', replayEvents);
@@ -707,9 +746,13 @@ var Replay = (function ReplayClosure() {
         }, 0);
       }
     },
-    saveCapture: function _saveCapture(capture, scriptId) {
-      replayLog.log('capture:', capture, scriptId);
-      this.captures.push(capture);
+    saveCapture: function _saveCapture(capture) {
+      var loopPrefix = this.loopPrefix.join(',');
+      capture.nodeName = loopPrefix + ':' + capture.id + ':' + capture.nodeName;
+
+      replayLog.log('capture:', capture);
+      // this.captures.push(capture);
+      this.scriptServer.saveCapture(capture, this.scriptId);
       this.updateListeners({capture: capture.innerText.trim()});
     },
     findPortInTab: function _findPortInTab(frame) {
@@ -873,7 +916,7 @@ var Replay = (function ReplayClosure() {
         }
       // need to open new tab
       } else {
-        /*
+        
         var allTabs = Object.keys(this.ports.tabIdToTab);
 
         var revMapping = {};
@@ -888,11 +931,11 @@ var Replay = (function ReplayClosure() {
             unusedTabs.push(tabId);
         }
 
-        if (index != 0 && unusedTabs.length == 1) {
+        if (this.index != 0 && unusedTabs.length == 1) {
           tabMapping[frame.tab] = unusedTabs[0];
           this.setNextTimeout(0);
         }
-        */
+        
 
         var prompt = "Does the page exist? If so select the tab then type " +
                      "'yes'. Else type 'no'.";
@@ -1002,15 +1045,61 @@ var Replay = (function ReplayClosure() {
         var type = e.type;
 
         if (type == 'beginloop') {
-          if (!v.prefixes) {
-            replayLog.log('generalizing next event');
+          if ('generalPrefixes' in v.reset) {
+            replayLog.log('have prefixes, starting loop');
+  
+            // reset mappings
+            this.portMapping = jQuery.extend({}, v.reset.portMapping);
+            this.tabMapping = jQuery.extend({}, v.reset.tabMapping);
+            this.record.events = v.reset.recordEvents.slice(0);
+  
+            // close new tabs since original state
+            var currentTabIds = Object.keys(this.ports.tabIdToTab);
+            var tabIdToTab = v.reset.tabIdToTab; 
+            for (var i = 0, ii = currentTabIds.length; i < ii; ++i) {
+              var tabId = currentTabIds[i];
+              if (!tabIdToTab[tabId])
+                chrome.tabs.remove(parseInt(tabId));
+            }
 
+            var endEvent = this.getEvent(v.data.end);
+            var endIndex = events.indexOf(endEvent);
+
+            var prefixes = v.reset.generalPrefixes;
+            var prefixIndex = v.reset.index;
+
+            // end the loop and continue
+            if (prefixIndex >= prefixes.length) {
+              this.index = endIndex;
+              this.incrementIndex();
+              this.setNextTimeout();
+              return;
+            }
+
+            this.loopPrefix.push(prefixIndex); 
+            var newPrefix = prefixes[prefixIndex];
+            v.reset.index++;
+  
+            var generalizeInfo = {
+              orig: v.reset.origPrefix,
+              new: newPrefix
+            }
+  
+            for (var i = index + 1; i < endIndex; ++i) {
+              events[i].value.generalize = generalizeInfo;
+              this.resetEvent(events[i]);
+            }
+  
+            //replayPort.postMessage({type: 'portEvents',
+            //                        value: this.eventsByPort[frame.port]});
+  
+            this.incrementIndex();
+            this.setNextTimeout(0);
+          } else {
             var nextEventIdx = index + 1;
-
             for (var i = index + 1, ii = events.length; i < ii; ++i) {
-            
-              if (events[nextEventIdx].type == 'event') {
-                var eventType = events[nextEventIdx].value.data.type;
+              if (events[i].type == 'event') {
+                var eventType = events[i].value.data.type;
                 if (eventType.indexOf('mouse') != -1 ||
                     eventType == 'capture') {
                   nextEventIdx = i;
@@ -1024,75 +1113,180 @@ var Replay = (function ReplayClosure() {
 
             if (!port)
               return;
-
-            port.postMessage({type: 'generalize', value: nextEvent});
-            this.replayState = ReplayState.REPLAY_ACK;
-            return;
-          } else {
-            console.log('begin loop');
-  
-            // reset mappings
-            this.portMapping = jQuery.extend({}, v.portMapping);
-            this.tabMapping = jQuery.extend({}, v.tabMapping);
-            this.record.events = v.recordEvents.slice(0);
-  
-            // close new tabs since original state
-            var currentTabIds = Object.keys(this.ports.tabIdToTab);
-            var tabIdToTab = v.tabIdToTab; 
-            for (var i = 0, ii = currentTabIds.length; i < ii; ++i) {
-              var tabId = currentTabIds[i];
-              if (!tabIdToTab[tabId])
-                chrome.tabs.remove(parseInt(tabId));
+            
+            if (v.generalXPath) {
+              replayLog.log('found general xpath, need prefixes');
+              var value = {generalXPath: v.generalXPath, origXPath: v.origXPath};
+              port.postMessage({type: 'prefix', value: value});
+              this.replayState = ReplayState.REPLAY_ACK;
+            } else {
+              replayLog.log('no loop info, generalizing on next event');
+              port.postMessage({type: 'generalize', value: nextEvent});
+              this.replayState = ReplayState.REPLAY_ACK;
             }
-  
-            // end the loop and continue
-            if (v.index >= v.prefixes.length) {
-              this.index = endIndex;
-              this.incrementIndex();
-              this.setNextTimeout();
-            }
-
-            var endEvent = this.getEvent(v.data.end);
-            var endIndex = events.indexOf(endEvent);
-  
-            var newPrefix = v.prefixes[v.index];
-            v.index++;
-  
-            var generalizeInfo = {
-              orig: v.orig,
-              new: newPrefix
-            }
-  
-            for (var i = index + 1; i < endIndex; ++i) {
-              events[i].value.generalize = generalizeInfo;
-            }
-  
-            //replayPort.postMessage({type: 'portEvents',
-            //                        value: this.eventsByPort[frame.port]});
-  
-            this.incrementIndex();
-            this.setNextTimeout(0);
-            return;
           }
+          return;
         } else if (type == 'endloop') {
           replayLog.log('end loop');
 
+          this.loopPrefix.pop();
           var beginEvent = this.getEvent(v.data.begin);
           this.index = events.indexOf(beginEvent);
           this.setNextTimeout(0);
           return;
         } else if (type == 'beginnext') {
-          
-          replayLog.log('skipping event:', e);
-          this.incrementIndex();
-          this.setNextTimeout(0);
-          return;
+          if ('index' in v.reset) {
+            console.log('executing next loop');
 
+            // reset mappings
+            this.portMapping = jQuery.extend({}, v.reset.portMapping);
+            this.tabMapping = jQuery.extend({}, v.reset.tabMapping);
+            this.record.events = v.reset.recordEvents.slice(0);
+  
+            // close new tabs since original state
+            var currentTabIds = Object.keys(this.ports.tabIdToTab);
+            var tabIdToTab = v.reset.tabIdToTab; 
+            for (var i = 0, ii = currentTabIds.length; i < ii; ++i) {
+              var tabId = currentTabIds[i];
+              if (!tabIdToTab[tabId])
+                chrome.tabs.remove(parseInt(tabId));
+            }
+
+            var endEvent = this.getEvent(v.data.end);
+            var endIndex = events.indexOf(endEvent);
+            for (var i = index + 1; i < endIndex; ++i) {
+              this.resetEvent(events[i]);
+            }
+
+            var replay = this;
+//            var user = this.user;
+//            user.question('Got all data?', yesNoCheck, 'yes', function(a) {
+//              if (a == 'yes') {
+            if (v.reset.finished) {
+                var endEvent = replay.getEvent(v.data.end);
+                var endIndex = events.indexOf(endEvent);
+  
+                replay.index = endIndex;
+                replay.incrementIndex();
+                replay.setNextTimeout();
+            } else {
+                var nextEvents = v.nextEvents;
+                var index = v.reset.index;
+            
+                this.loopPrefix.push(index); 
+  
+                if (index == 0) {
+                  v.reset.index++;
+                  replay.incrementIndex();
+                  replay.setNextTimeout();
+                  return;
+                }
+
+                index -= 1;
+                if (index >= nextEvents.length)
+                  index = nextEvents.length - 1;
+                var nextEvent = nextEvents[index];
+
+                var nextTabMapping = {};
+                var tab = nextEvent[0].value.frame.tab;
+                var origTab = -1;
+                var origTabMapping = v.origTabMapping;
+                for (var t in origTabMapping) {
+                  if (origTabMapping[t] == tab) {
+                    origTab = t;
+                    break;
+                  }
+                }
+                var newTab = this.tabMapping[origTab];
+                nextTabMapping[tab] = newTab;
+
+                var pass =  null;
+                replay.subReplay(nextEvent, null, nextTabMapping,
+                    function(r) {
+                      // check that events were executed
+                      pass = r.events.length == r.index;
+                    },
+                    function(r) {
+                      v.reset.index++;
+
+                      if (pass == false) {
+                        v.reset.finished = true;
+
+                        var endEvent = replay.getEvent(v.data.end);
+                        var endIndex = events.indexOf(endEvent);
+  
+                        replay.index = endIndex;
+                        replay.incrementIndex();
+                        replay.setNextTimeout(1000);
+                      } else {
+                        replay.incrementIndex();
+                        replay.setNextTimeout(1000);
+                      }
+                    },
+                    25000
+                );
+            }
+//            });
+            return;
+          } else if (v.nextEvents) {
+            v.reset.portMapping = {};//jQuery.extend({}, this.portMapping);
+            v.reset.tabMapping = jQuery.extend({}, this.tabMapping);
+            v.reset.recordEvents = this.record.events.slice(0);
+            v.reset.tabIdToTab = jQuery.extend({}, this.ports.tabIdToTab);
+            v.reset.index = 0;
+            
+            this.setNextTimeout(0);
+            return;
+          } else {
+            
+            replayLog.log('recording next events');
+            v.nextEvents = [];
+            v.origPortMapping = jQuery.extend({}, this.portMapping);
+            v.origTabMapping = jQuery.extend({}, this.tabMapping);
+
+            var start = this.record.events.length;
+
+            var user = this.user;
+            var p = 'Demonstrate how to get the next set of data. Press enter ' +
+              'when done.'
+
+            var replay = this;
+            var recordNextEvents = function() {
+              user.question(p, function(a) {return true}, '', function(a) {
+                var events = replay.record.events;
+                var end = events.length;
+                var nextEvent = events.slice(start, end).filter(function(e) {
+                  return e.type == 'event';
+                });
+                start = end;
+                v.nextEvents.push(nextEvent);
+
+                user.question('Demonstrate another?', yesNoCheck, 'no',
+                  function(answer) {
+                    if (answer == 'yes') {
+                      recordNextEvents();
+                    } else {
+                      // start from beginning
+                      replay.replay(replay.events, replay.scriptId, replay.cont);
+                      // replay.index = 0;
+                      // replay.setNextTimeout(0);
+                    }
+                  }
+                );
+              });
+            }
+            recordNextEvents();
+            return;
+          } 
         } else if (type == 'endnext') {
           replayLog.log('end loop');
 
-          this.index = events.indexOf(v.start);
+          this.loopPrefix.pop();
+
+          var beginEvent = this.getEvent(v.data.begin);
+          this.index = events.indexOf(beginEvent);
           this.setNextTimeout(0);
+          return;
         } else if (type != 'event') {
           replayLog.log('skipping event:', e);
           this.incrementIndex();
@@ -1197,7 +1391,7 @@ var Replay = (function ReplayClosure() {
               } else {
                 // remove the mapping and try again
                 this.addDebug('using disconnected port, remove and try again');
-                delete portMapping[port];
+                delete this.portMapping[e.value.frame.port];
                 this.setNextTimeout(0);
               }
             } else if (strategy == BrokenPortStrategey.SKIP) {
@@ -1214,6 +1408,7 @@ var Replay = (function ReplayClosure() {
               throw 'unknown broken port strategy';
             }
           } else {
+            err.printStackTrace();
             throw err;
           }
         }
@@ -1221,6 +1416,11 @@ var Replay = (function ReplayClosure() {
         replayLog.error('error:', err.message, err);
         this.finish(err.toString());
       }
+    },
+    resetEvent: function _resetEvent(e) {
+      var v = e.value;
+      if (v.reset)
+        v.reset = {};
     },
     receiveAck: function _receiveAck(ack) {
       this.ack = ack;
@@ -1239,13 +1439,16 @@ var Replay = (function ReplayClosure() {
       var e = events[index];
 
       var value = e.value;
-      value.prefixes = ack.prefixes;
-      value.orig = ack.orig;
-      value.portMapping = jQuery.extend({}, this.portMapping);
-      value.tabMapping = jQuery.extend({}, this.tabMapping);
-      value.index = 0;
-      value.recordEvents = this.record.events.slice(0);
-      value.tabIdToTab = jQuery.extend({}, this.ports.tabIdToTab);
+      value.generalXPath = ack.generalXPath;
+      value.origXPath = ack.origXPath;
+
+      value.reset.generalPrefixes = ack.generalPrefixes;
+      value.reset.origPrefix = ack.origPrefix;
+      value.reset.portMapping = jQuery.extend({}, this.portMapping);
+      value.reset.tabMapping = jQuery.extend({}, this.tabMapping);
+      value.reset.index = 0;
+      value.reset.recordEvents = this.record.events.slice(0);
+      value.reset.tabIdToTab = jQuery.extend({}, this.ports.tabIdToTab);
     }
   };
 
@@ -1276,7 +1479,7 @@ var User = (function UserClosure() {
           if (sanitize)
             callback(sanitize);
           else
-            user.question(prompt, validation, callback);
+            user.question(prompt, validation, defaultAnswer, callback);
         });
       }
     },
@@ -1527,26 +1730,42 @@ chrome.webRequest.onBeforeRequest.addListener(function(details) {
   console.log('before request', details);
 }, filter);
 */
+function addBackgroundEvent(e) {
+  if (record.recordState == RecordState.RECORDING)
+    record.addEvent(e);
+  else if (replay.record.recordState == RecordState.REPLAYING)
+    replay.record.addEvent(e);
+}
+
+function addWebRequestEvent(details, type) {
+  var e = {type: type};
+  var v = {};
+  var data = {};
+
+  data.requestId = details.requestId;
+  data.method = details.method;
+  data.parentFrameId = details.parentFrameId;
+  data.tabId = details.tabId;
+  data.type = details.type;
+  data.url = details.url;
+  data.reqTimeStamp = details.timeStamp;
+  data.timeStamp = (new Date()).getTime();
+
+  v.data = data;
+  e.value = v;
+
+  addBackgroundEvent(e);
+
+}
+
+chrome.webRequest.onBeforeRequest.addListener(function(details) {
+  bgLog.log('request start', details);
+  addWebRequestEvent(details, 'start');
+}, filter);
 
 chrome.webRequest.onCompleted.addListener(function(details) {
-  if (record.recordState == RecordState.RECORDING) {
-    bgLog.log('completed', details);
-
-    var e = {type: 'request'};
-    var v = {};
-
-    var data = {};
-    data.method = details.method;
-    data.parentFrameId = details.parentFrameId;
-    data.tabId = details.tabId;
-    data.type = details.type;
-    data.url = details.url;
-
-    v.data = data;
-    e.value = v;
-
-    record.addEvent(e);
-  }
+  bgLog.log('completed', details);
+  addWebRequestEvent(details, 'completed');
 }, filter);
 
 // window is closed so tell the content scripts to stop recording and reset the
@@ -1563,7 +1782,7 @@ $(window).resize(function() {
 
 ports.sendToAll({type: 'params', value: params});
 controller.stop();
-controller.getScript('googlescholarsimple');
+controller.getScript('loopnext');
 
 
 function printEvents() {

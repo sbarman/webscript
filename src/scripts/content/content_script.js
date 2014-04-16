@@ -516,7 +516,8 @@ function simulate(request, startIndex) {
 
       var msg = {innerHtml: target.innerHTML,
                  innerText: target.innerText,
-                 nodeName: target.nodeName.toLowerCase()};
+                 nodeName: target.nodeName.toLowerCase(),
+                 id: id};
 
       port.postMessage({type: 'saveCapture', value: msg});
       continue;
@@ -655,6 +656,8 @@ function addExample(target, event) {
 }
 
 function generalizeFinish() {
+  cancelCapture();
+
   for (var i = 0, ii = ids.length; i < ii; ++i)
     dehighlightNode(ids[i]);
 
@@ -663,6 +666,7 @@ function generalizeFinish() {
 
   var parts = origXPath.split('/');
   var generalizedNodes = null;
+  var generalXPath = null;
   var maxStars = 2;
 
   console.log(origXPath);
@@ -685,9 +689,17 @@ function generalizeFinish() {
       }
 
       generalizedNodes = nodes;
+      generalXPath = newXPath;
       break starsloop;
     }
   }
+ 
+  log.log('found more general xpath:', generalXPath, origXPath); 
+  findPrefixes(origXPath, generalXPath)
+}
+
+function findPrefixes(origXPath, generalXPath) {
+  var generalizedNodes = xPathToNodes(generalXPath);
 
   if (generalizedNodes) {
     for (var i = 0, ii = generalizedNodes.length; i < ii; ++i) {
@@ -701,28 +713,28 @@ function generalizeFinish() {
     return;
   }
 
-  console.log(newXPath);
-  console.log(origXPath);
-
   // find the last occurence of * in xpath to find prefix in original xpath
+  var parts = origXPath.split('/');
+  var newParts = generalXPath.split('/');
   var lastStarIndex = newParts.lastIndexOf('*');
   var origPrefix = parts.slice(0, lastStarIndex + 1).join('/');
 
   ids = [];
   examples = [];
-  cancelCapture();
 
-  var nodesInfo = [];
+  var prefixes = [];
   for (var i = 0, ii = generalizedNodes.length; i < ii; ++i) {
     var newParts = nodeToXPath(generalizedNodes[i]).split('/');
     var newPrefix = newParts.slice(0, lastStarIndex + 1).join('/');
-    nodesInfo.push(newPrefix);
+    prefixes.push(newPrefix);
   }
 
   port.postMessage({type: 'ack', value: {
     type: Ack.GENERALIZE,
-    prefixes: nodesInfo,
-    orig: origPrefix,
+    generalXPath: generalXPath,
+    origXPath: origXPath,
+    generalPrefixes: prefixes,
+    origPrefix: origPrefix,
     setTimeout: true
   }});
 }
@@ -969,6 +981,8 @@ function handleMessage(request) {
     replayClipboard = request.value;
   } else if (type == 'generalize') {
     generalizeXPath(request.value);
+  } else if (type == 'prefix') {
+    findPrefixes(request.value.origXPath, request.value.generalXPath);
   } else {
     log.error('cannot handle message:', request);
   }

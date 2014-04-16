@@ -167,7 +167,7 @@ var saveTargetInfo;
       return null;
     } else if (targets.length > 1) {
       log.debug('Multiple targets found:', targets);
-      return targets[0];
+      return null;
     } else {
       return targets[0];
     }
