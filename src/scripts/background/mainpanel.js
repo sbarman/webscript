@@ -748,11 +748,14 @@ var Replay = (function ReplayClosure() {
     },
     saveCapture: function _saveCapture(capture) {
       var loopPrefix = this.loopPrefix.join(',');
-      capture.nodeName = loopPrefix + ':' + capture.id + ':' + capture.nodeName;
+      var capId = this.scriptId + ':' + loopPrefix + ':' + capture.id;
 
+      var storage = {}
+      storage[capId] = JSON.stringify(capture);
       replayLog.log('capture:', capture);
+      chrome.storage.local.set(storage);
       // this.captures.push(capture);
-      this.scriptServer.saveCapture(capture, this.scriptId);
+      // this.scriptServer.saveCapture(capture, this.scriptId);
       this.updateListeners({capture: capture.innerText.trim()});
     },
     findPortInTab: function _findPortInTab(frame) {
