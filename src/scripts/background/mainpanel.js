@@ -577,6 +577,7 @@ var Replay = (function ReplayClosure() {
       this.benchmarkLog = '';
       this.clipboard = null; 
       this.loopPrefix = [];
+      this.firstEventReplayed = false;
 
       this.record.reset();
     },
@@ -934,7 +935,7 @@ var Replay = (function ReplayClosure() {
             unusedTabs.push(tabId);
         }
 
-        if (this.index != 0 && unusedTabs.length == 1) {
+        if (this.firstEventReplayed && unusedTabs.length == 1) {
           tabMapping[frame.tab] = unusedTabs[0];
           this.setNextTimeout(0);
         }
@@ -1371,6 +1372,7 @@ var Replay = (function ReplayClosure() {
               }
 
               replayPort.postMessage({type: 'event', value: eventGroup});
+              this.firstEventReplayed = true;
               replayLog.log('sent message', eventGroup);
               if (replayState == ReplayState.REPLAYING)
                 this.replayState = ReplayState.REPLAY_ACK;

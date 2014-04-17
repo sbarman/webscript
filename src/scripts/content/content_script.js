@@ -21,6 +21,7 @@ var curRecordSnapshot; // snapshot (before and after) the current event
 
 // replay variables
 var lastReplayEvent; // last event replayed
+var lastReplayTarget;
 var lastReplaySnapshot; // snapshop taken before the event is replayed
 var curReplaySnapshot; // snapshot taken before the next event is replayed
 var dispatchingEvent = false;
@@ -246,7 +247,7 @@ function replayUpdateDeltas(eventData, eventMessage) {
         // check if these deltas match the last simulated event
         // and correct for unmatched deltas
         fixDeltas(recordDeltas, replayDeltas, lastReplayEvent,
-                   lastReplaySnapshot.after);
+                  lastReplayTarget, lastReplaySnapshot.after);
       }
 
       //annotation events may have changed the effects of the last event
@@ -255,6 +256,7 @@ function replayUpdateDeltas(eventData, eventMessage) {
       resnapshotBefore(target);
     }
     lastReplayEvent = replayEvent;
+    lastReplayTarget = target;
   }
 }
 
@@ -860,7 +862,8 @@ function resnapshotBefore(target) {
     curReplaySnapshot.before = snapshot();
 }
 
-function fixDeltas(recordDeltas, replayDeltas, recordEvent, snapshot) {
+function fixDeltas(recordDeltas, replayDeltas, recordEvent, lastTarget,
+                   snapshot) {
   replayLog.info('record deltas:', recordDeltas);
   replayLog.info('replay deltas:', replayDeltas);
 
@@ -872,7 +875,7 @@ function fixDeltas(recordDeltas, replayDeltas, recordEvent, snapshot) {
   replayLog.info('record deltas not matched: ', recordDeltasNotMatched);
   replayLog.info('replay deltas not matched: ', replayDeltasNotMatched);
 
-  var element = getTarget(recordEvent.data.target);
+  var element = target; //getTarget(recordEvent.data.target);
 
   for (var i = 0, ii = replayDeltasNotMatched.length; i < ii; ++i) {
     var delta = replayDeltasNotMatched[i];
