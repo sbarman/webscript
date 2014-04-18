@@ -1320,6 +1320,30 @@ var Replay = (function ReplayClosure() {
         if (!replayPort)
           return;
 
+        if (v.timing.waitEvent) {
+          var waitEvent = this.getEvent(v.timing.waitEvent);
+          var recordEvents = this.record.events;
+
+          var matchedEvent = null;
+          for (var i = recordEvents.length - 1; i >= 0; --i) {
+            var otherEvent = recordEvents[i];
+            console.log(otherEvent.type, waitEvent.type,
+                otherEvent.value.data.url, waitEvent.value.data.url);
+            if (otherEvent.type == waitEvent.type &&
+                otherEvent.value.data.type == waitEvent.value.data.type &&
+                matchUrls(otherEvent.value.data.url,
+                          waitEvent.value.data.url, 0.9)) {
+              matchedEvent = otherEvent;
+              break;
+            }
+          }
+
+          if (!matchedEvent) {
+            this.setNextTimeout(300);
+            return;
+          }
+        }
+
         // we have hopefully found a matching port, lets dispatch to that port
         this.lastReplayPort = replayPort;
 
