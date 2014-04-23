@@ -502,7 +502,7 @@ var Replay = (function ReplayClosure() {
 
       this.record.startRecording(true);
       //this.ports.sendToAll({type: 'resetCompensation', value: null});
-      this.setNextTimeout();
+      this.setNextTimeout(0);
     },
     subReplay: function _subReplay(events, scriptId, tabMapping, check, cont,
                                    timeout) {
@@ -598,12 +598,13 @@ var Replay = (function ReplayClosure() {
           this.updateListeners({simulate: e.meta.id});
       }
     },
-    getNextDomEventIndex: function _getNextDomEventIndex() {
+    getNextTimingEventIndex: function _getNextTimingEventIndex() {
       var index = this.index;
       var events = this.events;
 
       for (var i = index, ii = events.length; i < ii; ++i) {
-        if (events[i].type == 'event')
+        var v = events[i].value;
+        if (v.timing && 'waitTime' in v.timing)
           return i;
       }
       return events.length;
@@ -620,7 +621,7 @@ var Replay = (function ReplayClosure() {
     getNextTime: function _getNextTime() {
       var timing = params.replaying.timingStrategy;
 
-      var index = this.getNextDomEventIndex();
+      var index = this.getNextTimingEventIndex();
       var events = this.events;
       var waitTime = 0;
 
@@ -628,10 +629,11 @@ var Replay = (function ReplayClosure() {
         var defaultTime = events[index].value.timing.waitTime;
       else
         var defaultTime = 0;
-/*
-      if (defaultTime > 100 && events[this.index].value.data.type == 'capture')
-        defaultTime = 100;
-*/
+
+      if (events[this.index].value.data.type == 'capture' &&
+          typeof params.replaying.captureWait == 'number')
+        defaultTime = Math.min(defaultTime, params.replaying.captureWait);
+
       if (defaultTime > 10000)
         defaultTime = 10000;
 
@@ -939,6 +941,7 @@ var Replay = (function ReplayClosure() {
         if (this.firstEventReplayed && unusedTabs.length == 1) {
           tabMapping[frame.tab] = unusedTabs[0];
           this.setNextTimeout(0);
+          return;
         }
 
         var replay = this;
@@ -1017,7 +1020,9 @@ var Replay = (function ReplayClosure() {
 
           type = ack.type;
           if (type == Ack.SUCCESS) {
+            replayLog.log('found replay ack');
             this.incrementIndex();
+
             if (replayState == ReplayState.REPLAY_ACK)
               this.setNextTimeout();
             else
@@ -1025,7 +1030,6 @@ var Replay = (function ReplayClosure() {
 
             this.replayState = ReplayState.REPLAYING;
             this.lastReplayPort = null;
-            replayLog.log('found replay ack');
           } else if (type == Ack.PARTIAL) {
             throw "partially executed commands";
           } else if (type == Ack.GENERALIZE) {
@@ -1106,7 +1110,7 @@ var Replay = (function ReplayClosure() {
             //                        value: this.eventsByPort[frame.port]});
   
             this.incrementIndex();
-            this.setNextTimeout(0);
+            this.setNextTimeout();
           } else {
             var nextEventIdx = index + 1;
             for (var i = index + 1, ii = events.length; i < ii; ++i) {
@@ -1171,71 +1175,56 @@ var Replay = (function ReplayClosure() {
             }
 
             var replay = this;
-//            var user = this.user;
-//            user.question('Got all data?', yesNoCheck, 'yes', function(a) {
-//              if (a == 'yes') {
-            if (v.reset.finished) {
-                var endEvent = replay.getEvent(v.data.end);
-                var endIndex = events.indexOf(endEvent);
-  
-                replay.index = endIndex;
-                replay.incrementIndex();
-                replay.setNextTimeout();
-            } else {
-                var nextEvents = v.nextEvents;
-                var index = v.reset.index;
+            var nextEvents = v.nextEvents;
+            var index = v.reset.index;
             
-                this.loopPrefix.push(index); 
+            this.loopPrefix.push(index); 
   
-                if (index == 0) {
-                  v.reset.index++;
-                  replay.incrementIndex();
-                  replay.setNextTimeout();
-                  return;
-                }
-
-                index -= 1;
-                if (index >= nextEvents.length)
-                  index = nextEvents.length - 1;
-                var nextEvent = nextEvents[index];
-
-                var nextTabMapping = {};
-                var tab = nextEvent[0].value.frame.tab;
-                var origTab = -1;
-                var origTabMapping = v.origTabMapping;
-                for (var t in origTabMapping) {
-                  if (origTabMapping[t] == tab) {
-                    origTab = t;
-                    break;
-                  }
-                }
-                var newTab = this.tabMapping[origTab];
-                nextTabMapping[tab] = newTab;
-
-                var pass =  null;
-                replay.subReplay(nextEvent, null, nextTabMapping,
-                    function(r) {
-                      // check that events were executed
-                      pass = r.events.length == r.index;
-                    },
-                    function(r) {
-                      v.reset.index++;
-
-                      if (pass == false) {
-                        v.reset.finished = true;
-
-                        var endEvent = replay.getEvent(v.data.end);
-                        var endIndex = events.indexOf(endEvent);
-  
-                        replay.index = endIndex;
-                      }
-                      replay.incrementIndex();
-                      replay.setNextTimeout(1000);
-                    },
-                    25000
-                );
+            if (index == 0) {
+              v.reset.index++;
+              replay.incrementIndex();
+              replay.setNextTimeout();
+              return;
             }
-//            });
+
+            index -= 1;
+            if (index >= nextEvents.length)
+              index = nextEvents.length - 1;
+            var nextEvent = nextEvents[index];
+
+            var nextTabMapping = {};
+            var tab = nextEvent[0].value.frame.tab;
+            var origTab = -1;
+            var origTabMapping = v.origTabMapping;
+            for (var t in origTabMapping) {
+              if (origTabMapping[t] == tab) {
+                origTab = t;
+                break;
+              }
+            }
+            var newTab = this.tabMapping[origTab];
+            nextTabMapping[tab] = newTab;
+
+            var pass =  null;
+            replay.subReplay(nextEvent, null, nextTabMapping,
+                function(r) {
+                  // check that events were executed
+                  pass = r.events.length == r.index;
+                },
+                function(r) {
+                  v.reset.index++;
+
+                  if (pass == false) {
+                    var endEvent = replay.getEvent(v.data.end);
+                    var endIndex = events.indexOf(endEvent);
+  
+                    replay.index = endIndex;
+                  }
+                  replay.incrementIndex();
+                  replay.setNextTimeout(params.replaying.defaultWaitNextEvent);
+                },
+                25000
+            );
             return;
           } else if (v.nextEvents) {
             v.reset.portMapping = {};//jQuery.extend({}, this.portMapping);
@@ -1275,9 +1264,8 @@ var Replay = (function ReplayClosure() {
                       recordNextEvents();
                     } else {
                       // start from beginning
-                      replay.replay(replay.events, replay.scriptId, replay.cont);
-                      // replay.index = 0;
-                      // replay.setNextTimeout(0);
+                      replay.replay(replay.events, replay.scriptId,
+                                    replay.cont);
                     }
                   }
                 );

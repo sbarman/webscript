@@ -179,6 +179,8 @@ var TimeoutStrategy = {
       timingStrategy: TimingStrategy.MIMIC,
       defaultWait: 100,
       defaultWaitNewTab: 4000,
+      defaultWaitNextEvent: 4000,
+      captureWait: 0,
       highlightTarget: true,
       brokenPortStrategy: BrokenPortStrategy.RETRY,
       atomic: true,
