@@ -139,10 +139,14 @@ var TimeoutStrategy = {
     localSnapshot: true,
     events: events,
     defaultProps: defaultProps,
+    panel: {
+      enableEdit: true,
+    },
     logging: {
       level: 1,
       enabled: ['ports', 'event', 'record', 'replay', 'script', 'background',
-                'content', 'synthesis', 'benchmark', 'target', 'controller']
+                'content', 'synthesis', 'benchmark', 'target', 'controller',
+                'simpledebug']
     },
     synthesis: {
       enabled: true,
@@ -162,6 +166,8 @@ var TimeoutStrategy = {
       listenToAllEvents: false
     },
     replaying: {
+      saveCaptureLocal: false,
+      openNewTab: true,
       saveReplay: true,
       delayEvents: false,
       cancelUnknownEvents: false,

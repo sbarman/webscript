@@ -875,7 +875,7 @@ function fixDeltas(recordDeltas, replayDeltas, recordEvent, lastTarget,
   replayLog.info('record deltas not matched: ', recordDeltasNotMatched);
   replayLog.info('replay deltas not matched: ', replayDeltasNotMatched);
 
-  var element = target; //getTarget(recordEvent.data.target);
+  var element = lastTarget; //getTarget(recordEvent.data.target);
 
   for (var i = 0, ii = replayDeltasNotMatched.length; i < ii; ++i) {
     var delta = replayDeltasNotMatched[i];
@@ -887,8 +887,7 @@ function fixDeltas(recordDeltas, replayDeltas, recordEvent, lastTarget,
 //                 '->' + delta.changed.prop[divProp]);
 
       if (params.replaying.compensation == Compensation.FORCED) {
-        if (element)
-          element[divProp] = delta.orig.prop[divProp];
+        element[divProp] = delta.orig.prop[divProp];
       }
     }
   }
@@ -907,8 +906,7 @@ function fixDeltas(recordDeltas, replayDeltas, recordEvent, lastTarget,
         replayLog.debug('generating compensation event:', delta);
         generateCompensation(recordEvent, delta);
       } else if (params.replaying.compensation == Compensation.FORCED) {
-        if (element)
-          element[divProp] = delta.changed.prop[divProp];
+        element[divProp] = delta.changed.prop[divProp];
       }
     }
   }

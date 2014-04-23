@@ -3,6 +3,7 @@
 
 'use strict';
 
+/*
 var Learner = (function LearnerClosure() {
   var log = getLog('learner');
 
@@ -220,44 +221,62 @@ function runLearner(id) {
   var l = new Learner(ports, record, scriptServer, controller);
   l.search(id);
 }
+*/
 
+// find maximum number of deltas that can be applied
 var SimpleDebug = (function SimpleDebugClosure() {
   var log = getLog('simpledebug');
 
-  function SimpleDebug(orig, removeDeltas, test) {
+  function SimpleDebug(orig, deltas, accumulate, test) {
     this.orig = orig;
-    this.removeDeltas = removeDeltas;
+    this.deltas = deltas;
+    this.accumulate = accumulate;
     this.test = test;
   }
 
   SimpleDebug.prototype = {
     run: function _run() {
-      this.required = [];
+      this.enabled = [];
+      this.disabled = [];
       this.index = 0;
 
       this.runTest();
     },
     runTest: function _runTest() {
-      var deltas = this.removeDeltas;
+      var deltas = this.deltas;
       var index = this.index;
+      var required 
 
       if (index >= deltas.length) {
-        log.log('finished minimizing:', this.required);
+        log.log('finished minimizing:', this.enabled, this.disabled);
         return;
       }
 
       var cur = jQuery.extend(true, [], this.orig);
-      cur = deltas[index](cur); 
+      var delta = deltas[index];
+      cur = delta.apply(cur); 
+
+      var enabled = this.enabled;
+      if (this.accumulate) {
+        for (var i = 0, ii = enabled.length; i < ii; ++i) {
+          cur = enabled[i].delta.apply(cur);
+        }
+      }
 
       var test = this.test;
       var simpleDebug = this;
 
-      test(cur, function(result) {
+      test(cur, function(result, data) {
+        var info = {delta: delta,  misc: data};
         if (!result) {
-          simpleDebug.required.push(index);
+          simpleDebug.disabled.push(info);
+        } else {
+          simpleDebug.enabled.push(info);
         }
         simpleDebug.index++;
-        simpleDebug.runTest();
+        setTimeout(function() {
+          simpleDebug.runTest();
+        }, 0);
       });
     }
   }
@@ -265,20 +284,75 @@ var SimpleDebug = (function SimpleDebugClosure() {
   return SimpleDebug;
 })();
 
-function runSimpleDebug(scriptId) {
+function runScript(id, events, numRuns, timeout, callback) {
+  var runs = [];
+  function runOnce() {
+    if (runs.length < numRuns) {
+      var r = controller.replayScript(id, events, function(replay) {
+        clearTimeout(timeoutId);
+
+        var run = {
+          index: replay.index,
+          events: replay.record.events,
+          captures: replay.captures
+        }
+        runs.push(run);
+
+        setTimeout(function() {runOnce();});
+      });
+
+      // kill script after timeout period
+      var timeoutId = setTimeout(function() {
+        r.finish();
+      }, timeout);
+    } else {
+      callback(runs);
+    }
+  }
+  runOnce();
+}
+
+function collectCaptures(events) {
+  var expCaptures = [];
+  for (var i = 0, ii = events.length; i < ii; ++i) {
+    var e = events[i];
+    if (e.value.data.type == 'capture') {
+      expCaptures.push(e);
+    }
+  }
+  return expCaptures;
+}
+
+function checkReplaySuccess(captureEvents, events, replay) {
+  if (replay.index != events.length) {
+    return false;
+  }
+
+  var captures = replay.captures;
+  for (var i = 0, ii = captureEvents.length; i < ii; ++i) {
+    if (i >= captures.length) {
+      return false;
+    }
+
+    var c = captures[i];
+    var e = captureEvents[i];
+
+    var eText = e.value.data.target.snapshot.prop.innerText;
+    var cText = c.innerText;
+    if (eText != cText) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function runRemoveEvents(scriptId) {
   params.replaying.eventTimeout = 15;
   params.replaying.defaultUser = true;
+  params.panel.enableEdit = false;
   controller.updateParams();
 
   scriptServer.getScript(scriptId, true, function(id, events) {
-
-    var expCaptures = [];
-    for (var i = 0, ii = events.length; i < ii; ++i) {
-      var e = events[i];
-      if (e.value.data.type == 'capture') {
-        expCaptures.push(e);
-      }
-    }
 
     var removeEvents = [];
     for (var i = 0, ii = events.length; i < ii; ++i) {
@@ -286,57 +360,81 @@ function runSimpleDebug(scriptId) {
       if (e.type == 'event') {
         (function() {
           var eventId = e.value.meta.id;
-          removeEvents.push(function(origEvents) {
-            for (var j = 0, jj = origEvents.length; j < jj; ++j) {
-              if (origEvents[j].value.meta.id == eventId) {
-                origEvents.splice(j, 1);
-                break;
+          removeEvents.push({
+            id: 'remove event ' + eventId,
+            apply: function(origEvents) {
+              for (var j = 0, jj = origEvents.length; j < jj; ++j) {
+                if (origEvents[j].value.meta.id == eventId) {
+                  origEvents.splice(j, 1);
+                  break;
+                }
               }
+              return origEvents;
             }
-            return origEvents;
           });
         })();
       }
     }
 
+    var captureEvents = collectCaptures(events);
+
     function testScript(scriptEvents, callback) {
-      var timeoutId = -1;
-
-      var r = controller.replayScript(id, scriptEvents, function(replay) {
-        clearTimeout(timeoutId);
-
-        if (replay.index != replay.events.length) {
-          callback(false);
-          return;
-        }
-
-        var captures = replay.captures;
-        for (var i = 0, ii = expCaptures.length; i < ii; ++i) {
-          if (i >= captures.length) {
-            callback(false);
-            return;
-          }
-
-          var c = captures[i];
-          var e = expCaptures[i];
-
-          var eText = e.value.data.target.snapshot.prop.innerText;
-          var cText = c.innerText;
-          if (eText != cText) {
-            callback(false);
-            return;
-          }
-        }
-        callback(true);
+      runScript(id, scriptEvents, 1, 300 * 1000, function(replays) {
+        var replay = replays[0];
+        callback(checkReplaySuccess(captureEvents, scriptEvents, replay),
+                 replay);
       });
-
-      // kill script after timeout period
-      timeoutId = setTimeout(function() {
-        r.finish();
-      }, 300 * 1000);
     }
-
-    var debug = new SimpleDebug(events, removeEvents, testScript);
+  
+    console.log('trying to remove events:', removeEvents);
+    var debug = new SimpleDebug(events, removeEvents, true, testScript);
     debug.run();
   });
 }
+
+function runSynthTrigger(scriptId) {
+  params.replaying.eventTimeout = 15;
+  params.replaying.defaultUser = true;
+  params.panel.enableEdit = false;
+  controller.updateParams();
+
+  scriptServer.getScript(scriptId, true, function(id, events) {
+
+    var removeEvents = [];
+    for (var i = 0, ii = events.length; i < ii; ++i) {
+      var e = events[i];
+      if (e.type == 'event') {
+        (function() {
+          var eventId = e.value.meta.id;
+          removeEvents.push({
+            id: 'remove event ' + eventId,
+            apply: function(origEvents) {
+              for (var j = 0, jj = origEvents.length; j < jj; ++j) {
+                if (origEvents[j].value.meta.id == eventId) {
+                  origEvents[j].value.timing.waitTime = 0;
+                  break;
+                }
+              }
+              return origEvents;
+            }
+          });
+        })();
+      }
+    }
+
+    var captureEvents = collectCaptures(events);
+
+    function testScript(scriptEvents, callback) {
+      runScript(id, scriptEvents, 1, 300 * 1000, function(replays) {
+        var replay = replays[0];
+        callback(checkReplaySuccess(captureEvents, scriptEvents, replay),
+                 replay);
+      });
+    }
+  
+    console.log('trying to remove waits:', removeEvents);
+    var debug = new SimpleDebug(events, removeEvents, true, testScript);
+    debug.run();
+  });
+}
+

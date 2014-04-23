@@ -302,25 +302,28 @@ var Panel = (function PanelClosure() {
       }
 
       $('#events').append(eventDiv);
-      eventDiv.append(createMenu(eventInfo, id));
 
-      var controller = this.controller;
-      function edited(value, settings) {
-        var id = this.id;
-        var parts = id.split('.');
-        var event = parts[0];
-        var field = parts.slice(1).join('.');
-        controller.userUpdate(event, field, value);
-        return value;
+      if (params.panel.enableEdit) {
+        eventDiv.append(createMenu(eventInfo, id));
+
+        var controller = this.controller;
+        var edited = function(value, settings) {
+          var id = this.id;
+          var parts = id.split('.');
+          var event = parts[0];
+          var field = parts.slice(1).join('.');
+          controller.userUpdate(event, field, value);
+          return value;
+        }
+
+        eventDiv.find('span.editable').editable(edited, { 
+          type      : 'textarea',
+          width     : '100%',
+          cancel    : 'Cancel',
+          submit    : 'OK',
+          tooltip   : 'Click to edit...'
+        });
       }
-
-      eventDiv.find('span.editable').editable(edited, { 
-        type      : 'textarea',
-        width     : '100%',
-        cancel    : 'Cancel',
-        submit    : 'OK',
-        tooltip   : 'Click to edit...'
-      });
     },
     addMessage: function _addMessage(message) {
       var newDiv = $('<div/>', {class: 'message wordwrap'});

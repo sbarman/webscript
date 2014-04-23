@@ -628,10 +628,10 @@ var Replay = (function ReplayClosure() {
         var defaultTime = events[index].value.timing.waitTime;
       else
         var defaultTime = 0;
-
+/*
       if (defaultTime > 100 && events[this.index].value.data.type == 'capture')
         defaultTime = 100;
-
+*/
       if (defaultTime > 10000)
         defaultTime = 10000;
 
@@ -748,16 +748,18 @@ var Replay = (function ReplayClosure() {
       }
     },
     saveCapture: function _saveCapture(capture) {
-      var loopPrefix = this.loopPrefix.join(',');
-      var capId = this.scriptId + ':' + loopPrefix + ':' + capture.id;
-
-      var storage = {}
-      storage[capId] = JSON.stringify(capture);
       replayLog.log('capture:', capture);
-      chrome.storage.local.set(storage);
-      // this.captures.push(capture);
+      this.captures.push(capture);
       // this.scriptServer.saveCapture(capture, this.scriptId);
       this.updateListeners({capture: capture.innerText.trim()});
+
+      if (params.replaying.saveCaptureLocal) {
+        var loopPrefix = this.loopPrefix.join(',');
+        var capId = this.scriptId + ':' + loopPrefix + ':' + capture.id;
+        var storage = {}
+        storage[capId] = JSON.stringify(capture);
+        chrome.storage.local.set(storage);
+      }
     },
     findPortInTab: function _findPortInTab(frame) {
       var ports = this.ports;
@@ -920,7 +922,6 @@ var Replay = (function ReplayClosure() {
         }
       // need to open new tab
       } else {
-        
         var allTabs = Object.keys(this.ports.tabIdToTab);
 
         var revMapping = {};
@@ -939,35 +940,42 @@ var Replay = (function ReplayClosure() {
           tabMapping[frame.tab] = unusedTabs[0];
           this.setNextTimeout(0);
         }
-        
 
-        var prompt = "Does the page exist? If so select the tab then type " +
-                     "'yes'. Else type 'no'.";
         var replay = this;
-        var user = this.user;
-        user.question(prompt, yesNoCheck, 'no', function(answer) {
-          if (answer == 'no') {
-            replayLog.log('need to open new tab');
-            chrome.tabs.create({url: frame.topURL, active: true},
-              function(newTab) {
-                replayLog.log('new tab opened:', newTab);
-                var newTabId = newTab.id;
-                replay.tabMapping[frame.tab] = newTabId;
-                replay.ports.tabIdToTab[newTabId] = newTab;
-                replay.setNextTimeout(params.replaying.defaultWaitNewTab);
-              }
-            );
-          } else if (answer == 'yes') {
-            var tabInfo = user.getActivatedTab()
-            chrome.tabs.get(tabInfo.tabId, function(tab) {
-              replayLog.log('mapping tab:', tab);
-              var tabId = tab.id;
-              replay.tabMapping[frame.tab] = tabId;
-              // replay.ports.tabIdToTab[tabId] = tab;
+        var openNewTab = function() {
+          replayLog.log('need to open new tab');
+          chrome.tabs.create({url: frame.topURL, active: true},
+            function(newTab) {
+              replayLog.log('new tab opened:', newTab);
+              var newTabId = newTab.id;
+              replay.tabMapping[frame.tab] = newTabId;
+              replay.ports.tabIdToTab[newTabId] = newTab;
               replay.setNextTimeout(params.replaying.defaultWaitNewTab);
-            });
-          }
-        });
+            }
+          );
+        }
+
+        if (!this.firstEventReplayed && params.replaying.openNewTab) {
+          openNewTab();
+        } else {
+          var prompt = "Does the page exist? If so select the tab then type " +
+                       "'yes'. Else type 'no'.";
+          var user = this.user;
+          user.question(prompt, yesNoCheck, 'no', function(answer) {
+            if (answer == 'no') {
+              openNewTab();
+            } else if (answer == 'yes') {
+              var tabInfo = user.getActivatedTab()
+              chrome.tabs.get(tabInfo.tabId, function(tab) {
+                replayLog.log('mapping tab:', tab);
+                var tabId = tab.id;
+                replay.tabMapping[frame.tab] = tabId;
+                // replay.ports.tabIdToTab[tabId] = tab;
+                replay.setNextTimeout(0);
+              });
+            }
+          });
+        }
       }
       return replayPort;
     },
@@ -1220,12 +1228,9 @@ var Replay = (function ReplayClosure() {
                         var endIndex = events.indexOf(endEvent);
   
                         replay.index = endIndex;
-                        replay.incrementIndex();
-                        replay.setNextTimeout(1000);
-                      } else {
-                        replay.incrementIndex();
-                        replay.setNextTimeout(1000);
                       }
+                      replay.incrementIndex();
+                      replay.setNextTimeout(1000);
                     },
                     25000
                 );
@@ -1242,7 +1247,6 @@ var Replay = (function ReplayClosure() {
             this.setNextTimeout(0);
             return;
           } else {
-            
             replayLog.log('recording next events');
             v.nextEvents = [];
             v.origPortMapping = jQuery.extend({}, this.portMapping);
@@ -1339,7 +1343,7 @@ var Replay = (function ReplayClosure() {
           }
 
           if (!matchedEvent) {
-            this.setNextTimeout(300);
+            this.setNextTimeout(params.replaying.defaultWait);
             return;
           }
         }
@@ -1754,11 +1758,6 @@ chrome.tabs.onRemoved.addListener(function(tabId, removeInfo) {
 var filter = {urls: ['http://*/*', 'https://*/*'], 
   types: ['main_frame', 'sub_frame', 'script', 'object', 'xmlhttprequest']};
 
-/*
-chrome.webRequest.onBeforeRequest.addListener(function(details) {
-  console.log('before request', details);
-}, filter);
-*/
 function addBackgroundEvent(e) {
   if (record.recordState == RecordState.RECORDING)
     record.addEvent(e);
@@ -1784,13 +1783,12 @@ function addWebRequestEvent(details, type) {
   e.value = v;
 
   addBackgroundEvent(e);
-
 }
 
 chrome.webRequest.onBeforeRequest.addListener(function(details) {
   bgLog.log('request start', details);
   addWebRequestEvent(details, 'start');
-}, filter);
+}, filter, ['blocking']);
 
 chrome.webRequest.onCompleted.addListener(function(details) {
   bgLog.log('completed', details);
