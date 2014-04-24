@@ -227,33 +227,44 @@ function runLearner(id) {
 var SimpleDebug = (function SimpleDebugClosure() {
   var log = getLog('simpledebug');
 
-  function SimpleDebug(orig, deltas, accumulate, test) {
+  function SimpleDebug(orig, deltas, grouped, accumulate, test, callback) {
     this.orig = orig;
     this.deltas = deltas;
+    this.grouped = grouped;
     this.accumulate = accumulate;
     this.test = test;
+    this.callback = callback;
   }
 
   SimpleDebug.prototype = {
     run: function _run() {
       this.enabled = [];
       this.disabled = [];
-      this.index = 0;
+
+      if (this.grouped)  {
+        this.index = [0, 0];
+      } else {
+        this.index = 0;
+      }
 
       this.runTest();
     },
     runTest: function _runTest() {
-      var deltas = this.deltas;
-      var index = this.index;
-      var required 
-
-      if (index >= deltas.length) {
+      if (this.isFinished()) {
         log.log('finished minimizing:', this.enabled, this.disabled);
+        var finished = jQuery.extend(true, [], this.orig);
+        var enabled = this.enabled;
+        for (var i = 0, ii = enabled.length; i < ii; ++i) {
+          finished = enabled[i].delta.apply(finished);
+        }
+        this.finished = finished;
+        if (this.callback)
+          this.callback(this);
         return;
       }
 
       var cur = jQuery.extend(true, [], this.orig);
-      var delta = deltas[index];
+      var delta = this.getNextDelta();
       cur = delta.apply(cur); 
 
       var enabled = this.enabled;
@@ -273,12 +284,52 @@ var SimpleDebug = (function SimpleDebugClosure() {
         } else {
           simpleDebug.enabled.push(info);
         }
-        simpleDebug.index++;
+        simpleDebug.incrementIndex(result);
         setTimeout(function() {
           simpleDebug.runTest();
         }, 0);
       });
-    }
+    },
+    incrementIndex: function _incrementIndex(curDeltaSuccess) {
+      if (this.grouped) {
+        var index = this.index;
+        var idxGroup = index[0];
+        var idxDelta = index[1];
+
+        var deltas = this.deltas;
+        var deltaGroup = deltas[idxGroup];
+
+        if (!curDeltaSuccess && idxDelta + 1 < deltaGroup.length) {
+          index[1]++;
+        } else {
+          index[0]++;
+          index[1] = 0;
+        }
+      } else {
+        this.index++;
+      }
+    },
+    getNextDelta: function _getNextDelta() {
+      var deltas = this.deltas;
+      var index = this.index;
+
+      if (this.grouped) {
+        return deltas[index[0]][index[1]];
+      } else {
+        return deltas[index];
+      }
+    },
+    isFinished: function _isFinished() {
+      var deltas = this.deltas;
+      var index = this.index;
+      var grouped = this.grouped;
+
+      if (grouped) {
+        return grouped && index[0] >= deltas.length;
+      } else {
+       return !grouped && index >= deltas.length;
+      }
+    },
   }
 
   return SimpleDebug;
@@ -346,13 +397,18 @@ function checkReplaySuccess(captureEvents, events, replay) {
   return true;
 }
 
-function runRemoveEvents(scriptId) {
+function saveScript(scriptName, debug) {
+  var finalEvents = debug.finished;
+  scriptServer.saveScript(scriptName, finalEvents, [], params);
+}
+
+function runRemoveEvents(scriptName) {
   params.replaying.eventTimeout = 15;
   params.replaying.defaultUser = true;
   params.panel.enableEdit = false;
   controller.updateParams();
 
-  scriptServer.getScript(scriptId, true, function(id, events) {
+  scriptServer.getScript(scriptName, true, function(id, events) {
 
     var removeEvents = [];
     for (var i = 0, ii = events.length; i < ii; ++i) {
@@ -361,7 +417,7 @@ function runRemoveEvents(scriptId) {
         (function() {
           var eventId = e.value.meta.id;
           removeEvents.push({
-            id: 'remove event ' + eventId,
+            id: 'remove event:' + eventId,
             apply: function(origEvents) {
               for (var j = 0, jj = origEvents.length; j < jj; ++j) {
                 if (origEvents[j].value.meta.id == eventId) {
@@ -387,27 +443,31 @@ function runRemoveEvents(scriptId) {
     }
   
     console.log('trying to remove events:', removeEvents);
-    var debug = new SimpleDebug(events, removeEvents, true, testScript);
+    var debug = new SimpleDebug(events, removeEvents, false, true, testScript,
+        function(debug) {
+          saveScript(scriptName + '_remove', debug);
+        });
     debug.run();
   });
 }
 
-function runSynthTrigger(scriptId) {
+function runMinWait(scriptName) {
   params.replaying.eventTimeout = 15;
   params.replaying.defaultUser = true;
   params.panel.enableEdit = false;
   controller.updateParams();
 
-  scriptServer.getScript(scriptId, true, function(id, events) {
+  scriptServer.getScript(scriptName, true, function(id, events) {
 
-    var removeEvents = [];
+    var removeWaits = [];
     for (var i = 0, ii = events.length; i < ii; ++i) {
       var e = events[i];
       if (e.type == 'event') {
         (function() {
           var eventId = e.value.meta.id;
-          removeEvents.push({
-            id: 'remove event ' + eventId,
+          var origWait = e.value.timing.waitTime;
+          removeWaits.push({
+            id: 'remove wait:' + eventId + ',' + origWait,
             apply: function(origEvents) {
               for (var j = 0, jj = origEvents.length; j < jj; ++j) {
                 if (origEvents[j].value.meta.id == eventId) {
@@ -432,9 +492,133 @@ function runSynthTrigger(scriptId) {
       });
     }
   
-    console.log('trying to remove waits:', removeEvents);
-    var debug = new SimpleDebug(events, removeEvents, true, testScript);
+    console.log('trying to remove waits:', removeWaits);
+    var debug = new SimpleDebug(events, removeWaits, false, true, testScript,
+        function(debug) {
+          saveScript(scriptName + '_waits', debug);
+        });
     debug.run();
   });
 }
 
+function runSynthWait(scriptName) {
+  params.replaying.eventTimeout = 15;
+  params.replaying.defaultUser = true;
+  params.replaying.defaultWaitNewTab = 100;
+  params.replaying.targetTimeout = 1;
+  params.panel.enableEdit = false;
+  controller.updateParams();
+
+  scriptServer.getScript(scriptName, true, function(scriptId, events) {
+    runScript(scriptId, events, 3, 300 * 1000, function(replays) {
+      var triggers = mapPossibleTriggerToEvent(events, replays);
+      console.log(triggers);
+
+      var triggerChanges = [];
+      for (var i = 0, ii = events.length; i < ii; ++i) {
+        var e = events[i];
+        var id = e.value.meta.id;
+        if (id in triggers) {
+          var eventTriggers = triggers[id];
+          var triggerGroup = [];
+          for (var j = 0, jj = eventTriggers.length; j < jj; ++j) {
+            var triggerEvent = eventTriggers[j];
+            if (triggerEvent != 'nowait') {
+              (function() {
+                var eventId = id;
+                var triggerEventId = triggerEvent;
+                triggerGroup.push({
+                  id: 'add wait:' + eventId + ',' + triggerEventId,
+                  apply: function(origEvents) {
+                    for (var j = 0, jj = origEvents.length; j < jj; ++j) {
+                      if (origEvents[j].value.meta.id == eventId) {
+                        origEvents[j].value.timing.waitEvent = triggerEventId;
+                        origEvents[j].value.timing.waitTime = 0;
+                        break;
+                      }
+                    }
+                    return origEvents;
+                  }
+                })
+              })();
+            } else {
+              (function() {
+                var eventId = id;
+                triggerGroup.push({
+                  id: 'remove wait:' + eventId,
+                  apply: function(origEvents) {
+                    for (var j = 0, jj = origEvents.length; j < jj; ++j) {
+                      if (origEvents[j].value.meta.id == eventId) {
+                        origEvents[j].value.timing.waitTime = 0;
+                        break;
+                      }
+                    }
+                    return origEvents;
+                  }
+                })
+              })();
+            }
+          }
+          triggerChanges.push(triggerGroup);
+        }
+      }
+
+      var captureEvents = collectCaptures(events);
+
+      function testScript(scriptEvents, callback) {
+        runScript(scriptId, scriptEvents, 1, 300 * 1000, function(replays) {
+          var replay = replays[0];
+          callback(checkReplaySuccess(captureEvents, scriptEvents, replay),
+                   replay);
+        });
+      }
+  
+      console.log('trying to synthesize waits:');
+      var debug = new SimpleDebug(events, triggerChanges, true, true, testScript,
+          function(finalEvents) {
+            console.log(finalEvents);
+            saveScript(scriptName + '_trigger', finalEvents);
+          });
+      debug.run();
+    });
+  });
+}
+
+function getCompletedUrls(replay) {
+  var events = replay.events;
+  var completed = events.filter(function(e) {return e.type == 'completed'});
+  return completed.map(function(e) {return e.value.data.url});
+}
+
+function getPossibleTriggerUrls(replays) {
+  var urlLists = replays.map(getCompletedUrls);
+  var intersectList = urlLists[0];
+  for (var i = 1, ii = urlLists.length; i < ii; ++i) {
+    var l = urlLists[i];
+    intersectList = intersectList.filter(function(url) {
+      return l.indexOf(url) != -1;
+    });
+  }
+  return intersectList;
+}
+
+function mapPossibleTriggerToEvent(orig, replays) {
+  var triggerUrls = getPossibleTriggerUrls(replays);
+
+  var mapping = {};
+  var completedEvents = [];
+
+  for (var i = 0, ii = orig.length; i < ii; ++i) {
+    var e = orig[i];
+    if (e.type == 'event') {
+      mapping[e.value.meta.id] = completedEvents;
+      completedEvents = [];
+      completedEvents.push('nowait');
+    } else if (e.type == 'completed') {
+      if (triggerUrls.indexOf(e.value.data.url) != -1) {
+        completedEvents.push(e.value.meta.id);
+      }
+    }
+  }
+  return mapping;
+}

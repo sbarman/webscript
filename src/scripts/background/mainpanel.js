@@ -628,7 +628,7 @@ var Replay = (function ReplayClosure() {
       if (index < events.length)
         var defaultTime = events[index].value.timing.waitTime;
       else
-        var defaultTime = 0;
+        return 0;
 
       if (events[this.index].value.data.type == 'capture' &&
           typeof params.replaying.captureWait == 'number')
