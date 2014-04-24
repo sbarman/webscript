@@ -502,10 +502,9 @@ function runMinWait(scriptName) {
 }
 
 function runSynthWait(scriptName) {
+  params = jQuery.extend(true, {}, defaultParams);
   params.replaying.eventTimeout = 15;
   params.replaying.defaultUser = true;
-  params.replaying.defaultWaitNewTab = 100;
-  params.replaying.targetTimeout = 1;
   params.panel.enableEdit = false;
   controller.updateParams();
 
@@ -566,6 +565,11 @@ function runSynthWait(scriptName) {
       var captureEvents = collectCaptures(events);
 
       function testScript(scriptEvents, callback) {
+        // lets make it replay a bit harder
+        params.replaying.defaultWaitNewTab = 100;
+        params.replaying.targetTimeout = 1;
+        controller.updateParams();
+
         runScript(scriptId, scriptEvents, 1, 300 * 1000, function(replays) {
           var replay = replays[0];
           callback(checkReplaySuccess(captureEvents, scriptEvents, replay),

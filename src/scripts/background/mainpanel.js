@@ -31,6 +31,9 @@ var PortManager = (function PortManagerClosure() {
     },
     getTabInfo: function _getTabInfo(tab) {
       var tabInfo = this.tabIdToTabInfo[tab];
+      if (!tabInfo)
+        return null;
+
       var ret = {};
       ret.frames = tabInfo.frames;
 
