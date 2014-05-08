@@ -246,6 +246,10 @@ var Panel = (function PanelClosure() {
       var eventInfo = eventRecord.value;
       var id = eventInfo.meta.id;
       var type = eventRecord.type;
+
+      if (!params.panel.enableRequest && (type == 'completed' || type == 'start'))
+        return;
+
       var eventDiv = $('<div/>', {class: 'event wordwrap', id: id});
      
       var title = $('<div><b>[' + id + ']type:' + '</b>' + type + '</div>');

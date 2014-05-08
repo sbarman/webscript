@@ -404,7 +404,14 @@ var Record = (function RecordClosure() {
       beginEvent.value.timing = {waitTime: 0};
       var beginEventId = this.addEvent(beginEvent, null, begin);
 
-      var end = events.indexOf(this.getEvent(eventIds[eventIds.length - 1]));
+      var lastEventId;
+      if (eventIds.length == 1) {
+        lastEventId = events[events.length - 1].value.meta.id;
+      } else {
+        lastEventId = eventIds[eventIds.length - 1];
+      }
+
+      var end = events.indexOf(this.getEvent(lastEventId));
       var endEvent = {type: 'end' + type, value: {}};
       endEvent.value.data = {begin: beginEventId};
       endEvent.value.timing = {waitTime: 0};
