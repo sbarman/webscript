@@ -444,8 +444,8 @@ function runRemoveEvents(scriptName) {
   
     console.log('trying to remove events:', removeEvents);
     var debug = new SimpleDebug(events, removeEvents, false, true, testScript,
-        function(debug) {
-          saveScript(scriptName + '_remove', debug);
+        function(finalEvents) {
+          saveScript(scriptName + '_remove', finalEvents);
         });
     debug.run();
   });
@@ -486,9 +486,17 @@ function runMinWait(scriptName) {
 
     function testScript(scriptEvents, callback) {
       runScript(id, scriptEvents, 1, 300 * 1000, function(replays) {
+        /*
         var replay = replays[0];
         callback(checkReplaySuccess(captureEvents, scriptEvents, replay),
                  replay);
+        */
+        for (var i = 0, ii = replays.length; i < ii; ++i) {
+          if (!checkReplaySuccess(captureEvents, scriptEvents, replay[i])) {
+            callback(false);
+          }
+        }
+        callback(true);
       });
     }
   
@@ -505,6 +513,7 @@ function runSynthWait(scriptName) {
   params = jQuery.extend(true, {}, defaultParams);
   params.replaying.eventTimeout = 15;
   params.replaying.defaultUser = true;
+  params.replaying.timingStrategy = TimingStrategy.SLOWER;
   params.panel.enableEdit = false;
   controller.updateParams();
 
@@ -570,10 +579,14 @@ function runSynthWait(scriptName) {
         params.replaying.targetTimeout = 1;
         controller.updateParams();
 
-        runScript(scriptId, scriptEvents, 1, 300 * 1000, function(replays) {
-          var replay = replays[0];
-          callback(checkReplaySuccess(captureEvents, scriptEvents, replay),
-                   replay);
+        runScript(null, scriptEvents, 3, 300 * 1000, function(replays) {
+          for (var i = 0, ii = replays.length; i < ii; ++i) {
+            if (!checkReplaySuccess(captureEvents, scriptEvents, replays[i])) {
+              callback(false);
+              return;
+            }
+          }
+          callback(true);
         });
       }
   

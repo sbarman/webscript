@@ -647,9 +647,9 @@ var Replay = (function ReplayClosure() {
       } else if (timing == TimingStrategy.SPEED) {
         waitTime = 0;
       } else if (timing == TimingStrategy.SLOWER) {
-        waitTime = defaultTime + 1000;
+        waitTime = defaultTime * 2;
       } else if (timing == TimingStrategy.SLOWEST) {
-        waitTime = defaultTime + 3000;
+        waitTime = defaultTime * 4;
       } else if (timing == TimingStrategy.FIXED_1) {
         waitTime = 1000;
       } else if (timing == TimingStrategy.RANDOM_0_3) {
