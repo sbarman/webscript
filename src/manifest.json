@@ -31,6 +31,7 @@
              "scripts/content/synthesis.js",
              "scripts/content/target.js",
              "scripts/content/annotation_events.js",
+             "scripts/content/relation.js",
              "scripts/content/content_script.js"],
       "run_at": "document_start",
       // Bug with Chrome extensions doesn't allow extension code to access
