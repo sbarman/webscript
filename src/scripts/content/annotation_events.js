@@ -5,7 +5,7 @@
 
 var annotationEvents = {};
 
-var replayClipboard =  null;
+var replayClipboard = null;
 
 (function() {
   annotationEvents = {
@@ -47,14 +47,14 @@ var replayClipboard =  null;
         selection.removeAllRanges();
         selection.addRange(range);
 
-        console.log(selection + "");
-        var text = selection + "";
+        console.log(selection + '');
+        var text = selection + '';
         replayClipboard = text;
         port.postMessage({type: 'clipboard', value: text});
       }
     },
     'paste': {
-      guard:  function _pasteGuard(eventMessage) {
+      guard: function _pasteGuard(eventMessage) {
         return eventMessage.data.type == 'paste';
       },
       record: function _pastRecord(eventData, eventMessage) {
@@ -74,7 +74,7 @@ var replayClipboard =  null;
             }
           }
         }
-      },
+      }
     }
   };
 })();

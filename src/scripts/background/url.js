@@ -8,7 +8,7 @@ var matchUrls;
       similarity = params.replaying.urlSimilarity;
 
     var commonUrl = lcs(origUrl, matchedUrl);
-    var commonRatio = commonUrl.length / 
+    var commonRatio = commonUrl.length /
                       Math.max(origUrl.length, matchedUrl.length);
     if (commonRatio > similarity)
       return true;

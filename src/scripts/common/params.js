@@ -140,8 +140,8 @@ var TimeoutStrategy = {
     events: events,
     defaultProps: defaultProps,
     panel: {
-      enableEdit: false,
-      enableRequest: false,
+      enableEdit: true,
+      enableRequest: false
     },
     logging: {
       level: 1,

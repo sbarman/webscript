@@ -144,7 +144,7 @@ var PortManager = (function PortManagerClosure() {
         if (!removed)
           throw "Can't find frame in tabInfo";
       });
-    },
+    }
   };
 
   return PortManager;
@@ -260,7 +260,7 @@ var Record = (function RecordClosure() {
 
         var topFrame = false;
         var iframeIndex = -1;
-  
+
         if (portInfo.top.portName == portName) {
           topFrame == true;
         } else {
@@ -274,8 +274,8 @@ var Record = (function RecordClosure() {
           }
         }
         var topFrame = (portInfo.top.portName == portName);
-  
-  
+
+
         var time = e.data.timeStamp;
         var lastTime = this.lastTime;
         if (lastTime == 0) {
@@ -284,7 +284,7 @@ var Record = (function RecordClosure() {
           var waitTime = time - lastTime;
         }
         this.lastTime = time;
-  
+
         e.frame.port = portName;
         e.frame.topURL = topURL;
         e.frame.topFrame = topFrame;
@@ -296,7 +296,7 @@ var Record = (function RecordClosure() {
       recordLog.log('added event:', eventRequest, portName);
 
       var events = this.events;
-      
+
       if (!e.meta)
         e.meta = {};
       e.meta.id = 'event' + events.length;
@@ -322,7 +322,7 @@ var Record = (function RecordClosure() {
       for (var i = events.length - 1; i >= 0; --i) {
         var e = events[i];
         var value = e.value;
-        if (e.type == 'event' && value.frame.port == portName && 
+        if (e.type == 'event' && value.frame.port == portName &&
             value.meta.pageEventId == pageEventId) {
           for (var type in updates) {
             var typeUpdates = updates[type];
@@ -390,7 +390,7 @@ var Record = (function RecordClosure() {
       for (var i = 0, ii = events.length; i < ii; ++i) {
         var e = events[i];
         if (e.value.meta.id == eventId)
-          return e
+          return e;
       }
       return null;
     },
@@ -426,7 +426,7 @@ var Record = (function RecordClosure() {
     },
     addNextLoop: function _addNextLoop(eventIds) {
       this.addGeneralLoop('next', eventIds);
-    },
+    }
   };
 
   return Record;
@@ -474,7 +474,7 @@ var Replay = (function ReplayClosure() {
       for (var i = 0, ii = events.length; i < ii; ++i) {
         var e = events[i];
         if (e.value.meta.id == eventId)
-          return e
+          return e;
       }
       return null;
     },
@@ -585,7 +585,7 @@ var Replay = (function ReplayClosure() {
       this.cont = null;
       this.debug = [];
       this.benchmarkLog = '';
-      this.clipboard = null; 
+      this.clipboard = null;
       this.loopPrefix = [];
       this.firstEventReplayed = false;
 
@@ -622,7 +622,7 @@ var Replay = (function ReplayClosure() {
     setNextTimeout: function _setNextTimeout(time) {
       if (typeof time == 'undefined')
         time = this.getNextTime();
-       
+
       var replay = this;
       this.timeoutHandle = setTimeout(function() {
         replay.guts();
@@ -768,7 +768,7 @@ var Replay = (function ReplayClosure() {
       if (params.replaying.saveCaptureLocal) {
         var loopPrefix = this.loopPrefix.join(',');
         var capId = this.scriptId + ':' + loopPrefix + ':' + capture.id;
-        var storage = {}
+        var storage = {};
         storage[capId] = JSON.stringify(capture);
         chrome.storage.local.set(storage);
       }
@@ -940,7 +940,7 @@ var Replay = (function ReplayClosure() {
         for (var t in tabMapping) {
           revMapping[tabMapping[t]] = true;
         }
-       
+
         var unusedTabs = [];
         for (var i = 0, ii = allTabs.length; i < ii; ++i) {
           var tabId = allTabs[i];
@@ -966,19 +966,19 @@ var Replay = (function ReplayClosure() {
               replay.setNextTimeout(params.replaying.defaultWaitNewTab);
             }
           );
-        }
+        };
 
         if (!this.firstEventReplayed && params.replaying.openNewTab) {
           openNewTab();
         } else {
-          var prompt = "Does the page exist? If so select the tab then type " +
+          var prompt = 'Does the page exist? If so select the tab then type ' +
                        "'yes'. Else type 'no'.";
           var user = this.user;
           user.question(prompt, yesNoCheck, 'no', function(answer) {
             if (answer == 'no') {
               openNewTab();
             } else if (answer == 'yes') {
-              var tabInfo = user.getActivatedTab()
+              var tabInfo = user.getActivatedTab();
               chrome.tabs.get(tabInfo.tabId, function(tab) {
                 replayLog.log('mapping tab:', tab);
                 var tabId = tab.id;
@@ -1016,7 +1016,7 @@ var Replay = (function ReplayClosure() {
             replayLog.log('found wait ack');
             return;
           }
-        } else 
+        } else
         */
         if (replayState == ReplayState.REPLAY_ACK ||
             replayState == ReplayState.REPLAY_ONE_ACK) {
@@ -1041,7 +1041,7 @@ var Replay = (function ReplayClosure() {
             this.replayState = ReplayState.REPLAYING;
             this.lastReplayPort = null;
           } else if (type == Ack.PARTIAL) {
-            throw "partially executed commands";
+            throw 'partially executed commands';
           } else if (type == Ack.GENERALIZE) {
             this.generalizeScript(ack);
 
@@ -1073,15 +1073,15 @@ var Replay = (function ReplayClosure() {
         if (type == 'beginloop') {
           if ('generalPrefixes' in v.reset) {
             replayLog.log('have prefixes, starting loop');
-  
+
             // reset mappings
             this.portMapping = jQuery.extend({}, v.reset.portMapping);
             this.tabMapping = jQuery.extend({}, v.reset.tabMapping);
             this.record.events = v.reset.recordEvents.slice(0);
-  
+
             // close new tabs since original state
             var currentTabIds = Object.keys(this.ports.tabIdToTab);
-            var tabIdToTab = v.reset.tabIdToTab; 
+            var tabIdToTab = v.reset.tabIdToTab;
             for (var i = 0, ii = currentTabIds.length; i < ii; ++i) {
               var tabId = currentTabIds[i];
               if (!tabIdToTab[tabId])
@@ -1102,23 +1102,23 @@ var Replay = (function ReplayClosure() {
               return;
             }
 
-            this.loopPrefix.push(prefixIndex); 
+            this.loopPrefix.push(prefixIndex);
             var newPrefix = prefixes[prefixIndex];
             v.reset.index++;
-  
+
             var generalizeInfo = {
               orig: v.reset.origPrefix,
               new: newPrefix
-            }
-  
+            };
+
             for (var i = index + 1; i < endIndex; ++i) {
               events[i].value.generalize = generalizeInfo;
               this.resetEvent(events[i]);
             }
-  
+
             //replayPort.postMessage({type: 'portEvents',
             //                        value: this.eventsByPort[frame.port]});
-  
+
             this.incrementIndex();
             this.setNextTimeout();
           } else {
@@ -1139,7 +1139,7 @@ var Replay = (function ReplayClosure() {
 
             if (!port)
               return;
-            
+
             if (v.generalXPath) {
               replayLog.log('found general xpath, need prefixes');
               var value = {generalXPath: v.generalXPath, origXPath: v.origXPath};
@@ -1168,10 +1168,10 @@ var Replay = (function ReplayClosure() {
             this.portMapping = jQuery.extend({}, v.reset.portMapping);
             this.tabMapping = jQuery.extend({}, v.reset.tabMapping);
             this.record.events = v.reset.recordEvents.slice(0);
-  
+
             // close new tabs since original state
             var currentTabIds = Object.keys(this.ports.tabIdToTab);
-            var tabIdToTab = v.reset.tabIdToTab; 
+            var tabIdToTab = v.reset.tabIdToTab;
             for (var i = 0, ii = currentTabIds.length; i < ii; ++i) {
               var tabId = currentTabIds[i];
               if (!tabIdToTab[tabId])
@@ -1187,9 +1187,9 @@ var Replay = (function ReplayClosure() {
             var replay = this;
             var nextEvents = v.nextEvents;
             var index = v.reset.index;
-            
-            this.loopPrefix.push(index); 
-  
+
+            this.loopPrefix.push(index);
+
             if (index == 0) {
               v.reset.index++;
               replay.incrementIndex();
@@ -1215,7 +1215,7 @@ var Replay = (function ReplayClosure() {
             var newTab = this.tabMapping[origTab];
             nextTabMapping[tab] = newTab;
 
-            var pass =  null;
+            var pass = null;
             replay.subReplay(nextEvent, null, nextTabMapping,
                 function(r) {
                   // check that events were executed
@@ -1227,7 +1227,7 @@ var Replay = (function ReplayClosure() {
                   if (pass == false) {
                     var endEvent = replay.getEvent(v.data.end);
                     var endIndex = events.indexOf(endEvent);
-  
+
                     replay.index = endIndex;
                   }
                   replay.incrementIndex();
@@ -1242,7 +1242,7 @@ var Replay = (function ReplayClosure() {
             v.reset.recordEvents = this.record.events.slice(0);
             v.reset.tabIdToTab = jQuery.extend({}, this.ports.tabIdToTab);
             v.reset.index = 0;
-            
+
             this.setNextTimeout(0);
             return;
           } else {
@@ -1255,7 +1255,7 @@ var Replay = (function ReplayClosure() {
 
             var user = this.user;
             var p = 'Demonstrate how to get the next set of data. Press enter ' +
-              'when done.'
+              'when done.';
 
             var replay = this;
             var recordNextEvents = function() {
@@ -1280,10 +1280,10 @@ var Replay = (function ReplayClosure() {
                   }
                 );
               });
-            }
+            };
             recordNextEvents();
             return;
-          } 
+          }
         } else if (type == 'endnext') {
           replayLog.log('end loop');
 
@@ -1361,7 +1361,7 @@ var Replay = (function ReplayClosure() {
 
               replayLog.log('continue waiting for wait ack');
             }
-          } else 
+          } else
           */
           if (replayState == ReplayState.REPLAYING ||
               replayState == ReplayState.REPLAY_ONE) {
@@ -1428,7 +1428,7 @@ var Replay = (function ReplayClosure() {
             } else if (strategy == BrokenPortStrategey.SKIP) {
               // we probably navigated away from the page so lets skip all
               // events that use this same port
-              while (index < events.length && 
+              while (index < events.length &&
                      events[index].value.frameport == port) {
                 replayLog.log('skipping event:', index);
                 ++index;
@@ -1521,7 +1521,7 @@ var User = (function UserClosure() {
       return this.activeTab;
     },
     contentScriptQuestion: function _question(prompt, port) {
-      this.question(prompt, function() {return true;}, "", function(answer) {
+      this.question(prompt, function() {return true;}, '', function(answer) {
         port.postMessage({type: 'promptResponse', value: answer});
       });
     }
@@ -1678,7 +1678,7 @@ function handleIdMessage(request, sender, sendResponse) {
   bgLog.log('background receiving:', request, 'from', sender);
   if (request.type == 'getId') {
     var portName = ports.getNewId(request.value, sender);
-    if(portName)
+    if (portName)
       sendResponse({type: 'id', value: portName});
   }
 }
@@ -1753,7 +1753,7 @@ chrome.tabs.onRemoved.addListener(function(tabId, removeInfo) {
   ports.removeTab(tabId);
 });
 
-var filter = {urls: ['http://*/*', 'https://*/*'], 
+var filter = {urls: ['http://*/*', 'https://*/*'],
   types: ['main_frame', 'sub_frame', 'script', 'object', 'xmlhttprequest']};
 
 function addBackgroundEvent(e) {

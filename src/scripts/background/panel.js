@@ -125,10 +125,10 @@ var Panel = (function PanelClosure() {
       });
 
       $('#input').keypress(function(e) {
-        if(e.which == 13 && !e.shiftKey) {
+        if (e.which == 13 && !e.shiftKey) {
           var target = $(e.target);
           var val = target.val();
-          target.val("");
+          target.val('');
           e.preventDefault();
 
           panel.answer(val);
@@ -144,7 +144,7 @@ var Panel = (function PanelClosure() {
           var name = prefix + '.' + param;
 
           if (paramType == 'number') {
-            var input = $('<input/>', {type: 'text', name: name})
+            var input = $('<input/>', {type: 'text', name: name});
             input.prop('value', paramValue);
             var newDiv = $('<div/>', {text: param});
             newDiv.append(input);
@@ -251,7 +251,7 @@ var Panel = (function PanelClosure() {
         return;
 
       var eventDiv = $('<div/>', {class: 'event wordwrap', id: id});
-     
+
       var title = $('<div><b>[' + id + ']type:' + '</b>' + type + '</div>');
       var panel = this;
       title.click(function(e) {
@@ -264,7 +264,7 @@ var Panel = (function PanelClosure() {
         var xpath = eventInfo.data.target.xpath;
         var URL = eventInfo.frame.URL;
         var port = eventInfo.frame.port;
-  
+
         eventDiv.append('<b>type:' + '</b>' + type + '<br/>');
         eventDiv.append('<b>xpath:' + '</b>' + xpath + '<br/>');
         eventDiv.append('<b>URL:' + '</b>' + URL + '<br/>');
@@ -276,15 +276,15 @@ var Panel = (function PanelClosure() {
       };
 
       function createMenu(obj, idPrefix) {
-        var topDiv =  $('<div/>');
+        var topDiv = $('<div/>');
         for (var key in obj) {
           var val = obj[key];
           if (typeof val == 'object'/* && key != 'snapshot'*/) {
             var catDiv = $('<div/>');
-            var title = $('<div/>', {class: 'catTitle'})
+            var title = $('<div/>', {class: 'catTitle'});
             title.text(key);
             title.click(toggle);
-            var menu = createMenu(val, idPrefix + '.'  + key);
+            var menu = createMenu(val, idPrefix + '.' + key);
 
             catDiv.append(title);
             catDiv.append(menu);
@@ -318,14 +318,14 @@ var Panel = (function PanelClosure() {
           var field = parts.slice(1).join('.');
           controller.userUpdate(event, field, value);
           return value;
-        }
+        };
 
-        eventDiv.find('span.editable').editable(edited, { 
-          type      : 'textarea',
-          width     : '100%',
-          cancel    : 'Cancel',
-          submit    : 'OK',
-          tooltip   : 'Click to edit...'
+        eventDiv.find('span.editable').editable(edited, {
+          type: 'textarea',
+          width: '100%',
+          cancel: 'Cancel',
+          submit: 'OK',
+          tooltip: 'Click to edit...'
         });
       }
     },

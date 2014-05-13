@@ -241,7 +241,7 @@ var SimpleDebug = (function SimpleDebugClosure() {
       this.enabled = [];
       this.disabled = [];
 
-      if (this.grouped)  {
+      if (this.grouped) {
         this.index = [0, 0];
       } else {
         this.index = 0;
@@ -265,7 +265,7 @@ var SimpleDebug = (function SimpleDebugClosure() {
 
       var cur = jQuery.extend(true, [], this.orig);
       var delta = this.getNextDelta();
-      cur = delta.apply(cur); 
+      cur = delta.apply(cur);
 
       var enabled = this.enabled;
       if (this.accumulate) {
@@ -278,7 +278,7 @@ var SimpleDebug = (function SimpleDebugClosure() {
       var simpleDebug = this;
 
       test(cur, function(result, data) {
-        var info = {delta: delta,  misc: data};
+        var info = {delta: delta, misc: data};
         if (!result) {
           simpleDebug.disabled.push(info);
         } else {
@@ -329,8 +329,8 @@ var SimpleDebug = (function SimpleDebugClosure() {
       } else {
        return !grouped && index >= deltas.length;
       }
-    },
-  }
+    }
+  };
 
   return SimpleDebug;
 })();
@@ -346,7 +346,7 @@ function runScript(id, events, numRuns, timeout, callback) {
           index: replay.index,
           events: replay.record.events,
           captures: replay.captures
-        }
+        };
         runs.push(run);
 
         setTimeout(function() {runOnce();});
@@ -441,7 +441,7 @@ function runRemoveEvents(scriptName) {
                  replay);
       });
     }
-  
+
     console.log('trying to remove events:', removeEvents);
     var debug = new SimpleDebug(events, removeEvents, false, true, testScript,
         function(finalEvents) {
@@ -499,7 +499,7 @@ function runMinWait(scriptName) {
         callback(true);
       });
     }
-  
+
     console.log('trying to remove waits:', removeWaits);
     var debug = new SimpleDebug(events, removeWaits, false, true, testScript,
         function(debug) {
@@ -547,7 +547,7 @@ function runSynthWait(scriptName) {
                     }
                     return origEvents;
                   }
-                })
+                });
               })();
             } else {
               (function() {
@@ -563,7 +563,7 @@ function runSynthWait(scriptName) {
                     }
                     return origEvents;
                   }
-                })
+                });
               })();
             }
           }
@@ -589,7 +589,7 @@ function runSynthWait(scriptName) {
           callback(true);
         });
       }
-  
+
       console.log('trying to synthesize waits:');
       var debug = new SimpleDebug(events, triggerChanges, true, true, testScript,
           function(finalEvents) {

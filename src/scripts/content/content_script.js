@@ -297,7 +297,7 @@ function updateDeltas(target) {
         meta: {
           deltas: deltas,
           nodeSnapshot: snapshotNode(lastRecordSnapshot.target),
-          pageEventId: lastRecordEvent.meta.pageEventId,
+          pageEventId: lastRecordEvent.meta.pageEventId
         }
       },
       state: recording
@@ -364,7 +364,7 @@ function captureNodeReply(target, event) {
 
   log.log('capturing:', target, eventMessage);
   port.postMessage({type: 'event', value: eventMessage, state: recording});
-  
+
   event.preventDefault();
   event.stopImmediatePropagation();
 }
@@ -695,9 +695,9 @@ function generalizeFinish() {
       break starsloop;
     }
   }
- 
-  log.log('found more general xpath:', generalXPath, origXPath); 
-  findPrefixes(origXPath, generalXPath)
+
+  log.log('found more general xpath:', generalXPath, origXPath);
+  findPrefixes(origXPath, generalXPath);
 }
 
 function findPrefixes(origXPath, generalXPath) {
@@ -709,7 +709,7 @@ function findPrefixes(origXPath, generalXPath) {
       setTimeout(function() {
         dehighlightNode(idName);
       }, 2000);
-    } 
+    }
   } else {
     log.error('no nodes found');
     return;
