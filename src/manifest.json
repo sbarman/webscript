@@ -8,13 +8,13 @@
     "default_icon": "icons/16-full-color.png"
   },
   "background": {
-    "page": "pages/background.html"
+    "page": "main/pages/background.html"
   },
   "web_accessible_resources": [
-    "scripts/content/injected.js",
-    "scripts/common/params.js",
-    "scripts/common/logging.js",
-    "scripts/content/misc.js"
+    "main/scripts/content/injected.js",
+    "main/scripts/common/params.js",
+    "main/scripts/common/logging.js",
+    "main/scripts/content/misc.js"
   ],
   "content_scripts": [
     {
@@ -22,17 +22,17 @@
       "js": ["lib/jquery-1.7.2.js",
              "lib/underscore.js",
              "lib/outline/jquery.dom-outline-1.0.js",
-             "scripts/common/common.js",
-             "scripts/common/params.js",
-             "scripts/common/logging.js",
-             "scripts/content/misc.js",
-             "scripts/content/snapshot.js",
-             "scripts/content/port.js", 
-             "scripts/content/synthesis.js",
-             "scripts/content/target.js",
-             "scripts/content/annotation_events.js",
-             "scripts/content/relation.js",
-             "scripts/content/content_script.js"],
+             "main/scripts/common/common.js",
+             "main/scripts/common/params.js",
+             "main/scripts/common/logging.js",
+             "main/scripts/content/misc.js",
+             "main/scripts/content/snapshot.js",
+             "main/scripts/content/port.js", 
+             "main/scripts/content/synthesis.js",
+             "main/scripts/content/target.js",
+             "main/scripts/content/annotation_events.js",
+             "main/scripts/content/relation.js",
+             "main/scripts/content/content_script.js"],
       "run_at": "document_start",
       // Bug with Chrome extensions doesn't allow extension code to access
       // frames within a page. Instead we need to load the content script

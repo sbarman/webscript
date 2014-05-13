@@ -1,16 +1,6 @@
-/* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
 
 'use strict';
-
-/*
-Add listener on AJAX requests
-chrome.webRequest.onBeforeRequest.addListener(
-  function(info) {
-    console.log("Cat intercepted: ", info);
-  }, {urls: ["<all_urls>"]}
-);
-*/
 
 (function() {
 
@@ -41,7 +31,7 @@ chrome.webRequest.onBeforeRequest.addListener(
     var windowLeft = focusedWindow.left - defaultWidth;
 
     chrome.windows.create({url: chrome.extension.getURL(
-        'pages/mainpanel.html'), width: defaultWidth, height: defaultHeight,
+        'main/pages/mainpanel.html'), width: defaultWidth, height: defaultHeight,
         top: windowTop, left: windowLeft, focused: true, type: 'panel'},
         function(winInfo) {
           panelWindow = winInfo;
