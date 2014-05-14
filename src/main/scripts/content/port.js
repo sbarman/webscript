@@ -3,6 +3,11 @@
 
 'use strict';
 
+/*
+ * The port object is just a wrapper around Chrome's port interface. This
+ * class can probably be removed, but its ok for now.
+ */
+
 var Port = (function PortClosure() {
   function Port(id) {
     this.port = chrome.runtime.connect({name: id});

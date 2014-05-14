@@ -3,6 +3,11 @@
 
 'use strict';
 
+/*
+ * Logging utility. Allows logs to be disabled based upon name and level.
+ * These values are set in common/params.js.
+ */
+
 var getLog = null;
 
 var LogLevel = {
@@ -69,6 +74,7 @@ var LogLevel = {
     return NoopLogger;
   })();
 
+  /* Check to see if the log is enabled. */
   getLog = function() {
     var names = arguments;
     if (names.length == 0)

@@ -3,14 +3,9 @@
 
 'use strict';
 
-// ***************************************************************************
-// DOM functions
-// ***************************************************************************
-
+/* Convert a node to a xpath expression representing the path from the
+ * document element */
 function nodeToXPath(element) {
-//  we want the full path, not one that uses the id since ids can change
-//  if (element.id !== '')
-//    return 'id("' + element.id + '")';
   if (element.tagName.toLowerCase() === 'html')
     return element.tagName;
 
@@ -31,7 +26,7 @@ function nodeToXPath(element) {
   }
 }
 
-// convert an xpath expression to an array of DOM nodes
+/* Convert a xpath expression to a set of matching nodes */
 function xPathToNodes(xpath) {
   try {
     var q = document.evaluate(xpath, document, null, XPathResult.ANY_TYPE,
@@ -45,11 +40,12 @@ function xPathToNodes(xpath) {
     }
     return results;
   } catch (e) {
-    getLog('misc').error('xPath throws error when evaluated', xpath);
+    getLog('misc').error('xPath throws error when evaluated:', xpath);
   }
   return [];
 }
 
+/* Convert a xpath expression representing the path from root to a node */
 function simpleXPathToNode(xpath) {
   // error was thrown, attempt to just walk down the dom tree
   var currentNode = document.documentElement;
@@ -78,11 +74,13 @@ function simpleXPathToNode(xpath) {
         }
       }
     }
-    throw 'Cannot find child';
+    getLog('misc').error('xpath child cannot be found', xpath);
+    return null;
   }
   return [currentNode];
 }
 
+/* Convert xpath to a single node */
 function xPathToNode(xpath) {
   var nodes = xPathToNodes(xpath);
   //if we don't successfully find nodes, let's alert
@@ -109,25 +107,3 @@ function isElement(obj) {
       (typeof obj.ownerDocument === 'object');
   }
 }
-
-// ***************************************************************************
-// Server functions
-// ***************************************************************************
-
-/*
-function addComment(name, value) {
-  port.postMessage({type: 'comment', value: {name: name, value: value}});
-}
-*/
-
-//function for sending an alert that the user will see
-function sendAlert(msg) {
-  port.postMessage({type: 'alert', value: msg});
-}
-
-//function for adding to benchmark log
-function addBenchmarkLog(msg) {
-  port.postMessage({type: 'benchmarkLog', value: msg});
-}
-
-

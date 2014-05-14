@@ -4,45 +4,51 @@
 'use strict';
 
 var params = null;
-var defaultParams = null;
+var defaultParams = null; /* supposed to be read-only copy of parameters */
 
-var Compensation = {
-  NONE: 0,
-  SYNTH: 1,
-  FORCED: 2
+/* Compensation actions scheme, should be used when element properties differ
+ * between record and replay executions */
+var CompensationAction = {
+  NONE: 'none',
+  SYNTH: 'synth',
+  FORCED: 'forced'
 };
 
+/* Strategy to apply when an exeception is thrown because of a disconnected
+ * port */ 
 var BrokenPortStrategy = {
-  RETRY: 0,
-  SKIP: 1
+  RETRY: 'retry',
+  SKIP: 'skip'
 };
 
+/* Strategy for how much time should be spent between events */
 var TimingStrategy = {
-  MIMIC: 0,
-  SPEED: 1,
-  SLOWER: 2,
-  SLOWEST: 3,
-  FIXED_1: 4,
-  RANDOM_0_3: 5,
-  PERTURB_0_3: 6,
-  PERTURB: 7
+  MIMIC: 'mimic',
+  SPEED: 'speed',
+  SLOWER: 'slower',
+  SLOWEST: 'slower',
+  FIXED_1: 'fixed_1',
+  RANDOM_0_3: 'random_0_3',
+  PERTURB_0_3: 'perturb_0_3',
+  PERTURB: 'purterb'
 };
 
+/* Strategy for action to take after a timeout */
 var TimeoutStrategy = {
-  ERROR: 0,
-  SKIP: 1
+  ERROR: 'error',
+  SKIP: 'skip'
 };
 
 (function() {
-  // List of all events and whether or not we should capture them
+  /* List of all events and whether or not we should capture them */
   var events = {
     'Event': {
-      //'abort': true,
-      'change': true,  // change event occurs before focus is lost (blur)
+      // 'abort': true,
+      'change': true,  /* change event occurs before focus is lost (blur) */
       'copy': true,
       'cut': true,
       'error': false,
-      'input': true,  // input event occurs on every keystroke (or cut / paste)
+      'input': true,  /* input event occurs on each keystroke (or cut/paste) */
       'load': false,
       'paste': true,
       'reset': true,
@@ -65,8 +71,8 @@ var TimeoutStrategy = {
       'mouseover': false,
       'mouseup': true,
       'mousewheel': false
-  //    'dragenter': false,
-  //    'dragleave': false,
+      // 'dragenter': false,
+      // 'dragleave': false,
     },
     'KeyboardEvent': {
       'keydown': true,
@@ -119,8 +125,8 @@ var TimeoutStrategy = {
       'keyCode': 0,
       'charCode': 0,
       'timeStamp': 0,
-      'keyIdentifier': '',  // nonstandard to Chrome
-      'keyLocation': 0  // nonstandard to Chrome
+      'keyIdentifier': '',  /* nonstandard to Chrome */
+      'keyLocation': 0  /* nonstandard to Chrome */
     },
     'TextEvent': {
       'type': true,
@@ -133,10 +139,10 @@ var TimeoutStrategy = {
     }
   };
 
+  /* There are a lot of random parameters, too many for comments. Best way to
+   * figure out what a parameter does, is to grep for that parameter in the
+   * source code. */
   defaultParams = {
-    user: 'sbarman',
-    simultaneous: false, // this is probably broken now
-    localSnapshot: true,
     events: events,
     defaultProps: defaultProps,
     panel: {
@@ -149,7 +155,7 @@ var TimeoutStrategy = {
                 'content', 'synthesis', 'benchmark', 'target', 'controller',
                 'simpledebug']
     },
-    synthesis: {
+    compensation: {
       enabled: true,
       omittedProps: ['innerHTML', 'outerHTML', 'innerText', 'outerText',
           'textContent', 'className', 'childElementCount', 'scrollHeight',
@@ -159,24 +165,20 @@ var TimeoutStrategy = {
       depth: 2,
       optimization: 2
     },
-    recording: {
-      allEventProps: true,
-      delayEvents: false,
-      delay: 0,
+    record: {
+      recordAllEventProps: true,
       cancelUnrecordedEvents: false,
       listenToAllEvents: false
     },
-    replaying: {
+    replay: {
       saveCaptureLocal: false,
       openNewTab: true,
       saveReplay: true,
-      delayEvents: false,
       cancelUnknownEvents: false,
       skipCascadingEvents: true,
-      dummyCascadingEvents: false,
       eventTimeout: null,
       targetTimeout: 15,
-      compensation: Compensation.FORCED,
+      compensation: CompensationAction.FORCED,
       timingStrategy: TimingStrategy.MIMIC,
       defaultWait: 100,
       defaultWaitNewTab: 4000,
@@ -189,15 +191,14 @@ var TimeoutStrategy = {
       urlSimilarity: 0.8,
       defaultUser: false
     },
-    //server: 'http://sbarman.webfactional.com/api/',
-    server: 'http://127.0.0.1:8000/api/',
-    benchmarking: {
-      timeout: 600,
-      targetInfo: false
-    }
+    server: {
+      // url: 'http://sbarman.webfactional.com/api/',
+      url: 'http://127.0.0.1:8000/api/',
+      user: 'sbarman',
+    },
   };
 
-  if (window.jQuery)
+  if (jQuery)
     params = jQuery.extend(true, {}, defaultParams);
   else
     params = defaultParams;

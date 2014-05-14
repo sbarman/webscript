@@ -916,6 +916,11 @@ function fixDeltas(recordDeltas, replayDeltas, recordEvent, lastTarget,
 // Misc code
 // ***************************************************************************
 
+//function for sending an alert that the user will see
+function sendAlert(msg) {
+  port.postMessage({type: 'alert', value: msg});
+}
+
 // given the new parameters, update the parameters for this content script
 function updateParams(newParams) {
   var oldParams = params;

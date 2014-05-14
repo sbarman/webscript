@@ -3,13 +3,28 @@
 
 'use strict';
 
+/*
+ * Takes a snapshot of a DOM node, by saving its properties and children.
+ * These can be very expensive operations, so use sparingly.
+ */
+
 var snapshot = null;
 var snapshotNode = null;
 var snapshotBranch = null;
 
 (function() {
+  /* Don't snapshot certain DOM nodes */
   var ignoreTags = {'script': true, 'style': true};
 
+  /* Creates a snapshot of node properties. Only string, number, and boolean
+   * properties are copied.
+   *
+   * @param node The DOM node whose values should be copied.
+   * @param props An array of  properties which should be copied. Alternatively
+   *     'all' can be specified which will copy all properties of the node.
+   *
+   * @returns {object} Mapping from property name to value.
+   */
   function getProperties(node, props) {
     if (props == 'all')
       props = Object.keys(node);
@@ -36,7 +51,19 @@ var snapshotBranch = null;
     return mapping;
   }
 
-  function cloneNode(node, xpath, childTags, props) {
+  /* Serializes a DOM node by saving properties of the node
+   *
+   * @param node The DOM node to snapshot.
+   * @param xpath The xpath of @link{node}.
+   * @param {boolean} childTags Whether the tags of @link{node}'s children
+   *     should also be snapshotted.
+   * @param props The node's properties which should be saved.
+   * 
+   * @returns {object} Return's an object representing the \link{node}. The
+   *     object contains the following fields: type, prop{object}, and
+   *     possibly children{array}.
+   */
+  function _snapshotNode(node, xpath, childTags, props) {
     xpath = xpath.toLowerCase();
 
     var nodeName = node.nodeName.toLowerCase();
@@ -61,19 +88,19 @@ var snapshotBranch = null;
         var child = childNodes.item(i);
         var nodeType = child.nodeType;
 
-        //let's track the number of tags of this kind we've seen in the
-        //children so far, to build the xpath
+        /* let's track the number of tags of this kind we've seen in the
+         * children so far, to build the xpath */
         var childNodeName = child.nodeName.toLowerCase();
         if (!(childNodeName in childrenTags))
           childrenTags[childNodeName] = 1;
         else
           childrenTags[childNodeName] += 1;
 
-        if (nodeType === 1) { // nodeType is "Element" (1)
+        if (nodeType === 1) { /* nodeType is "Element" (1) */
           if (!(childNodeName in ignoreTags)) {
             var newPath = xpath + '/' + childNodeName + '[' +
                           childrenTags[childNodeName] + ']';
-            var child = cloneNode(child, newPath, false, []);
+            var child = _snapshotNode(child, newPath, false, []);
             children.push(child);
           }
         }
@@ -82,19 +109,31 @@ var snapshotBranch = null;
     return returnVal;
   }
 
-  function cloneBranch(node) {
+  /* Create an array of snapshots from the node until the its highest parent
+   * is reached.
+   *
+   * @returns {array} List of node snapshots, starting the highest ancestor.
+   */
+  function _snapshotBranch(node) {
     var path = [];
     var props = ['className', 'id'];
     while (node != null) {
-      path.push(cloneNode(node, nodeToXPath(node), true, props));
+      path.push(_snapshotNode(node, nodeToXPath(node), true, props));
       node = node.parentElement;
     }
     return path.reverse();
   }
 
-  function cloneSubtree(node, xpath) {
+  /* Create a tree of snapshots representing the subtree rooted at @link{node}
+   *
+   * @returns {object} Return's an object representing the \link{node}. The
+   *     object contains the following fields: type, prop{object}, and
+   *     children{array}. The children field contains recursive snapshots
+   *     of the node's children.
+   */
+  function _snapshotSubtree(node, xpath) {
     var nodeName = node.nodeName.toLowerCase();
-    var returnVal = cloneNode(node, xpath, false, 'all');
+    var returnVal = _snapshotNode(node, xpath, false, 'all');
 
     var childNodes = node.childNodes;
     var children = [];
@@ -105,8 +144,8 @@ var snapshotBranch = null;
       var child = childNodes.item(i);
       var nodeType = child.nodeType;
 
-      //let's track the number of tags of this kind we've seen in the
-      //children so far, to build the xpath
+      /* let's track the number of tags of this kind we've seen in the
+       * children so far, to build the xpath */
       var childNodeName = child.nodeName.toLowerCase();
       if (!(childNodeName in childrenTags))
         childrenTags[childNodeName] = 1;
@@ -123,7 +162,7 @@ var snapshotBranch = null;
 
           var newPath = xpath + '/' + childNodeName + '[' +
                         childrenTags[childNodeName] + ']';
-          var child = cloneSubtree(child, newPath);
+          var child = _snapshotSubtree(child, newPath);
           children.push(child);
         }
       }
@@ -132,37 +171,24 @@ var snapshotBranch = null;
     return returnVal;
   }
 
-  function findCloneBody(node) {
-    var nodeName = node.nodeName.toLowerCase();
+  snapshot = function()
+    var body = document.body;
+
+    var nodeName = body.nodeName.toLowerCase();
     if (nodeName == 'body') {
-      var objTree = cloneSubtree(node, 'html/body[1]');
+      var objTree = _snapshotSubtree(node, 'html/body[1]');
       return objTree;
     }
-
-    if (node.hasChildNodes()) {
-      var childNodes = node.childNodes;
-      for (var i = 0, ii = childNodes.length; i < ii; ++i) {
-        var child = childNodes.item(i);
-        var ret = findCloneBody(child);
-        if (ret)
-          return ret;
-      }
-    }
-    return null;
   }
-
-  snapshot = function() {
-    return findCloneBody(document);
-  };
 
   snapshotNode = function(node) {
     if (!node)
       return null;
 
-    var objTree = cloneNode(node, nodeToXPath(node), false, 'all');
+    var objTree = _snapshotNode(node, nodeToXPath(node), false, 'all');
     return objTree;
   };
 
-  snapshotBranch = cloneBranch;
+  snapshotBranch = _snapshotBranch;
 
 })();

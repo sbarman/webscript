@@ -1,3 +1,8 @@
+/* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
+
+'use strict'
+
 var getTarget;
 var getTargetFunction;
 var targetFunctions;
@@ -6,6 +11,7 @@ var saveTargetInfo;
 (function() {
   var log = getLog('target');
 
+  /* Store information about the DOM node */
   saveTargetInfo = function _saveTargetInfo(target, recording) {
     var targetInfo = {};
     targetInfo.xpath = nodeToXPath(target);
@@ -15,6 +21,9 @@ var saveTargetInfo;
     }
     return targetInfo;
   };
+
+  /* The following functions are different implementations to take a target
+   * info object, and convert it to a list of possible DOM nodes */ 
 
   function getTargetSimple(targetInfo) {
     return xPathToNodes(targetInfo.xpath);
@@ -36,11 +45,11 @@ var saveTargetInfo;
         return targets;
       }
 
-      // If we're here, we failed to find the child. Try dropping
-      // steadily larger prefixes of the xpath until some portion works.
-      // Gives up if only three levels left in xpath.
+      /* If we're here, we failed to find the child. Try dropping
+       * steadily larger prefixes of the xpath until some portion works.
+       * Gives up if only three levels left in xpath. */
       if (xpath.split('/').length < 4) {
-        // No more prefixes to reasonably remove, so give up
+        /* No more prefixes to reasonably remove, so give up */
         return [];
       }
 
@@ -61,8 +70,8 @@ var saveTargetInfo;
   }
 
   function getTargetSearch(targetInfo) {
-    // search over changes to the ancesters (replacing each ancestor with a
-    // star plus changes such as adding or removing ancestors)
+    /* search over changes to the ancesters (replacing each ancestor with a
+     * star plus changes such as adding or removing ancestors) */
 
     function helper(xpathSplit, index) {
       if (index == 0)
@@ -158,8 +167,11 @@ var saveTargetInfo;
     return maxTargets;
   }
 
+  /* Set the target function */
   getTargetFunction = getTargetComposite;
 
+  /* Given the target info, produce a single target DOM node. May get several
+   * possible candidates, and would just return the first candidate. */
   getTarget = function(targetInfo) {
     var targets = getTargetFunction(targetInfo);
     if (!targets) {
@@ -173,6 +185,7 @@ var saveTargetInfo;
     }
   };
 
+  /* List of all target functions. Used for benchmarking */
   targetFunctions = {
     simple: getTargetSimple,
     suffix: getTargetSuffix,
