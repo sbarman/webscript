@@ -10,7 +10,6 @@ var defaultParams = null; /* supposed to be read-only copy of parameters */
  * between record and replay executions */
 var CompensationAction = {
   NONE: 'none',
-  SYNTH: 'synth',
   FORCED: 'forced'
 };
 

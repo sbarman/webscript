@@ -4,34 +4,33 @@
 
 'use strict';
 
-var port; // port variable to send msgs to content script
+/* Variables are kept in the global scopes so addons have access to them in an
+ * easy-to-access manner. This should be ok since content scripts have a
+ * scope isolated from the page's scope, so just need to be careful that an
+ * add-on doesn't pollute the scope. */
 
-// closure so global scope won't get dirty
-(function() {
-
-// global variables
 var recording = RecordState.STOPPED;
 var id = 'setme';
+var port; /* port variable to send msgs to content script */
 
-// record variables
-var pageEventId = 0; // counter to give each event on page a unique id
-var lastRecordEvent; // last event recorded
-var lastRecordSnapshot; // snapshot (before and after) for last event
-var curRecordSnapshot; // snapshot (before and after) the current event
+/* Record variables */
+var pageEventId = 0; /* counter to give each event on page a unique id */
+var lastRecordEvent; /* last event recorded */
+var lastRecordSnapshot; /* snapshot (before and after) for last event */
+var curRecordSnapshot; /* snapshot (before and after) the current event */
 
-// replay variables
-var lastReplayEvent; // last event replayed
+/* Replay variables */
+var lastReplayEvent; /* last event replayed */
 var lastReplayTarget;
-var lastReplaySnapshot; // snapshop taken before the event is replayed
-var curReplaySnapshot; // snapshot taken before the next event is replayed
-var dispatchingEvent = false;
-var retryTimeout = null;
-var portEvents = null;
-var xPathMapping = null;
-var portEventsIdx = 0;
-var timeoutInfo = {startTime: 0, startIndex: 0, request: null};
+var lastReplaySnapshot; /* snapshop taken before the event is replayed */
+var curReplaySnapshot; /* snapshot taken before the next event is replayed */
+var dispatchingEvent = false; /* if we currently dispatching an event */
+var retryTimeout = null; /* handle to retry callback */
+var simulatedEvents = null; /* current events we need are trying to dispatch */
+var simulatedEventsIdx = 0;
+var timeoutInfo = {startTime: 0, startIndex: 0, events: null};
 
-// loggers
+/* Loggers */
 var log = getLog('content');
 var recordLog = getLog('record');
 var replayLog = getLog('replay');
@@ -40,12 +39,23 @@ var replayLog = getLog('replay');
 // Recording code
 // ***************************************************************************
 
-// return the type of an event, which is used to init and dispatch it
+/* Reset all of the record time variables */
+function resetRecord() {
+  lastRecordEvent = null;
+  lastRecordSnapshot = null;
+  curRecordSnapshot = null;
+}
+
+/* Get the class of an event, which is used to init and dispatch it
+ *
+ * @param {string} type The DOM event type
+ * @returns {string} The class type, such as MouseEvent, etc.
+ */
 function getEventType(type) {
   for (var eventType in params.events) {
     var eventTypes = params.events[eventType];
     for (var e in eventTypes) {
-      if (e == type) {
+      if (e === type) {
         return eventType;
       }
     }
@@ -53,51 +63,46 @@ function getEventType(type) {
   return null;
 };
 
-// return the default event properties for an event
+/* Return the default event properties for an event */
 function getEventProps(type) {
   var eventType = getEventType(type);
   return params.defaultProps[eventType];
 }
 
+/* Find matching event in simulatedEvents. Needed to ensure that an event is
+ * not replayed twice, i.e. once by the browser and once by the tool. */
 function getMatchingEvent(eventData) {
   if (!dispatchingEvent)
     return null;
 
-  if (portEventsIdx == null || portEventsIdx >= portEvents.length)
+  if (simulatedEvents == null ||
+      simulatedEventsIdx >= simulatedEvents.length)
     return null;
 
-  var eventObject = portEvents[portEventsIdx];
+  var eventObject = simulatedEvents[simulatedEventsIdx];
   var eventRecord = eventObject.value;
   if (eventRecord.data.type == eventData.type) {
-    portEventsIdx++;
+    simulatedEventsIdx++;
     return eventObject;
   }
 
   return null;
 }
 
-// create an event record given the data from the event handler
+/* Create an event record given the data from the event handler */
 function recordEvent(eventData) {
-  // check if we are stopped, then just return
+  /* check if we are stopped, then just return */
   if (recording == RecordState.STOPPED)
     return true;
 
   var type = eventData.type;
   var dispatchType = getEventType(type);
+  var shouldRecord = params.events[dispatchType][type];
 
-  // we are capturing a node from the user
-  if (domOutlineCallback) {
-    if (type == 'click') {
-      domOutline.raiseClick(eventData);
-      return false;
-    }
-    return true;
-  }
-
-  // cancel the affects of events which are not extension generated or are not
-  // picked up by the recorder
-  if (recording == RecordState.REPLAYING && !dispatchingEvent &&
-      params.replaying.cancelUnknownEvents) {
+  /* cancel the affects of events which are not extension generated or are not
+   * picked up by the recorder */
+  if (params.replay.cancelUnknownEvents && 
+      recording == RecordState.REPLAYING && !dispatchingEvent) {
     recordLog.debug('[' + id + '] cancel unknown event during replay:',
          type, dispatchType, eventData);
     eventData.stopImmediatePropagation();
@@ -105,24 +110,22 @@ function recordEvent(eventData) {
     return false;
   }
 
-  var shouldRecord = params.events[dispatchType][type];
-
-  if (recording == RecordState.RECORDING &&
-      params.recording.cancelUnrecordedEvents && !shouldRecord) {
-    recordLog.debug('[' + id + '] cancel unrecorded event:', type, dispatchType,
-                  eventData);
+  if (params.record.cancelUnrecordedEvents &&
+      recording == RecordState.RECORDING && !shouldRecord) {
+    recordLog.debug('[' + id + '] cancel unrecorded event:', type, 
+        dispatchType, eventData);
     eventData.stopImmediatePropagation();
     eventData.preventDefault();
     return false;
   }
 
-  // if we are not recording this type of event, we should exit
+  /* if we are not recording this type of event, we should exit */
   if (!shouldRecord)
     return true;
 
-  // continue recording the event
+  /* continue recording the event */
   recordLog.debug('[' + id + '] process event:', type, dispatchType,
-                eventData);
+      eventData);
   sendAlert('Recorded event: ' + type);
 
   var properties = getEventProps(type);
@@ -136,12 +139,12 @@ function recordEvent(eventData) {
     meta: {}
   };
 
-  // deal with all the replay mess that we can't do in simulate
+  /* deal with all the replay mess that we can't do in simulate */
   if (recording == RecordState.REPLAYING)
     replayUpdateDeltas(eventData, eventMessage);
 
-  // deal with snapshotting the DOM, calculating the deltas, and sending
-  // updates
+  /* deal with snapshotting the DOM, calculating the deltas, and sending
+   * updates */
   updateDeltas(target);
 
   eventMessage.data.target = saveTargetInfo(target, recording);
@@ -151,57 +154,38 @@ function recordEvent(eventData) {
   eventMessage.meta.pageEventId = pageEventId++;
   eventMessage.meta.recordState = recording;
 
-  var e = eventMessage.data;
-  // record all properties of the event object
+  var data = eventMessage.data;
+  /* record all properties of the event object */
   if (params.recording.allEventProps) {
     for (var prop in eventData) {
       try {
-        var data = eventData[prop];
-        var type = typeof(data);
-        if (type == 'number' || type == 'boolean' || type == 'string' ||
-            type == 'undefined') {
-          e[prop] = eventData[prop];
-        } else if (prop == 'relatedTarget' && isElement(data)) {
-          e[prop] = saveTargetInfo(data, recording);
+        var value = eventData[prop];
+        var t = typeof(value);
+        if (t == 'number' || t == 'boolean' || t == 'string' || 
+            t == 'undefined') {
+          data[prop] = value;
+        } else if (prop == 'relatedTarget' && isElement(value)) {
+          data[prop] = saveTargetInfo(value, recording);
         }
-      } catch (e) {
-        recordLog.error('[' + id + '] error recording property:', prop, e);
+      } catch (err) {
+        recordLog.error('[' + id + '] error recording property:', prop, err);
       }
     }
-  // only record the default event properties
+  /* only record the default event properties */
   } else {
     for (var prop in properties) {
       if (prop in eventData)
-        e[prop] = eventData[prop];
+        data[prop] = eventData[prop];
     }
   }
 
-  // record the actual character, instead of just the charCode
-  if (e['charCode'])
-    e['char'] = String.fromCharCode(e['charCode']);
-
-  for (var e in annotationEvents) {
-    var t = annotationEvents[e];
-    if (t.guard(eventMessage)) {
-      t.record(eventData, eventMessage);
-    }
-  }
-
-  // save the event record
+  /* save the event record */
   recordLog.debug('[' + id + '] saving event message:', eventMessage);
   port.postMessage({type: 'event', value: eventMessage, state: recording});
-
   lastRecordEvent = eventMessage;
 
-  // just spin for some number of seconds to delay the page compared
-  // to some server
-  if (recording == RecordState.RECORDING && params.recording.delayEvents) {
-    var curTime = new Date().getTime();
-    var endTime = curTime + params.recording.delay;
-    while (curTime < endTime)
-      curTime = new Date().getTime();
-  }
-
+  /* check to see if this event is part of a cascade of events. we do this 
+   * by setting a timeout, which will execute after the cascade of events */
   setTimeout(function() {
     var update = {
       type: 'updateEvent',
@@ -220,7 +204,7 @@ function recordEvent(eventData) {
   return true;
 };
 
-// fix deltas that did not occur during replay
+/* Fix deltas that did not occur during replay */
 function replayUpdateDeltas(eventData, eventMessage) {
   var replayEvent = getMatchingEvent(eventData);
   if (replayEvent) {
@@ -232,7 +216,7 @@ function replayUpdateDeltas(eventData, eventMessage) {
     var target = eventData.target;
     snapshotReplay(target);
 
-    // make sure the deltas from the last event actually happened
+    /* make sure the deltas from the last event actually happened */
     if (params.synthesis.enabled && lastReplayEvent) {
       var recordDeltas = lastReplayEvent.meta.deltas;
       if (typeof recordDeltas == 'undefined') {
@@ -240,19 +224,16 @@ function replayUpdateDeltas(eventData, eventMessage) {
         recordDeltas = [];
       }
 
-      // make sure replay matches recording
+      /* make sure replay matches recording */
       if (lastReplaySnapshot) {
         var replayDeltas = getDeltas(lastReplaySnapshot.before,
                                      lastReplaySnapshot.after);
-        // check if these deltas match the last simulated event
-        // and correct for unmatched deltas
-        fixDeltas(recordDeltas, replayDeltas, lastReplayEvent,
-                  lastReplayTarget, lastReplaySnapshot.after);
+        /* check if these deltas match the last simulated event
+         * and correct for unmatched deltas */
+        fixDeltas(recordDeltas, replayDeltas, lastReplayTarget);
       }
 
-      //annotation events may have changed the effects of the last event
-      //have to make sure that anything associated with this event isn't
-      //from annotation events of last event
+      /* Resnapshot to record the changes caused by fixing the deltas */
       resnapshotBefore(target);
     }
     lastReplayEvent = replayEvent;
@@ -260,12 +241,7 @@ function replayUpdateDeltas(eventData, eventMessage) {
   }
 }
 
-function resetRecord() {
-  lastRecordEvent = null;
-  lastRecordSnapshot = null;
-  curRecordSnapshot = null;
-}
-
+/* Create a snapshot of the target element */
 function snapshotRecord(target) {
   if (params.localSnapshot) {
     lastRecordSnapshot = curRecordSnapshot;
@@ -284,6 +260,7 @@ function snapshotRecord(target) {
   }
 }
 
+/* Update the deltas for the previous event */
 function updateDeltas(target) {
   snapshotRecord(target);
 
@@ -307,91 +284,10 @@ function updateDeltas(target) {
 }
 
 // ***************************************************************************
-// Capture code
-// ***************************************************************************
-
-var domOutline = DomOutline({
-    borderWidth: 2,
-    onClick: onClickCapture
-  }
-);
-
-var domOutlineCallback = null;
-
-function startCapture(callback) {
-  domOutlineCallback = callback;
-  domOutline.start();
-}
-
-function cancelCapture() {
-  domOutlineCallback = null;
-  domOutline.stop();
-}
-
-function onClickCapture(node, event) {
-  var callback = domOutlineCallback;
-  if (callback) {
-    domOutlineCallback = null;
-    callback(node, event);
-  }
-}
-
-function captureNode() {
-  if (recording == RecordState.RECORDING) {
-    log.log('starting node capture');
-    startCapture(captureNodeReply);
-  }
-}
-
-function cancelCaptureNode() {
-  cancelCapture();
-}
-
-function captureNodeReply(target, event) {
-  var eventMessage = {
-    data: {},
-    frame: {},
-    meta: {},
-    timing: {}
-  };
-
-  eventMessage.data.type = 'capture';
-  eventMessage.data.target = saveTargetInfo(target, recording);
-  eventMessage.data.timeStamp = new Date().getTime();
-  eventMessage.frame.URL = document.URL;
-  eventMessage.meta.nodeName = target.nodeName.toLowerCase();
-  eventMessage.meta.recordState = recording;
-
-  log.log('capturing:', target, eventMessage);
-  port.postMessage({type: 'event', value: eventMessage, state: recording});
-
-  event.preventDefault();
-  event.stopImmediatePropagation();
-}
-
-// ***************************************************************************
 // Replaying code
 // ***************************************************************************
 
-function setPortEvents(events) {
-  portEvents = events;
-}
-
-function setXPathMapping(mapping) {
-  xPathMapping = mapping;
-}
-
-function getPortEventIndex(id) {
-  for (var i = 0, ii = portEvents.length; i < ii; ++i) {
-    var e = portEvents[i];
-    if (e.value.meta.id == id) {
-      return i;
-    }
-  }
-  return -1;
-}
-
-// needed since some event properties are marked as read only
+/* Needed since some event properties are marked as read only */
 function setEventProp(e, prop, value) {
   Object.defineProperty(e, prop, {value: value});
   if (e.prop != value) {
@@ -400,119 +296,93 @@ function setEventProp(e, prop, value) {
   }
 }
 
-function checkTimeout(request, startIndex) {
-  var timeout = params.replaying.targetTimeout;
+/* Check if the current event has timed out.
+ *
+ * @params events The current list of events to replay.
+ * @params startIndex The index into @link{events} which is needs to be
+ *     replayed.
+ * @returns {boolean} True if timeout has occured
+ */
+function checkTimeout(events, startIndex) {
+  var timeout = params.replay.targetTimeout;
   if (timeout != null && timeout > 0) {
     var curTime = new Date().getTime();
 
-    // we havent changed event
-    if (timeoutInfo.request == request &&
+    /* we havent changed event */
+    if (timeoutInfo.events == events &&
         timeoutInfo.startIndex == startIndex) {
       if (curTime - timeoutInfo.startTime > timeout * 1000)
         return true;
     } else {
       timeoutInfo = {startTime: curTime, startIndex: startIndex,
-                     request: request};
+                     events: events};
     }
   }
   return false;
 }
 
-// replay an event from an event message
-function simulate(request, startIndex) {
-  // since we are simulating new events, lets clear out any retries
+/* Replays a set of events atomically
+ *
+ * @params events The current list of events to replay.
+ * @params startIndex The index into @link{events} which is needs to be
+ *     replayed.
+ */
+function simulate(events, startIndex) {
+  /* since we are simulating new events, lets clear out any retries from
+   * the last request */
   clearRetry();
 
-  var events = request.value;
-  portEvents = events;
-  portEventsIdx = 0;
-  /*
-  for (var i = startIndex, ii = events.length; i < ii; ++i) {
-    var eventRecord = events[i].value;
-    var id = eventRecord.meta.id;
-    portEventsIdx = getPortEventIndex(id);
-    portEvents[portEventsIdx].replayed = false;
-  }
-  */
+  simulatedEvents = events;
+  simulatedEventsIdx = 0;
 
   for (var i = startIndex, ii = events.length; i < ii; ++i) {
     var eventRecord = events[i].value;
     var eventData = eventRecord.data;
-    var id = eventRecord.meta.id;
     var eventName = eventData.type;
 
-    portEventsIdx = getPortEventIndex(id);
+    var id = eventRecord.meta.id;
 
-    // this event was detected by the recorder, so lets skip it
-    if (params.replaying.cascadeCheck && portEvents[portEventsIdx].replayed) {
+    /* this event was detected by the recorder, so lets skip it */
+    if (params.replay.cascadeCheck && events[i].replayed)
       continue;
-    }
 
     replayLog.debug('simulating:', eventName, eventData);
-    addBenchmarkLog('simulating: ' + eventName);
-/*
-    if (eventName == 'wait') {
-      replayLog.debug('checking wait:', eventData);
-      var result = eval(eventData.condition);
-      port.postMessage({type: 'ack', value: result});
-      return;
-    } else if (eventName == 'custom') {
-      var script = eval(eventData.script);
-      script(element, eventData);
-      return;
-    }
-*/
 
     var targetInfo = eventData.target;
     var xpath = targetInfo.xpath;
 
-//    var mapping = xPathMapping[xpath];
-    var generalize = eventRecord.generalize;
-
-    if (generalize && xpath.indexOf(generalize.orig) == 0) {
-      xpath = xpath.replace(generalize.orig, generalize.new);
-      targetInfo = {xpath: xpath};
-    }
-   /*
-    else if (mapping && mapping.newVal == '*') {
-      generalizeXPath(targetInfo, id);
-      return;
-    }
-  */
-
+    /* find the target */
     var target = getTarget(targetInfo);
     if (params.benchmarking.targetInfo) {
       var actualTargets = getTargetFunction(targetInfo);
-      addBenchmarkLog('num targets: ' + actualTargets.length);
 
       for (var strategy in targetFunctions) {
         var strategyTargets = targetFunctions[strategy](targetInfo);
         var common = actualTargets.filter(function(t) {
           return strategyTargets.indexOf(t) != -1;
         });
-        addBenchmarkLog('comparison: ' + strategy + ',' +
-                        strategyTargets.length + ',' + common.length);
       }
     }
 
-    // lets try to dispatch this event a little bit in the future, in case the
-    // future in the case the page needs to change
+    /* if no target exists, lets try to dispatch this event a little bit in
+     *the future, and hope the page changes */
     if (!target) {
-      if (eventName != 'capture' && checkTimeout(request, i)) {
-        replayLog.log('timeout finding target, skip event: ', request, i);
+      if (checkTimeout(events, i)) {
+        replayLog.warn('timeout finding target, skip event: ', events, i);
         // we timed out with this target, so lets skip the event
         i++;
       }
 
-      setRetry(request, i, params.replaying.defaultWait);
+      setRetry(events, i, params.replay.defaultWait);
       port.postMessage({type: 'debug', value: 'no target found'});
       return;
     }
 
-    if (params.replaying.highlightTarget) {
+    if (params.replay.highlightTarget) {
       highlightNode(target, 100);
     }
 
+    /* If capture event, then scrape data */
     if (eventName == 'capture') {
       replayLog.log('found capture node:', target);
 
@@ -525,6 +395,7 @@ function simulate(request, startIndex) {
       continue;
     }
 
+    /* Create an event object to mimick the recorded event */
     var eventType = getEventType(eventName);
     var defaultProperties = getEventProps(eventName);
 
@@ -579,7 +450,7 @@ function simulate(request, startIndex) {
       replayLog.error('unknown type of event');
     }
 
-    // used to detect extension generated events
+    /* used to detect extension generated events */
     oEvent.extensionGenerated = true;
     if (eventData.cascading) {
       oEvent.cascading = eventData.cascading;
@@ -589,7 +460,8 @@ function simulate(request, startIndex) {
     replayLog.debug('[' + id + '] dispatchEvent', eventName, options, target,
                     oEvent);
 
-    // send the update to the inject script
+    /* send the update to the injected script so that the event can be 
+     * updated on the pages's context */
     var detail = {};
     for (var prop in oEvent) {
       var data = oEvent[prop];
@@ -604,184 +476,112 @@ function simulate(request, startIndex) {
     }
     document.dispatchEvent(new CustomEvent('webscript', {detail: detail}));
 
-    // update panel showing event was sent
+    /* update panel showing event was sent */
     sendAlert('Dispatched event: ' + eventData.type);
 
-    // this does the actual event simulation
+    /* actually dispatch the event */ 
     dispatchingEvent = true;
     target.dispatchEvent(oEvent);
     dispatchingEvent = false;
-
-    for (var e in annotationEvents) {
-      var t = annotationEvents[e];
-      if (t.guard(eventRecord)) {
-        t.replay(target, eventRecord, events, i);
-      }
-    }
   }
+  /* let the background page know that all the events were replayed (its
+   * possible some/all events were skipped) */
   port.postMessage({type: 'ack', value: {type: Ack.SUCCESS}});
   replayLog.debug('[' + id + '] sent ack');
 }
 
-// ***************************************************************************
-// Generalization code
-// ***************************************************************************
-
-var origXPath;
-var examples;
-var ids;
-
-function generalizeXPath(eventObj) {
-  origXPath = eventObj.value.data.target.xpath;
-  examples = [];
-  ids = [];
-
-  log.log('starting generalization');
-  startCapture(addExample);
-  promptUser('Select a few elements in domain then press enter.',
-    function(response) {
-      generalizeFinish();
-    }
-  );
-}
-
-function addExample(target, event) {
-  var highlightId = highlightNode(target);
-
-  ids.push(highlightId);
-  examples.push(target);
-
-  event.preventDefault();
-  event.stopImmediatePropagation();
-
-  startCapture(addExample);
-}
-
-function generalizeFinish() {
-  cancelCapture();
-
-  for (var i = 0, ii = ids.length; i < ii; ++i)
-    dehighlightNode(ids[i]);
-
-  for (var i = 0, ii = examples.length; i < ii; ++i)
-    log.log(nodeToXPath(examples[i]));
-
-  var parts = origXPath.split('/');
-  var generalizedNodes = null;
-  var generalXPath = null;
-  var maxStars = 2;
-
-  console.log(origXPath);
-
-  starsloop: for (var numStars = 1; numStars <= maxStars; ++numStars) {
-    partsloop: for (var i = parts.length - numStars; i >= 0; --i) {
-      var newParts = parts.slice(0);
-      for (var k = 0; k < numStars; ++k) {
-        newParts.splice(i + k, 1, '*');
-      }
-      var newXPath = newParts.join('/');
-      console.log(newXPath);
-      var nodes = xPathToNodes(newXPath);
-
-      // check to see if xpath is valid
-      for (var j = 0, jj = examples.length; j < jj; ++j) {
-        if (nodes.indexOf(examples[j]) == -1) {
-          continue partsloop;
-        }
-      }
-
-      generalizedNodes = nodes;
-      generalXPath = newXPath;
-      break starsloop;
-    }
+/* Stop the next execution of simulate */
+function clearRetry() {
+  if (retryTimeout) {
+    clearTimeout(retryTimeout);
+    retryTimeout = null;
   }
-
-  log.log('found more general xpath:', generalXPath, origXPath);
-  findPrefixes(origXPath, generalXPath);
 }
 
-function findPrefixes(origXPath, generalXPath) {
-  var generalizedNodes = xPathToNodes(generalXPath);
+/* Try simulating again in a little bit */
+function setRetry(events, startIndex, timeout) {
+  retryTimeout = setTimeout(function() {
+    simulate(events, startIndex);
+  }, timeout);
+  return;
+}
 
-  if (generalizedNodes) {
-    for (var i = 0, ii = generalizedNodes.length; i < ii; ++i) {
-      var idName = highlightNode(generalizedNodes[i]);
-      setTimeout(function() {
-        dehighlightNode(idName);
-      }, 2000);
-    }
+/* Take a snapshot of the target */
+function snapshotReplay(target) {
+  replayLog.log('snapshot target:', target);
+  if (params.localSnapshot) {
+    lastReplaySnapshot = curReplaySnapshot;
+    if (lastReplaySnapshot)
+      lastReplaySnapshot.after = snapshotNode(lastReplaySnapshot.target);
+
+    curReplaySnapshot = {before: snapshotNode(target), target: target};
   } else {
-    log.error('no nodes found');
-    return;
+    var curSnapshot = snapshot();
+
+    lastReplaySnapshot = curReplaySnapshot;
+    if (lastReplaySnapshot)
+      lastReplaySnapshot.after = curSnapshot;
+
+    curReplaySnapshot = {before: curSnapshot};
+  }
+}
+
+/* Update the snapshot */
+function resnapshotBefore(target) {
+  if (params.localSnapshot)
+    curReplaySnapshot.before = snapshotNode(target);
+  else
+    curReplaySnapshot.before = snapshot();
+}
+
+/* Update the lastTarget, so that the record and replay deltas match */
+function fixDeltas(recordDeltas, replayDeltas, lastTarget) {
+  replayLog.info('record deltas:', recordDeltas);
+  replayLog.info('replay deltas:', replayDeltas);
+
+  /* effects of events that were found in record but not replay */
+  var recordDeltasNotMatched = filterDeltas(recordDeltas, replayDeltas);
+  /* effects of events that were found in replay but not record */
+  var replayDeltasNotMatched = filterDeltas(replayDeltas, recordDeltas);
+
+  replayLog.info('record deltas not matched: ', recordDeltasNotMatched);
+  replayLog.info('replay deltas not matched: ', replayDeltasNotMatched);
+
+  var element = lastTarget;
+
+  for (var i = 0, ii = replayDeltasNotMatched.length; i < ii; ++i) {
+    var delta = replayDeltasNotMatched[i];
+    replayLog.debug('unmatched replay delta', delta);
+
+    if (delta.type == 'Property is different.') {
+      var divProp = delta.divergingProp;
+      if (params.replay.compensation == Compensation.FORCED) {
+        element[divProp] = delta.orig.prop[divProp];
+      }
+    }
   }
 
-  // find the last occurence of * in xpath to find prefix in original xpath
-  var parts = origXPath.split('/');
-  var newParts = generalXPath.split('/');
-  var lastStarIndex = newParts.lastIndexOf('*');
-  var origPrefix = parts.slice(0, lastStarIndex + 1).join('/');
+  /* the thing below is the stuff that's doing divergence synthesis */
+  for (var i = 0, ii = recordDeltasNotMatched.length; i < ii; ++i) {
+    var delta = recordDeltasNotMatched[i];
+    replayLog.debug('unmatched record delta', delta);
 
-  ids = [];
-  examples = [];
-
-  var prefixes = [];
-  for (var i = 0, ii = generalizedNodes.length; i < ii; ++i) {
-    var newParts = nodeToXPath(generalizedNodes[i]).split('/');
-    var newPrefix = newParts.slice(0, lastStarIndex + 1).join('/');
-    prefixes.push(newPrefix);
+    if (delta.type == 'Property is different.') {
+      var divProp = delta.divergingProp;
+      if (params.replay.compensation == Compensation.FORCED) {
+        element[divProp] = delta.changed.prop[divProp];
+      }
+    }
   }
-
-  port.postMessage({type: 'ack', value: {
-    type: Ack.GENERALIZE,
-    generalXPath: generalXPath,
-    origXPath: origXPath,
-    generalPrefixes: prefixes,
-    origPrefix: origPrefix,
-    setTimeout: true
-  }});
 }
 
 // ***************************************************************************
-// Prompt code
+// Misc code
 // ***************************************************************************
-
-var promptCallback = null;
-
-function promptUser(text, callback) {
-  if (!promptCallback)
-    log.warn('overwriting old prompt callback');
-
-  promptCallback = callback;
-  port.postMessage({type: 'prompt', value: text});
-}
-
-function promptResponse(text) {
-  if (promptCallback)
-    promptCallback(text);
-
-  promptCallback = null;
-}
-
-/*
-function addMemoizedTarget(xPath, target) {
-  memoizedTargets.push([xPath, target]);
-
-  if (memoizedTargets.length > 5)
-    memoizedTargets.shift();
-}
-
-function getMemoizedTarget(xPath) {
-  for (var i = memoizedTargets.length - 1; i >= 0; --i) {
-    var t = memoizedTargets[i];
-    if (t[0] === xPath)
-      return t[1];
-  }
-  return null;
-}
-*/
 
 var highlightCount = 0;
 
+/* Highlight a node with a green rectangle. Uesd to indicate the target. */
 function highlightNode(target, time) {
   var offset = $(target).offset();
   var boundingBox = target.getBoundingClientRect();
@@ -790,8 +590,6 @@ function highlightNode(target, time) {
   newDiv.attr('id', idName);
   newDiv.css('width', boundingBox.width);
   newDiv.css('height', boundingBox.height);
-  // newDiv.css('top', boundingBox.top);
-  // newDiv.css('left', boundingBox.left);
   newDiv.css('top', offset.top);
   newDiv.css('left', offset.left);
   newDiv.css('position', 'absolute');
@@ -813,115 +611,13 @@ function dehighlightNode(id) {
   $('#' + id).remove();
 }
 
-function clearRetry() {
-  if (retryTimeout) {
-    clearTimeout(retryTimeout);
-    retryTimeout = null;
-  }
-}
 
-function setRetry(request, startIndex, timeout) {
-  retryTimeout = setTimeout(function() {
-    simulate(request, startIndex);
-  }, timeout);
-  return;
-}
-
-function updateEvent(request) {
-  var update = request.value;
-  if (lastReplayEvent.pageEventId == update.pageEventId) {
-    for (var key in update) {
-      lastReplayEvent[key] = update[key];
-    }
-  }
-}
-
-function snapshotReplay(target) {
-  replayLog.log('snapshot target:', target);
-  if (params.localSnapshot) {
-    lastReplaySnapshot = curReplaySnapshot;
-    if (lastReplaySnapshot)
-      lastReplaySnapshot.after = snapshotNode(lastReplaySnapshot.target);
-
-    curReplaySnapshot = {before: snapshotNode(target), target: target};
-  } else {
-    var curSnapshot = snapshot();
-
-    lastReplaySnapshot = curReplaySnapshot;
-    if (lastReplaySnapshot)
-      lastReplaySnapshot.after = curSnapshot;
-
-    curReplaySnapshot = {before: curSnapshot};
-  }
-}
-
-function resnapshotBefore(target) {
-  if (params.localSnapshot)
-    curReplaySnapshot.before = snapshotNode(target);
-  else
-    curReplaySnapshot.before = snapshot();
-}
-
-function fixDeltas(recordDeltas, replayDeltas, recordEvent, lastTarget,
-                   snapshot) {
-  replayLog.info('record deltas:', recordDeltas);
-  replayLog.info('replay deltas:', replayDeltas);
-
-  // effects of events that were found in record browser but not replay browser
-  var recordDeltasNotMatched = filterDeltas(recordDeltas, replayDeltas);
-  // effects of events that were found in replay browser but not record browser
-  var replayDeltasNotMatched = filterDeltas(replayDeltas, recordDeltas);
-
-  replayLog.info('record deltas not matched: ', recordDeltasNotMatched);
-  replayLog.info('replay deltas not matched: ', replayDeltasNotMatched);
-
-  var element = lastTarget; //getTarget(recordEvent.data.target);
-
-  for (var i = 0, ii = replayDeltasNotMatched.length; i < ii; ++i) {
-    var delta = replayDeltasNotMatched[i];
-    replayLog.debug('unmatched replay delta', delta);
-
-    if (delta.type == 'Property is different.') {
-      var divProp = delta.divergingProp;
-//      addComment('replay delta', divProp + ':' + delta.orig.prop[divProp] +
-//                 '->' + delta.changed.prop[divProp]);
-
-      if (params.replaying.compensation == Compensation.FORCED) {
-        element[divProp] = delta.orig.prop[divProp];
-      }
-    }
-  }
-
-  //the thing below is the stuff that's doing divergence synthesis
-  for (var i = 0, ii = recordDeltasNotMatched.length; i < ii; ++i) {
-    var delta = recordDeltasNotMatched[i];
-    replayLog.debug('unmatched record delta', delta);
-
-    if (delta.type == 'Property is different.') {
-      var divProp = delta.divergingProp;
-//      addComment('record delta', divProp + ':' + delta.orig.prop[divProp] +
-//                 '->' + delta.changed.prop[divProp]);
-
-      if (params.replaying.compensation == Compensation.SYNTH) {
-        replayLog.debug('generating compensation event:', delta);
-        generateCompensation(recordEvent, delta);
-      } else if (params.replaying.compensation == Compensation.FORCED) {
-        element[divProp] = delta.changed.prop[divProp];
-      }
-    }
-  }
-}
-
-// ***************************************************************************
-// Misc code
-// ***************************************************************************
-
-//function for sending an alert that the user will see
+/* Send an alert that will be displayed in the main panel */
 function sendAlert(msg) {
   port.postMessage({type: 'alert', value: msg});
 }
 
-// given the new parameters, update the parameters for this content script
+/* Update the parameters for this scripts scope */
 function updateParams(newParams) {
   var oldParams = params;
   params = newParams;
@@ -929,9 +625,9 @@ function updateParams(newParams) {
   var oldEvents = oldParams.events;
   var events = params.events;
 
-  // if we are listening to all events, then we don't need to do anything since
-  // we should have already added listeners to all events at the very
-  // beginning
+  /* if we are listening to all events, then we don't need to do anything since
+   * we should have already added listeners to all events at the very
+   * beginning */
   if (params.recording.listenToAllEvents)
     return;
 
@@ -950,51 +646,42 @@ function updateParams(newParams) {
   }
 }
 
-// event handler for messages coming from the background page
+var handlers = {
+  'recording': function(v) {
+    recording = v;
+  },
+  'params': updateParams,
+  'event': function(v) {
+    simulate(v, 0);
+  },
+  'snapshot': function() {
+    port.postMessage({type: 'snapshot', value: snapshot()});
+  },
+  'updateDeltas': updateDeltas,
+  'reset': resetRecord,
+  'url': function() {
+    port.postMessage({type: 'url', value: document.URL});
+  },
+  'capture': captureNode,
+  'cancelCapture': cancelCaptureNode,
+  'pauseReplay': clearRetry,
+};
+
+/* Handle messages coming from the background page */
 function handleMessage(request) {
   var type = request.type;
 
   log.log('[' + id + '] handle message:', request, type);
-  if (type == 'recording') {
-    recording = request.value;
-  } else if (type == 'params') {
-    updateParams(request.value);
-  } else if (type == 'event') {
-    simulate(request, 0);
-  } else if (type == 'snapshot') {
-    port.postMessage({type: 'snapshot', value: snapshot()});
-  } else if (type == 'updateDeltas') {
-    updateDeltas();
-  } else if (type == 'reset') {
-    resetRecord();
-  } else if (type == 'url') {
-    port.postMessage({type: 'url', value: document.URL});
-  } else if (type == 'capture') {
-    captureNode();
-  } else if (type == 'cancelCapture') {
-    cancelCaptureNode();
-  } else if (type == 'pauseReplay') {
-    clearRetry();
-/*
-  } else if (type == 'portEvents') {
-    setPortEvents(request.value);
-*/
-    } else if (type == 'userUpdates') {
-    setXPathMapping(request.value);
-  } else if (type == 'promptResponse') {
-    promptResponse(request.value);
-  } else if (type == 'clipboard') {
-    replayClipboard = request.value;
-  } else if (type == 'generalize') {
-    generalizeXPath(request.value);
-  } else if (type == 'prefix') {
-    findPrefixes(request.value.origXPath, request.value.generalXPath);
+
+  var callback = handlers[type];
+  if (callback) {
+    callback(request.value);
   } else {
     log.error('cannot handle message:', request);
   }
 }
 
-// Attach the event handlers to their respective events
+/* Attach the event handlers to their respective events */
 function addListenersForRecording() {
   var events = params.events;
   for (var eventType in events) {
@@ -1007,17 +694,17 @@ function addListenersForRecording() {
 };
 
 
-// We need to add all the events now before and other event listners are
-// added to the page. We will remove the unwanted handlers once params is
-// updated
+/* We need to add all the events now before and other event listners are
+ * added to the page. We will remove the unwanted handlers once params is
+ * updated */
 addListenersForRecording();
 
-// need to check if we are in an iframe
+/* need to check if we are in an iframe */
 var value = {};
 value.top = (self == top);
 value.URL = document.URL;
 
-// Add all the other handlers
+/* Add all the other handlers */
 chrome.runtime.sendMessage({type: 'getId', value: value}, function(resp) {
   id = resp.value;
   port = new Port(id);
@@ -1046,10 +733,9 @@ function injectScript(path) {
   };
   (document.head || document.documentElement).appendChild(s);
 }
+
 // TODO(sbarman): need to wrap these so variables don't escape into the
 // enclosing scope
 injectScript('scripts/common/params.js');
 injectScript('scripts/content/misc.js');
 injectScript('scripts/content/injected.js');
-
-})();
