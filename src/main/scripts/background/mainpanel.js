@@ -3,40 +3,42 @@
 
 'use strict';
 
-// handles mapping between ports, tabs, iframes, etc
+/* Store mappings between ports, tabs, iframes, etc */
 var PortManager = (function PortManagerClosure() {
   var portLog = getLog('ports');
 
   function PortManager() {
     this.numPorts = 0;
-    this.ports = {};
-    this.portNameToTabId = {};
-    this.portNameToPortInfo = {};
-    this.tabIdToPortNames = {};
+    this.portIdtoPort = {};
+    this.portIdToTabId = {};
+    this.portIdToPortInfo = {};
+    this.tabIdToPortIds = {};
     this.tabIdToTabInfo = {};
-    this.portToSnapshot = {};
     this.tabIdToTab = {};
   }
 
   PortManager.prototype = {
+    /* Send a message to all content scripts. Messages should be in the form
+     * {type: ..., value: ...} */
     sendToAll: function _sendToAll(message) {
       portLog.log('sending to all:', message);
-      var ports = this.ports;
-      for (var portName in ports) {
-        ports[portName].postMessage(message);
+      var ports = this.portIdToPort;
+      for (var portId in ports) {
+        ports[portId].postMessage(message);
       }
     },
-    getTab: function _getTab(portName) {
-      return this.portNameToTabId[portName];
+    getTabId: function _getTabId(portId) {
+      return this.portIdToTabId[portId];
     },
-    getTabInfo: function _getTabInfo(tab) {
-      var tabInfo = this.tabIdToTabInfo[tab];
+    getTabInfo: function _getTabInfo(tabId) {
+      var tabInfo = this.tabIdToTabInfo[tabId];
       if (!tabInfo)
         return null;
 
       var ret = {};
       ret.frames = tabInfo.frames;
 
+      /* we store all the top frames, so just return the last frame */
       var topFrames = tabInfo.top;
       if (topFrames.length > 0)
         ret.top = topFrames[topFrames.length - 1];
@@ -46,49 +48,43 @@ var PortManager = (function PortManagerClosure() {
     getTabFromTabId: function _getTabFromTabId(tabId) {
       return this.tabIdToTab[tabId];
     },
-    getPort: function _getPort(portName) {
-      return this.ports[portName];
-    },
-    getSnapshot: function _getSnapshot(portName) {
-      return this.portToSnapshot[portName];
-    },
-    addSnapshot: function _addSnapshot(name, snapshot) {
-      this.portToSnapshot[name] = snapshot;
+    getPort: function _getPort(portId) {
+      return this.portIdToPort[portId];
     },
     updateUrl: function _updateUrl(port, url) {
-      this.portNameToPortInfo[port.name].URL = url;
+      this.portIdToPortInfo[port.name].URL = url;
     },
     removeTab: function _removeTab(tabId) {
-      delete this.tabIdToPortNames[tabId];
+      delete this.tabIdToPortIds[tabId];
       delete this.tabIdToTab[tabId];
+      delete this.tabIdToTabInfo[tabId];
     },
     getNewId: function _getNewId(value, sender) {
-      // for some reason, the start page loads the content script but doesn't
-      // have a tab id. in this case, don't assign an id
+      /* for some reason, the start page loads the content script but doesn't
+       * have a tab id. in this case, don't assign an id */
       if (!sender.tab) {
-        portLog.log('request for new id without a tab id');
+        portLog.warn('request for new id without a tab id');
         return;
       }
 
       this.numPorts++;
-      var portName = '' + this.numPorts;
+      var portId = '' + this.numPorts;
 
-      portLog.log('adding new id: ', portName, value);
+      portLog.log('adding new id: ', portId, value);
 
-      // Update various mappings
+      /* Update various mappings */
       var tabId = sender.tab.id;
-
       this.tabIdToTab[tabId] = sender.tab;
-      this.portNameToTabId[portName] = tabId;
-      this.portNameToPortInfo[portName] = value;
-      value.portName = portName;
+      this.portIdToTabId[portId] = tabId;
+      this.portIdToPortInfo[portId] = value;
+      value.portId = portId;
 
-      var portNames = this.tabIdToPortNames[tabId];
-      if (!portNames) {
-        portNames = [];
-        this.tabIdToPortNames[tabId] = portNames;
+      var portIds = this.tabIdToPortIds[tabId];
+      if (!portIds) {
+        portIds = [];
+        this.tabIdToPortIds[tabId] = portIds;
       }
-      portNames.push(portName);
+      portIds.push(portId);
 
       var tabInfo = this.tabIdToTabInfo[tabId];
       if (!tabInfo) {
@@ -100,13 +96,13 @@ var PortManager = (function PortManagerClosure() {
       } else {
         tabInfo.frames.push(value);
       }
-      return portName;
+      return portId;
     },
     connectPort: function _connectPort(port) {
-      var portName = port.name;
-      var ports = this.ports;
+      var portId = port.name;
+      var ports = this.portIdToPort;
 
-      ports[portName] = port;
+      ports[portId] = port;
 
       port.addMessageListener(function(msg) {
         handleMessage(port, msg);
@@ -116,14 +112,14 @@ var PortManager = (function PortManagerClosure() {
       port.addDisconnectListener(function(evt) {
         portLog.log('disconnect port:', port);
 
-        if (portName in ports) {
-          delete ports[portName];
+        if (portId in ports) {
+          delete ports[portId];
         } else {
           throw "Can't find port";
         }
 
-        var portInfo = portManager.portNameToPortInfo[portName];
-        var tabId = portManager.portNameToTabId[portName];
+        var portInfo = portManager.portIdToPortInfo[portId];
+        var tabId = portManager.portIdToTabId[portId];
         var tabInfo = portManager.tabIdToTabInfo[tabId];
 
         var frames;
@@ -134,7 +130,7 @@ var PortManager = (function PortManagerClosure() {
 
         var removed = false;
         for (var i = 0, ii = frames.length; i < ii; ++i) {
-          if (frames[i].portName == portName) {
+          if (frames[i].portId == portId) {
             frames.splice(i, 1);
             removed = true;
             break;
@@ -150,13 +146,12 @@ var PortManager = (function PortManagerClosure() {
   return PortManager;
 })();
 
-// handles recording of events from the content scripts
+/* Handles recording of events from the content scripts */
 var Record = (function RecordClosure() {
   var recordLog = getLog('record');
 
   function Record(ports) {
     this.ports = ports;
-    this.recordState = RecordState.STOPPED;
     this.listeners = [];
 
     this.reset();
@@ -164,16 +159,16 @@ var Record = (function RecordClosure() {
 
   Record.prototype = {
     reset: function _reset() {
+      this.recordState = RecordState.STOPPED;
       this.scriptId = null;
       this.events = [];
-      this.comments = [];
-      this.commentCounter = 0;
       this.lastTime = 0;
       this.capturing = false;
 
-      this.updateListeners({reset: true});
+      this.updateListeners({type: 'reset', value: null});
       this.ports.sendToAll({type: 'reset', value: null});
     },
+    /* Messages should be in the form {type:..., value:...} */
     addListener: function _addListener(callback) {
       this.listeners.push(callback);
     },
@@ -189,34 +184,27 @@ var Record = (function RecordClosure() {
     updateStatus: function _updateStatus(newStatus) {
       if (this.recordState != newStatus) {
         this.recordState = newStatus;
-
-        var text = '';
-        if (newStatus == RecordState.RECORDING)
-          text = 'Recording';
-        else if (newStatus == RecordState.STOPPED)
-          text = 'Stopped';
-        else if (newStatus == RecordState.REPLAYING)
-          text = 'Replaying';
-        else
-          throw 'unknown status';
-        this.updateListeners({status: text});
+        this.updateListeners({type: 'status', value: newStatus});
       }
     },
+    /* Begin recording events.
+     *
+     * @param {boolean} replaying Whether we are recording a user's
+     *     interactions or the events raised by the replayer. 
+     */
     startRecording: function _startRecording(replaying) {
       recordLog.log('starting record');
-      if (replaying)
-        this.updateStatus(RecordState.REPLAYING);
-      else
-        this.updateStatus(RecordState.RECORDING);
+      var s = replaying ? RecordState.REPLAYING : RecordState.RECORDING;
+      this.updateStatus(s);
 
-      // Tell the content scripts to begin recording
+      /* Tell the content scripts to begin recording */
       this.ports.sendToAll({type: 'recording', value: this.getStatus()});
     },
     stopRecording: function _stopRecording() {
       recordLog.log('stopping record');
       this.updateStatus(RecordState.STOPPED);
 
-      // Tell the content scripts to stop recording
+      /* Tell the content scripts to stop recording */
       this.ports.sendToAll({type: 'updateDeltas', value: null});
       this.ports.sendToAll({type: 'recording', value: this.getStatus()});
     },
@@ -226,24 +214,19 @@ var Record = (function RecordClosure() {
         this.capturing = true;
       }
     },
-    addComment: function _addComment(eventRequest, portName) {
-      var value = eventRequest.value;
-      var comment = {};
-      comment.name = value.name;
-      comment.value = value.value;
+    /* Add an to be recorded
+     *
+     * @param {object} eventRequest Details of about the saved event
+     * @param {string} portId Optional name of the port for the event
+     * @param {index} index Index where put the event. Defaults to the end of the
+     *     event array if undefined
+     *
+     * @returns {string} Id assigned to the event
+     */
+    addEvent: function _addEvent(eventRequest, portId, index) {
+      recordLog.log('added event:', eventRequest, portId);
 
-      recordLog.log('added comment:', comment, portName);
-
-      var eventList = this.events;
-      var commentList = this.comments;
-
-      // order number is the index of the current event + some fraction
-      comment.execution_order = (eventList.length - 1) + (0.01 *
-          (this.commentCounter + 1));
-      commentList.push(comment);
-      this.commentCounter += 1;
-    },
-    addEvent: function _addEvent(eventRequest, portName, index) {
+      /* Tell other frames to stop capturing */
       if (this.capturing && eventRequest.value.type == 'capture') {
         this.ports.sendToAll({type: 'cancelCapture', value: null});
         this.capturing = false;
@@ -251,41 +234,32 @@ var Record = (function RecordClosure() {
 
       var e = eventRequest.value;
 
-      if (portName) {
+      /* Check if the event is coming from a content script */
+      if (portId) {
         var ports = this.ports;
-        var tab = ports.getTab(portName);
-        var portInfo = ports.getTabInfo(tab);
+        var tab = ports.getTabId(portId);
+        var tabInfo = ports.getTabInfo(tab);
         // TODO: this is broken, maybe
-        var topURL = portInfo.top.URL;
+        var topURL = tabInfo.top.URL;
 
-        var topFrame = false;
         var iframeIndex = -1;
+        var topFrame = (tabInfo.top.portId == portId);
 
-        if (portInfo.top.portName == portName) {
-          topFrame == true;
+        if (topFrame) {
+          var topFrame == true;
         } else {
-          var frames = portInfo.frames;
+          var topFrame = false;
+          var frames = tabInfo.frames;
           for (var i = 0, ii = frames.length; i < ii; ++i) {
             var frame = frames[i];
-            if (frame.portName == portName) {
+            if (frame.portId == portId) {
               iframeIndex = i;
               break;
             }
           }
         }
-        var topFrame = (portInfo.top.portName == portName);
 
-
-        var time = e.data.timeStamp;
-        var lastTime = this.lastTime;
-        if (lastTime == 0) {
-          var waitTime = 0;
-        } else {
-          var waitTime = time - lastTime;
-        }
-        this.lastTime = time;
-
-        e.frame.port = portName;
+        e.frame.port = portId;
         e.frame.topURL = topURL;
         e.frame.topFrame = topFrame;
         e.frame.iframeIndex = iframeIndex;
@@ -293,25 +267,40 @@ var Record = (function RecordClosure() {
         e.timing.waitTime = waitTime;
       }
 
-      recordLog.log('added event:', eventRequest, portName);
+      /* Save timing info */
+      var time = e.data.timeStamp;
+      var lastTime = this.lastTime;
+      if (lastTime == 0) {
+        var waitTime = 0;
+      } else {
+        var waitTime = time - lastTime;
+      }
+      this.lastTime = time;
 
-      var events = this.events;
-
+      /* Give this event an unique id */
       if (!e.meta)
         e.meta = {};
       e.meta.id = 'event' + events.length;
 
-      if (typeof index == 'number') {
-        this.events.splice(index, 0, eventRequest);
-        this.updateListeners({event: eventRequest, index: index});
-      } else {
+      var events = this.events;
+      if (typeof index == 'undefined') {
         this.events.push(eventRequest);
-        this.updateListeners({event: eventRequest});
-        this.commentCounter = 0;
+        this.updateListeners({type: 'event', value: {event: eventRequest}});
+      } else {
+        this.events.splice(index, 0, eventRequest);
+        this.updateListeners({type: 'event', 
+            value: {event: eventRequest, index: index}});
       }
       return e.meta.id;
     },
-    updateEvent: function _updateEvent(eventRequest, portName) {
+    /* Update the properties of an event. @link{eventRequest} should contain the
+     * pageEventId so that the event can be matched.
+     *
+     * @param {object} eventRequest Updates to be made and meta data used to 
+     *     identify event
+     * @param {string} portId Id of port which requests came through
+     */
+    updateEvent: function _updateEvent(eventRequest, portId) {
       var updates = eventRequest.value;
       var pageEventId = updates.meta.pageEventId;
 
@@ -322,8 +311,10 @@ var Record = (function RecordClosure() {
       for (var i = events.length - 1; i >= 0; --i) {
         var e = events[i];
         var value = e.value;
-        if (e.type == 'event' && value.frame.port == portName &&
+        /* Check if its the right event */
+        if (e.type == 'event' && value.frame.port == portId &&
             value.meta.pageEventId == pageEventId) {
+          var id = value.meta.
           for (var type in updates) {
             var typeUpdates = updates[type];
             for (var key in typeUpdates) {
@@ -334,17 +325,16 @@ var Record = (function RecordClosure() {
         }
       }
     },
+    /* Create a copy of the events recorded */
     getEvents: function _getEvents() {
       return jQuery.extend(true, [], this.events);
     },
-    getComments: function _getComments() {
-      return this.comments.slice(0);
-    },
+    /* Set the recorded events */
     setEvents: function _setEvents(events) {
       this.reset();
       this.events = events;
       for (var i = 0, ii = events.length; i < ii; ++i) {
-        this.updateListeners({event: events[i]});
+        this.updateListeners({type: 'event', value: events[i]});
       }
     },
     setScriptId: function _setScriptId(id) {
@@ -559,12 +549,12 @@ var Replay = (function ReplayClosure() {
         var update = allUpdates[i];
         if (update.field == 'data.target.xpath') {
           var e = this.getEvent(update.eventId);
-          var portName = e.value.frame.port;
+          var portId = e.value.frame.port;
 
-          if (!xPathMapping[portName])
-            xPathMapping[portName] = {};
+          if (!xPathMapping[portId])
+            xPathMapping[portId] = {};
 
-          xPathMapping[portName][update.oldVal] = update;
+          xPathMapping[portId][update.oldVal] = update;
         }
       }
       this.xPathMapping = xPathMapping;
@@ -789,7 +779,7 @@ var Replay = (function ReplayClosure() {
         var topFrame = portInfo.top;
         if (topFrame) {
           if (matchUrls(frame.URL, topFrame.URL))
-            port = ports.getPort(topFrame.portName);
+            port = ports.getPort(topFrame.portId);
         }
       } else {
         replayLog.log('try to find port in one of the iframes');
@@ -805,71 +795,10 @@ var Replay = (function ReplayClosure() {
           this.addDebug('no iframes found for page');
           return;
         } else if (urlFrames.length == 1) {
-          return ports.getPort(urlFrames[0].portName);
+          return ports.getPort(urlFrames[0].portId);
         }
 
         replayLog.warn('multiple iframes with same url:', urlFrames);
-
-        /*
-        var allFrameSnapshots = true;
-        for (var i = 0, ii = urlFrames.length; i < ii; i++) {
-          if (!ports.getSnapshot(urlFrames[i].portName)) {
-            allFrameSnapshots = false;
-            break;
-          }
-        }
-
-        if (allFrameSnapshots) {
-          var similar = function(node1, node2) {
-            if (typeof node1 != 'object' || typeof node2 != 'object') {
-              return 0;
-            }
-            var score = 0;
-            var attr1 = node1.attr;
-            var attr2 = node2.attr;
-            for (var a in attr1) {
-              if (a in attr2) {
-                score++;
-              }
-            }
-
-            var children1 = node1.children;
-            var children2 = node2.children;
-            var c1length = children1.length;
-            var c2length = children2.length;
-            if (c1length < c2length) {
-              var length = c1length;
-            } else {
-              var length = c2length;
-            }
-            for (var i = 0; i < length; ++i) {
-              score += similar(children1[i], children2[i]);
-            }
-            return score;
-          };
-          var topScore = -1;
-          var index = -1;
-
-          replayLog.warn('snapshots probably broken when finding correct ' +
-                         'iframe', snapshot);
-
-          for (var i = 0, ii = urlFrames.length; i < ii; ++i) {
-            var score = similar(snapshot,
-                                ports.getSnapshot(urlFrames[i].portName));
-            if (score > topScore) {
-              index = i;
-              topScore = score;
-            }
-          }
-          this.portToSnapshot = {};
-          newPort = ports.getPort(urlFrames[index].portName);
-        } else {
-          for (var i = 0, ii = urlFrames.length; i < ii; i++) {
-            var port = ports.getPort(urlFrames[i].portName);
-            port.postMessage({type: 'snapshot', value: null});
-          }
-        }
-        */
       }
       replayLog.log('found port:', port);
       return port;
@@ -1677,9 +1606,9 @@ var bgLog = getLog('background');
 function handleIdMessage(request, sender, sendResponse) {
   bgLog.log('background receiving:', request, 'from', sender);
   if (request.type == 'getId') {
-    var portName = ports.getNewId(request.value, sender);
-    if (portName)
-      sendResponse({type: 'id', value: portName});
+    var portId = ports.getNewId(request.value, sender);
+    if (portId)
+      sendResponse({type: 'id', value: portId});
   }
 }
 
@@ -1716,8 +1645,6 @@ function handleMessage(port, request) {
       port.postMessage({type: 'recording', value: RecordState.STOPPED});
   } else if (request.type == 'getParams') {
     port.postMessage({type: 'params', value: params});
-  } else if (request.type == 'snapshot') {
-    ports.addSnapshot(port.name, request.value);
   } else if (request.type == 'ack') {
     replay.receiveAck(request.value);
   } else if (request.type == 'url') {

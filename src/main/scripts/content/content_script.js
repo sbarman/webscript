@@ -654,9 +654,6 @@ var handlers = {
   'event': function(v) {
     simulate(v, 0);
   },
-  'snapshot': function() {
-    port.postMessage({type: 'snapshot', value: snapshot()});
-  },
   'updateDeltas': updateDeltas,
   'reset': resetRecord,
   'url': function() {
