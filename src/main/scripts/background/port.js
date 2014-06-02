@@ -3,6 +3,7 @@
 
 'use strict';
 
+/* Wrapper around the Chrome port abstraction */
 var Port = (function PortClosure() {
   function Port(port) {
     this.port = port;

@@ -1,8 +1,18 @@
+/* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
+
+'use strict';
+
 var matchUrls;
 
 (function() {
   var log = getLog('url');
 
+  /* Decide whether two urls are the 'same'
+   * @param {number} similarity Threshold between 0 and 1 (most similar) which
+   *     needs to be met.
+   * @returns {boolean} True if two urls match
+   */
   matchUrls = function _matchUrls(origUrl, matchedUrl, similarity) {
     if (!similarity)
       similarity = params.replaying.urlSimilarity;
@@ -20,6 +30,7 @@ var matchUrls;
         origAnchor.pathname == matchedAnchor.pathname;
   };
   
+  /* Longest common subexpression */
   function lcs(x, y) {
     var s, i, j, m, n,
       lcs = [], row = [], c = [],

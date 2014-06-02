@@ -9,68 +9,6 @@ recordEvent
     return true;
   }
 
-// ***************************************************************************
-// Capture code
-// ***************************************************************************
-
-var domOutline = DomOutline({
-    borderWidth: 2,
-    onClick: onClickCapture
-  }
-);
-
-var domOutlineCallback = null;
-
-function startCapture(callback) {
-  domOutlineCallback = callback;
-  domOutline.start();
-}
-
-function cancelCapture() {
-  domOutlineCallback = null;
-  domOutline.stop();
-}
-
-function onClickCapture(node, event) {
-  var callback = domOutlineCallback;
-  if (callback) {
-    domOutlineCallback = null;
-    callback(node, event);
-  }
-}
-
-function captureNode() {
-  if (recording == RecordState.RECORDING) {
-    log.log('starting node capture');
-    startCapture(captureNodeReply);
-  }
-}
-
-function cancelCaptureNode() {
-  cancelCapture();
-}
-
-function captureNodeReply(target, event) {
-  var eventMessage = {
-    data: {},
-    frame: {},
-    meta: {},
-    timing: {}
-  };
-
-  eventMessage.data.type = 'capture';
-  eventMessage.data.target = saveTargetInfo(target, recording);
-  eventMessage.data.timeStamp = new Date().getTime();
-  eventMessage.frame.URL = document.URL;
-  eventMessage.meta.nodeName = target.nodeName.toLowerCase();
-  eventMessage.meta.recordState = recording;
-
-  log.log('capturing:', target, eventMessage);
-  port.postMessage({type: 'event', value: eventMessage, state: recording});
-
-  event.preventDefault();
-  event.stopImmediatePropagation();
-}
 
     var generalize = eventRecord.generalize;
 

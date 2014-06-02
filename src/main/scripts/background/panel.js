@@ -3,7 +3,7 @@
 
 'use strict';
 
-// handles user interface
+/* User interface */
 var Panel = (function PanelClosure() {
   function Panel(controller) {
     this.controller = controller;
@@ -20,6 +20,19 @@ var Panel = (function PanelClosure() {
     var panel = this;
     controller.addListener(function(msg) {
       panel.controllerUpdate(msg);
+    });
+
+    /* window is closed so tell the content scripts to stop recording and reset
+     * the extension icon */
+    $(window).unload(function() {
+      controller.stop();
+      chrome.browserAction.setBadgeText({text: ''});
+      chrome.runtime.onMessage.removeListener(handleMessage);
+    });
+    
+    var panel = this;
+    $(window).resize(function() {
+      panel.resize();
     });
   }
 

@@ -181,7 +181,7 @@ function recordEvent(eventData) {
 
   /* save the event record */
   recordLog.debug('[' + id + '] saving event message:', eventMessage);
-  port.postMessage({type: 'event', value: eventMessage, state: recording});
+  port.postMessage({type: 'dom', value: eventMessage, state: recording});
   lastRecordEvent = eventMessage;
 
   /* check to see if this event is part of a cascade of events. we do this 
@@ -374,7 +374,6 @@ function simulate(events, startIndex) {
       }
 
       setRetry(events, i, params.replay.defaultWait);
-      port.postMessage({type: 'debug', value: 'no target found'});
       return;
     }
 
@@ -391,7 +390,7 @@ function simulate(events, startIndex) {
                  nodeName: target.nodeName.toLowerCase(),
                  id: id};
 
-      port.postMessage({type: 'saveCapture', value: msg});
+      port.postMessage({type: 'saveCapture', value: msg, state: recording});
       continue;
     }
 
@@ -486,7 +485,7 @@ function simulate(events, startIndex) {
   }
   /* let the background page know that all the events were replayed (its
    * possible some/all events were skipped) */
-  port.postMessage({type: 'ack', value: {type: Ack.SUCCESS}});
+  port.postMessage({type: 'ack', value: {type: Ack.SUCCESS}, state: recording});
   replayLog.debug('[' + id + '] sent ack');
 }
 
@@ -576,6 +575,68 @@ function fixDeltas(recordDeltas, replayDeltas, lastTarget) {
 }
 
 // ***************************************************************************
+// Capture code
+// ***************************************************************************
+
+var domOutline = DomOutline({
+    borderWidth: 2,
+    onClick: onClickCapture
+  }
+);
+
+var domOutlineCallback = null;
+
+function startCapture(callback) {
+  domOutlineCallback = callback;
+  domOutline.start();
+}
+
+function cancelCapture() {
+  domOutlineCallback = null;
+  domOutline.stop();
+}
+
+function onClickCapture(node, event) {
+  var callback = domOutlineCallback;
+  if (callback) {
+    domOutlineCallback = null;
+    callback(node, event);
+  }
+}
+
+function captureNode() {
+  if (recording == RecordState.RECORDING) {
+    log.log('starting node capture');
+    startCapture(captureNodeReply);
+  }
+}
+
+function cancelCaptureNode() {
+  cancelCapture();
+}
+
+function captureNodeReply(target, event) {
+  var eventMessage = {
+    data: {},
+    frame: {},
+    meta: {},
+    timing: {}
+  };
+
+  eventMessage.data.target = saveTargetInfo(target, recording);
+  eventMessage.data.timeStamp = new Date().getTime();
+  eventMessage.frame.URL = document.URL;
+  eventMessage.meta.nodeName = target.nodeName.toLowerCase();
+  eventMessage.meta.recordState = recording;
+
+  log.log('capturing:', target, eventMessage);
+  port.postMessage({type: 'capture', value: eventMessage, state: recording});
+
+  event.preventDefault();
+  event.stopImmediatePropagation();
+}
+
+// ***************************************************************************
 // Misc code
 // ***************************************************************************
 
@@ -614,7 +675,7 @@ function dehighlightNode(id) {
 
 /* Send an alert that will be displayed in the main panel */
 function sendAlert(msg) {
-  port.postMessage({type: 'alert', value: msg});
+  port.postMessage({type: 'alert', value: msg, state: recording});
 }
 
 /* Update the parameters for this scripts scope */
@@ -657,7 +718,7 @@ var handlers = {
   'updateDeltas': updateDeltas,
   'reset': resetRecord,
   'url': function() {
-    port.postMessage({type: 'url', value: document.URL});
+    port.postMessage({type: 'url', value: document.URL, state: recording});
   },
   'capture': captureNode,
   'cancelCapture': cancelCaptureNode,
@@ -708,15 +769,15 @@ chrome.runtime.sendMessage({type: 'getId', value: value}, function(resp) {
   port.addListener(handleMessage);
 
   // see if recording is going on
-  port.postMessage({type: 'getParams', value: null});
-  port.postMessage({type: 'getRecording', value: null});
+  port.postMessage({type: 'getParams', value: null, state: recording});
+  port.postMessage({type: 'getRecording', value: null, state: recording});
 });
 
 var pollUrlId = window.setInterval(function() {
   if (value.URL != document.URL) {
     var url = document.URL;
     value.URL = url;
-    port.postMessage({type: 'url', value: url});
+    port.postMessage({type: 'url', value: url, state: recording});
     log.log('url change: ', url);
   }
 }, 1000);
