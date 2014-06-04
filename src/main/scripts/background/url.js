@@ -15,7 +15,7 @@ var matchUrls;
    */
   matchUrls = function _matchUrls(origUrl, matchedUrl, similarity) {
     if (!similarity)
-      similarity = params.replaying.urlSimilarity;
+      similarity = params.replay.urlSimilarity;
 
     var commonUrl = lcs(origUrl, matchedUrl);
     var commonRatio = commonUrl.length /

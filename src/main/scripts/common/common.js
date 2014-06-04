@@ -14,7 +14,7 @@ var RecordState = {
 };
 
 var ReplayState = {
-  STOPPED: 'stopped'
+  STOPPED: 'stopped',
   REPLAYING: 'replaying', /* replaying the next command */
   ACK: 'ack', /* waiting for an ack from the content script */
 };

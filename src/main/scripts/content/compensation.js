@@ -63,8 +63,8 @@ var filterDeltas = null;
     if (!(obj1props && obj2props)) {
       throw 'divergingProps called with bad arguements';
     }
-    var obj1props = _.omit(obj1props, params.synthesis.omittedProps);
-    var obj2props = _.omit(obj2props, params.synthesis.omittedProps);
+    var obj1props = _.omit(obj1props, params.compensation.omittedProps);
+    var obj2props = _.omit(obj2props, params.compensation.omittedProps);
   
     var divergingProps = [];
     for (var prop in obj1props) {
@@ -99,7 +99,7 @@ var filterDeltas = null;
       if (!nodeEquals(origNode, changedNode)) {
         var props1 = origNode.prop || [];
         var props2 = changedNode.prop || [];
-        var omittedProps = params.synthesis.omittedProps;
+        var omittedProps = params.compensation.omittedProps;
   
         props1 = _.omit(props1, omittedProps);
         props2 = _.omit(props2, omittedProps);
@@ -155,7 +155,7 @@ var filterDeltas = null;
   function nodeEquals(node1, node2) {
     if (node1 && node2) {
       if ('prop' in node1 && 'prop' in node2) {
-        var omittedProps = params.synthesis.omittedProps;
+        var omittedProps = params.compensation.omittedProps;
         var node1RelevantProps = _.omit(node1.prop, omittedProps);
         var node2RelevantProps = _.omit(node2.prop, omittedProps);
   

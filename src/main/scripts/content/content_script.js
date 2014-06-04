@@ -156,7 +156,7 @@ function recordEvent(eventData) {
 
   var data = eventMessage.data;
   /* record all properties of the event object */
-  if (params.recording.allEventProps) {
+  if (params.record.allEventProps) {
     for (var prop in eventData) {
       try {
         var value = eventData[prop];
@@ -190,10 +190,10 @@ function recordEvent(eventData) {
     var update = {
       type: 'updateEvent',
       value: {
-        meta: {
-          endEventId: lastRecordEvent.meta.pageEventId,
-          pageEventId: eventMessage.meta.pageEventId
-        }
+        pageEventId: eventMessage.meta.pageEventId,
+        updates: [
+          {field: 'meta.endEventId', value: lastRecordEvent.meta.pageEventId}
+        ]
       },
       state: recording
     };
@@ -217,7 +217,7 @@ function replayUpdateDeltas(eventData, eventMessage) {
     snapshotReplay(target);
 
     /* make sure the deltas from the last event actually happened */
-    if (params.synthesis.enabled && lastReplayEvent) {
+    if (params.compensation.enabled && lastReplayEvent) {
       var recordDeltas = lastReplayEvent.meta.deltas;
       if (typeof recordDeltas == 'undefined') {
         recordLog.error('no deltas found for last event:', lastReplayEvent);
@@ -243,21 +243,11 @@ function replayUpdateDeltas(eventData, eventMessage) {
 
 /* Create a snapshot of the target element */
 function snapshotRecord(target) {
-  if (params.localSnapshot) {
-    lastRecordSnapshot = curRecordSnapshot;
-    if (lastRecordSnapshot)
-      lastRecordSnapshot.after = snapshotNode(lastRecordSnapshot.target);
+  lastRecordSnapshot = curRecordSnapshot;
+  if (lastRecordSnapshot)
+    lastRecordSnapshot.after = snapshotNode(lastRecordSnapshot.target);
 
-    curRecordSnapshot = {before: snapshotNode(target), target: target};
-  } else {
-    var curSnapshot = snapshot();
-
-    lastRecordSnapshot = curRecordSnapshot;
-    if (lastRecordSnapshot)
-      lastRecordSnapshot.after = curSnapshot;
-
-    curRecordSnapshot = {before: curSnapshot};
-  }
+  curRecordSnapshot = {before: snapshotNode(target), target: target};
 }
 
 /* Update the deltas for the previous event */
@@ -271,11 +261,12 @@ function updateDeltas(target) {
     var update = {
       type: 'updateEvent',
       value: {
-        meta: {
-          deltas: deltas,
-          nodeSnapshot: snapshotNode(lastRecordSnapshot.target),
-          pageEventId: lastRecordEvent.meta.pageEventId
-        }
+        pageEventId: lastRecordEvent.meta.pageEventId,
+        updates: [
+          {field: 'meta.deltas', value: deltas},
+          {field: 'meta.nodeSnapshot', 
+           value: snapshotNode(lastRecordSnapshot.target)}
+        ]
       },
       state: recording
     };
@@ -353,16 +344,6 @@ function simulate(events, startIndex) {
 
     /* find the target */
     var target = getTarget(targetInfo);
-    if (params.benchmarking.targetInfo) {
-      var actualTargets = getTargetFunction(targetInfo);
-
-      for (var strategy in targetFunctions) {
-        var strategyTargets = targetFunctions[strategy](targetInfo);
-        var common = actualTargets.filter(function(t) {
-          return strategyTargets.indexOf(t) != -1;
-        });
-      }
-    }
 
     /* if no target exists, lets try to dispatch this event a little bit in
      *the future, and hope the page changes */
@@ -486,7 +467,7 @@ function simulate(events, startIndex) {
   /* let the background page know that all the events were replayed (its
    * possible some/all events were skipped) */
   port.postMessage({type: 'ack', value: {type: Ack.SUCCESS}, state: recording});
-  replayLog.debug('[' + id + '] sent ack');
+  replayLog.debug('sent ack: ', id);
 }
 
 /* Stop the next execution of simulate */
@@ -508,29 +489,16 @@ function setRetry(events, startIndex, timeout) {
 /* Take a snapshot of the target */
 function snapshotReplay(target) {
   replayLog.log('snapshot target:', target);
-  if (params.localSnapshot) {
-    lastReplaySnapshot = curReplaySnapshot;
-    if (lastReplaySnapshot)
-      lastReplaySnapshot.after = snapshotNode(lastReplaySnapshot.target);
+  lastReplaySnapshot = curReplaySnapshot;
+  if (lastReplaySnapshot)
+    lastReplaySnapshot.after = snapshotNode(lastReplaySnapshot.target);
 
-    curReplaySnapshot = {before: snapshotNode(target), target: target};
-  } else {
-    var curSnapshot = snapshot();
-
-    lastReplaySnapshot = curReplaySnapshot;
-    if (lastReplaySnapshot)
-      lastReplaySnapshot.after = curSnapshot;
-
-    curReplaySnapshot = {before: curSnapshot};
-  }
+  curReplaySnapshot = {before: snapshotNode(target), target: target};
 }
 
 /* Update the snapshot */
 function resnapshotBefore(target) {
-  if (params.localSnapshot)
-    curReplaySnapshot.before = snapshotNode(target);
-  else
-    curReplaySnapshot.before = snapshot();
+  curReplaySnapshot.before = snapshotNode(target);
 }
 
 /* Update the lastTarget, so that the record and replay deltas match */
@@ -689,7 +657,7 @@ function updateParams(newParams) {
   /* if we are listening to all events, then we don't need to do anything since
    * we should have already added listeners to all events at the very
    * beginning */
-  if (params.recording.listenToAllEvents)
+  if (params.record.listenToAllEvents)
     return;
 
   for (var eventType in events) {
@@ -794,6 +762,5 @@ function injectScript(path) {
 
 // TODO(sbarman): need to wrap these so variables don't escape into the
 // enclosing scope
-injectScript('scripts/common/params.js');
-injectScript('scripts/content/misc.js');
-injectScript('scripts/content/injected.js');
+injectScript('main/scripts/common/params.js');
+injectScript('main/scripts/content/injected.js');

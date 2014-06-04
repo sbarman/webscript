@@ -171,12 +171,11 @@ var snapshotBranch = null;
     return returnVal;
   }
 
-  snapshot = function()
+  snapshot = function() {
     var body = document.body;
-
     var nodeName = body.nodeName.toLowerCase();
     if (nodeName == 'body') {
-      var objTree = _snapshotSubtree(node, 'html/body[1]');
+      var objTree = _snapshotSubtree(body, 'html/body[1]');
       return objTree;
     }
   }

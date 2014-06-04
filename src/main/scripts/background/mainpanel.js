@@ -9,7 +9,7 @@ var PortManager = (function PortManagerClosure() {
 
   function PortManager() {
     this.numPorts = 0;
-    this.portIdtoPort = {};
+    this.portIdToPort = {};
     this.portIdToTabId = {};
     this.portIdToPortInfo = {};
     this.tabIdToPortIds = {};
@@ -216,12 +216,12 @@ var Record = (function RecordClosure() {
         this.capturing = true;
       }
     },
-    /* Add an to be recorded
+    /* Add the event to be recorded
      *
      * @param {object} eventRequest Details of about the saved event
      * @param {string} portId Optional name of the port for the event
-     * @param {index} index Index where put the event. Defaults to the end of the
-     *     event array if undefined
+     * @param {index} index Index where put the event. Defaults to the end of
+     *     the event array if undefined
      *
      * @returns {string} Id assigned to the event
      */
@@ -248,7 +248,7 @@ var Record = (function RecordClosure() {
         var topFrame = (tabInfo.top.portId == portId);
 
         if (topFrame) {
-          var topFrame == true;
+          var topFrame = true;
         } else {
           var topFrame = false;
           var frames = tabInfo.frames;
@@ -276,15 +276,17 @@ var Record = (function RecordClosure() {
       } else {
         var waitTime = time - lastTime;
       }
+      if (!('timing' in e))
+        e.timing = {};
       e.timing.waitTime = waitTime;
       this.lastTime = time;
 
       /* Give this event an unique id */
-      if (!e.meta)
+      var events = this.events;
+      if (!('meta' in e))
         e.meta = {};
       e.meta.id = 'event' + events.length;
 
-      var events = this.events;
       if (typeof index == 'undefined') {
         this.events.push(eventRequest);
         this.updateListeners({type: 'event', value: {event: eventRequest}});
@@ -315,8 +317,8 @@ var Record = (function RecordClosure() {
         var e = events[i];
         var value = e.value;
         /* Check if its the right event */
-        if (e.type == 'event' && value.frame.port == portId &&
-            value.meta.pageEventId == pageEventId) {
+        if (value.frame && value.frame.port == portId &&
+            value.meta && value.meta.pageEventId == pageEventId) {
           var id = value.meta.id;
           for (var i = 0, ii = updates.length; i < ii; ++i) {
             var u = updates[i];
@@ -341,7 +343,6 @@ var Record = (function RecordClosure() {
         var event = events[i];
         var value = event.value;
         if (value.meta.id == eventId) {
-          var oldVal = getProp(value, field.split('.'), 0);
           updateProp(value, field.split('.'), 0);
         }
       }
@@ -551,7 +552,7 @@ var Replay = (function ReplayClosure() {
       if (index < events.length) {
         var e = events[index].value;
         if (e.meta)
-          this.updateListeners({simulate: e.meta.id});
+          this.updateListeners({type: 'simulate', value: e.meta.id});
       }
     },
     /* Return the index of the next event that should be replayed */ 
@@ -562,7 +563,7 @@ var Replay = (function ReplayClosure() {
 
       for (var i = index, ii = events.length; i < ii; ++i) {
         var v = events[i].type;
-        if (events[i].type in replayablEvents)
+        if (events[i].type in replayableEvents)
           return i;
       }
       return events.length;
@@ -570,17 +571,17 @@ var Replay = (function ReplayClosure() {
     /* Return the time in the future the next replayable event should be
      * executed based upon the current timing strategy. */
     getNextTime: function _getNextTime() {
-      var timing = params.replaying.timingStrategy;
+      var timing = params.replay.timingStrategy;
 
       var curIndex = this.index;
-      var nextindex = this.getNextReplayableEventIndex();
+      var nextIndex = this.getNextReplayableEventIndex();
       var events = this.events;
       var waitTime = 0;
 
       /* Check if there are any events to replay */
-      if (index >= events.length)
+      if (nextIndex >= events.length)
         return 0;
-      if (index == 0)
+      if (curIndex == 0)
         return 1000;
 
       var defaultTime = 0;
@@ -588,8 +589,8 @@ var Replay = (function ReplayClosure() {
         defaultTime += events[i].value.timing.waitTime;
 
       if (events[nextIndex].type == 'capture' &&
-          typeof params.replaying.captureWait == 'number')
-        defaultTime = Math.min(defaultTime, params.replaying.captureWait);
+          typeof params.replay.captureWait == 'number')
+        defaultTime = Math.min(defaultTime, params.replay.captureWait);
 
       if (defaultTime > 10000)
         defaultTime = 10000;
@@ -646,17 +647,15 @@ var Replay = (function ReplayClosure() {
     restart: function _restart() {
       if (this.callbackHandle == null) {
         var replayState = this.replayState;
-        if (replayState == ReplayState.REPLAY_ACK) {
+        if (replayState == ReplayState.ACK) {
           this.replayState = ReplayState.REPLAYING;
-        } else if (replayState == ReplayState.REPLAY_ONE_ACK) {
-          this.replayState == ReplayState.REPLAY_ONE;
         }
 
         this.setNextTimeout(0);
       }
     },
     replayOne: function _replayOne() {
-      this.replayState = ReplayState.REPLAY_ONE;
+      this.replayState = ReplayState.REPLAYING;
       this.restart();
     },
     skip: function _skip() {
@@ -664,7 +663,7 @@ var Replay = (function ReplayClosure() {
       this.replayState = ReplayState.REPLAYING;
     },
     resend: function _resend() {
-      if (this.replayState == ReplayState.REPLAY_ACK)
+      if (this.replayState == ReplayState.ACK)
         this.replayState = ReplayState.REPLAYING;
     },
     /* Replay has finished, and now we need to call the continuation */
@@ -690,7 +689,7 @@ var Replay = (function ReplayClosure() {
         var captures = replay.captures;
         var scriptId = replay.scriptId;
 
-        if (params.replaying.saveReplay && scriptId &&
+        if (params.replay.saveReplay && scriptId &&
             replayEvents.length > 0) {
           scriptServer.saveScript('replay ' + scriptId, replayEvents, params,
                                   scriptId);
@@ -712,7 +711,7 @@ var Replay = (function ReplayClosure() {
       this.updateListeners({type: 'capture', value: capture.innerText.trim()});
 
       /* in case the server down, we can save it to local storage */
-      if (params.replaying.saveCaptureLocal) {
+      if (params.replay.saveCaptureLocal) {
         var capId = this.scriptId + ':' + capture.id;
         var storage = {};
         storage[capId] = JSON.stringify(capture);
@@ -745,7 +744,7 @@ var Replay = (function ReplayClosure() {
           portMapping[port] = replayPort;
           replayLog.log('tab already seen, found port:', replayPort);
         } else {
-          this.setNextTimeout(params.replaying.defaultWait);
+          this.setNextTimeout(params.replay.defaultWait);
           replayLog.log('tab already seen, no port found');
         }
       /* nothing matched, so we need to open new tab */
@@ -784,13 +783,13 @@ var Replay = (function ReplayClosure() {
               var newTabId = newTab.id;
               replay.tabMapping[frame.tab] = newTabId;
               replay.ports.tabIdToTab[newTabId] = newTab;
-              replay.setNextTimeout(params.replaying.defaultWaitNewTab);
+              replay.setNextTimeout(params.replay.defaultWaitNewTab);
             }
           );
         };
 
         /* automatically open up a new tab for the first event */
-        if (!this.firstEventReplayed && params.replaying.openNewTab) {
+        if (!this.firstEventReplayed && params.replay.openNewTab) {
           openNewTab();
         /* ask the user whether the page exists, or a new tab should be opened */
         } else {
@@ -867,7 +866,7 @@ var Replay = (function ReplayClosure() {
     },
     /* Check if executing an event has timed out */
     checkTimeout: function _checkTimeout() {
-      var eventTimeout = params.replaying.eventTimeout;
+      var eventTimeout = params.replay.eventTimeout;
       if (eventTimeout != null && eventTimeout > 0) {
         var timeoutInfo = this.timeoutInfo;
         var curTime = new Date().getTime();
@@ -900,7 +899,7 @@ var Replay = (function ReplayClosure() {
         if (replayState == ReplayState.ACK) {
           var ack = this.ack;
           if (!ack) {
-            this.setNextTimeout(params.replaying.defaultWait);
+            this.setNextTimeout(params.replay.defaultWait);
             replayLog.log('continue waiting for replay ack');
             return;
           }
@@ -943,7 +942,7 @@ var Replay = (function ReplayClosure() {
         }
 
         /* check if event has been replayed, if so skip it */
-        if (params.replaying.cascadeCheck && this.checkReplayed(v)) {
+        if (params.replay.cascadeCheck && this.checkReplayed(v)) {
           replayLog.debug('skipping event: ' + e.id);
           this.incrementIndex();
           if (!this.replayOne)
@@ -981,7 +980,7 @@ var Replay = (function ReplayClosure() {
           }
 
           if (!matchedEvent) {
-            this.setNextTimeout(params.replaying.defaultWait);
+            this.setNextTimeout(params.replay.defaultWait);
             return;
           }
         }
@@ -992,11 +991,11 @@ var Replay = (function ReplayClosure() {
         try {
           if (replayState == ReplayState.REPLAYING) {
             this.ack = null;
-            if (e.type == 'event') {
+            if (e.type == 'dom') {
               /* group atomic events */
               var eventGroup = [];
               var endEvent = meta.endEventId;
-              if (params.replaying.atomic && endEvent) {
+              if (params.replay.atomic && endEvent) {
                 var t = this.index;
                 var events = this.events;
                 while (t < events.length &&
@@ -1010,7 +1009,7 @@ var Replay = (function ReplayClosure() {
               }
 
               replayPort.postMessage({type: 'event', value: eventGroup});
-              this.replayState = ReplayState.REPLAY_ACK;
+              this.replayState = ReplayState.ACK;
 
               this.firstEventReplayed = true;
 
@@ -1026,7 +1025,7 @@ var Replay = (function ReplayClosure() {
           /* a disconnected port generally means that the page has been
            * navigated away from */
           if (err.message == 'Attempting to use a disconnected port object') {
-            var strategy = params.replaying.brokenPortStrategy;
+            var strategy = params.replay.brokenPortStrategy;
             if (strategy == BrokenPortStrategy.RETRY) {
               if (v.data.cascading) {
                 /* skip the rest of the events */
@@ -1101,7 +1100,7 @@ var User = (function UserClosure() {
       var panel = this.panel;
       var user = this;
 
-      if (params.replaying.defaultUser) {
+      if (params.replay.defaultUser) {
         callback(defaultAnswer);
       } else {
         panel.question(prompt, function(answer) {
@@ -1172,7 +1171,6 @@ var Controller = (function ControllerClosure() {
     replayRecording: function _replayRecording(cont) {
       ctlLog.log('replay');
       this.stop();
-      this.replay.pause();
 
       var record = this.record;
       var events = record.getEvents();
@@ -1333,7 +1331,7 @@ function handleMessage(port, request) {
   var type = request.type;
   var state = request.state;
 
-  log.log('[' + id + '] handle message:', request, type, state);
+  bgLog.log('handle message:', request, type, state);
 
   if (state == RecordState.RECORDING && type in recordHandlers) {
     recordHandlers[type](port, request);
@@ -1342,7 +1340,7 @@ function handleMessage(port, request) {
   } else if (type in handlers) {
     handlers[type](port, request);
   } else {
-    log.error('cannot handle message:', request);
+    bgLog.error('cannot handle message:', request);
   }
 }
 

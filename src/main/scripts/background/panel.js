@@ -38,18 +38,29 @@ var Panel = (function PanelClosure() {
 
   Panel.prototype = {
     controllerUpdate: function _controllerUpdate(msg) {
-      if ('event' in msg) {
-        this.addEvent(msg.event);
-      } else if ('status' in msg) {
-        this.updateStatus(msg.status);
-      } else if ('reset' in msg) {
-        this.clearEvents();
-      } else if ('simulate' in msg) {
-        this.scroll(msg.simulate);
-      } else if ('capture' in msg) {
-        this.addMessage(msg.capture);
-      } else {
-        throw 'unknown controller update';
+      var type = msg.type;
+      var value = msg.value;
+
+      switch (type) {
+        case 'dom':
+        case 'capture':
+        case 'event':
+          this.addEvent(value.event, value.index);
+          break;
+        case 'status':
+          this.updateStatus(value);
+          break;
+        case 'reset':
+          this.clearEvents();
+          break;
+        case 'simulate':
+          this.scroll(value);
+          break;
+        case 'capture':
+          this.addMessage(value);
+          break;
+        default:
+          throw 'unknown controller update';
       }
     },
     setup: function _setup() {
@@ -253,7 +264,7 @@ var Panel = (function PanelClosure() {
         return selectEvents.indexOf(this.id) >= 0;
       }).addClass('selected');
     },
-    addEvent: function _addEvent(eventRecord) {
+    addEvent: function _addEvent(eventRecord, index) {
       this.events.push(eventRecord);
 
       var eventInfo = eventRecord.value;
@@ -272,7 +283,7 @@ var Panel = (function PanelClosure() {
       });
       eventDiv.append(title);
 
-      if (type == 'event' || type == 'capture') {
+      if (type == 'dom' || type == 'capture') {
         var type = eventInfo.data.type;
         var xpath = eventInfo.data.target.xpath;
         var URL = eventInfo.frame.URL;

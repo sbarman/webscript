@@ -146,7 +146,7 @@ var TimeoutStrategy = {
     defaultProps: defaultProps,
     panel: {
       enableEdit: true,
-      enableRequest: false
+      enableRequest: true
     },
     logging: {
       level: 1,
@@ -161,8 +161,6 @@ var TimeoutStrategy = {
           'scrollWidth', 'clientHeight', 'clientWidth', 'clientTop',
           'clientLeft', 'offsetHeight', 'offsetWidth', 'offsetTop',
           'offsetLeft', 'text', 'valueAsNumber', 'id', 'class', 'xpath'],
-      depth: 2,
-      optimization: 2
     },
     record: {
       recordAllEventProps: true,
@@ -197,7 +195,7 @@ var TimeoutStrategy = {
     },
   };
 
-  if (jQuery)
+  if (window.jQuery)
     params = jQuery.extend(true, {}, defaultParams);
   else
     params = defaultParams;
