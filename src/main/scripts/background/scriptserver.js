@@ -75,37 +75,6 @@ var ScriptServer = (function ScriptServerClosure() {
       }
       saveEvent(0);
     },
-    saveComments: function _saveComments(scriptId, comments) {
-      var server = this.server;
-
-      if (!comments)
-        return;
-
-      var postMsg = {};
-      var commentMsg = [];
-      for (var i = 0, ii = comments.length; i < ii; ++i) {
-        var comment = comments[i];
-        comment['script_id'] = scriptId;
-        commentMsg.push(comment);
-      }
-
-      postMsg['comments'] = commentMsg;
-      scriptLog.log('saving comments:', postMsg);
-      $.ajax({
-        error: function(jqXHR, textStatus, errorThrown) {
-          scriptLog.log('error comments', jqXHR, textStatus, errorThrown);
-        },
-        success: function(data, textStatus, jqXHR) {
-          scriptLog.log(data, jqXHR, textStatus);
-        },
-        contentType: 'application/json',
-        data: JSON.stringify(postMsg),
-        dataType: 'json',
-        processData: false,
-        type: 'POST',
-        url: server + 'comment/'
-      });
-    },
     saveParams: function _saveParams(scriptId, params) {
       var server = this.server;
 
@@ -146,19 +115,18 @@ var ScriptServer = (function ScriptServerClosure() {
         url: server + 'script_param/'
       });
     },
-    saveScript: function _saveScript(name, events, comments, params, parentId) {
+    saveScript: function _saveScript(name, events, params, parentId) {
       if (events.length == 0)
         return;
 
       // make a copy of the array
       events = events.slice(0);
-      comments = comments.slice(0);
 
       var scriptServer = this;
       var server = this.server;
       var postMsg = {};
       postMsg['name'] = name;
-      postMsg['user'] = {username: params.user};
+      postMsg['user'] = {username: params.server.user};
       postMsg['events'] = [];
 
       if (typeof parentId == 'number') {
@@ -176,7 +144,6 @@ var ScriptServer = (function ScriptServerClosure() {
 
           var scriptId = data.id;
           scriptServer.saveEvents(scriptId, events);
-          //scriptServer.saveComments(scriptId, comments);
           scriptServer.saveParams(scriptId, params);
         },
         contentType: 'application/json',
@@ -221,30 +188,6 @@ var ScriptServer = (function ScriptServerClosure() {
       getEvent(0, []);
       return null;
     },
-    getComments: function _getComments(scriptId, cont) {
-      var server = this.server;
-
-      function getComments() {
-        $.ajax({
-          error: function(jqXHR, textStatus, errorThrown) {
-            scriptLog.log(jqXHR, textStatus, errorThrown);
-            cont(null);
-          },
-          success: function(data, textStatus, jqXHR) {
-            scriptLog.log(data, textStatus, jqXHR);
-            cont(data);
-          },
-          url: server + 'script_comments/' + scriptId + '/?format=json',
-          type: 'GET',
-          processData: false,
-          accepts: 'application/json',
-          dataType: 'json'
-        });
-      }
-
-      getComments();
-      return null;
-    },
     getScript: function _getScript(name, convert, cont) {
       var scriptServer = this;
       var server = this.server;
@@ -265,38 +208,36 @@ var ScriptServer = (function ScriptServerClosure() {
               }
             }
 
-            scriptServer.getComments(script.id, function(comments) {
-              scriptServer.getEvents(script.events, function(scriptEvents) {
-                var serverEvents = scriptEvents.sort(function(a, b) {
-                  return a.execution_order - b.execution_order;
-                });
-
-                if (!convert) {
-                  cont(script.id, serverEvents, comments);
-                  return;
-                }
-
-                var events = [];
-                for (var i = 0, ii = serverEvents.length; i < ii; ++i) {
-                  var e = serverEvents[i];
-                  var serverParams = e.parameters;
-                  var event = {};
-                  event.value = {};
-
-                  var msgValue = event.value;
-
-                  for (var j = 0, jj = serverParams.length; j < jj; ++j) {
-                    var p = serverParams[j];
-                    if (p.name.charAt(0) == '_') {
-                      event[p.name.slice(1)] = JSON.parse(p.value);
-                    } else {
-                      msgValue[p.name] = JSON.parse(p.value);
-                    }
-                  }
-                  events.push(event);
-                }
-                cont(script.id, events, comments);
+            scriptServer.getEvents(script.events, function(scriptEvents) {
+              var serverEvents = scriptEvents.sort(function(a, b) {
+                return a.execution_order - b.execution_order;
               });
+
+              if (!convert) {
+                cont(script.id, serverEvents);
+                return;
+              }
+
+              var events = [];
+              for (var i = 0, ii = serverEvents.length; i < ii; ++i) {
+                var e = serverEvents[i];
+                var serverParams = e.parameters;
+                var event = {};
+                event.value = {};
+
+                var msgValue = event.value;
+
+                for (var j = 0, jj = serverParams.length; j < jj; ++j) {
+                  var p = serverParams[j];
+                  if (p.name.charAt(0) == '_') {
+                    event[p.name.slice(1)] = JSON.parse(p.value);
+                  } else {
+                    msgValue[p.name] = JSON.parse(p.value);
+                  }
+                }
+                events.push(event);
+              }
+              cont(script.id, events);
             });
           }
         },
@@ -363,11 +304,6 @@ var ScriptServer = (function ScriptServerClosure() {
         url: server + 'benchmark_run/'
       });
       return null;
-    },
-    saveCaptures: function _saveCaptures(captures, scriptId) {
-      for (var i = 0, ii = captures.length; i < ii; ++i) {
-        this.saveCapture(captures[i], scriptId);
-      }
     },
     saveCapture: function _saveCapture(capture, scriptId) {
       var scriptServer = this;

@@ -356,7 +356,7 @@ var Record = (function RecordClosure() {
       this.reset();
       this.events = events;
       for (var i = 0, ii = events.length; i < ii; ++i) {
-        this.updateListeners({type: 'event', value: events[i]});
+        this.updateListeners({type: 'event', value: {event: events[i]}});
       }
     },
     setScriptId: function _setScriptId(id) {
@@ -1008,7 +1008,7 @@ var Replay = (function ReplayClosure() {
                 eventGroup = [e];
               }
 
-              replayPort.postMessage({type: 'event', value: eventGroup});
+              replayPort.postMessage({type: 'dom', value: eventGroup});
               this.replayState = ReplayState.ACK;
 
               this.firstEventReplayed = true;
@@ -1211,7 +1211,7 @@ var Controller = (function ControllerClosure() {
     getScript: function(name) {
       ctlLog.log('getting script');
       var controller = this;
-      var events = this.scriptServer.getScript(name, true,
+      this.scriptServer.getScript(name, true,
           function(scriptId, events) {
             controller.setEvents(scriptId, events);
           });
@@ -1248,7 +1248,7 @@ var Controller = (function ControllerClosure() {
 
 /* Instantiate components */
 var ports = new PortManager();
-var scriptServer = new ScriptServer(params.server);
+var scriptServer = new ScriptServer(params.server.url);
 
 var user = new User(user);
 var record = new Record(ports);
@@ -1406,7 +1406,7 @@ chrome.webRequest.onCompleted.addListener(function(details) {
 
 ports.sendToAll({type: 'params', value: params});
 controller.stop();
-//controller.getScript('loopnext');
+controller.getScript('test');
 
 /*
 function printEvents() {

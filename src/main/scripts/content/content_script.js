@@ -312,6 +312,60 @@ function checkTimeout(events, startIndex) {
   return false;
 }
 
+/* Execute a capture action
+ *
+ * @params captureEvent 
+ */
+function capture(captureEvent) {
+  /* since we are simulating a new event, lets clear out any retries from
+   * the last request */
+  clearRetry();
+
+  var eventRecord = events[i].value;
+  var eventData = eventRecord.data;
+  var eventName = eventData.type;
+
+  var id = eventRecord.meta.id;
+
+  replayLog.debug('capturing:', eventName, eventData);
+
+  var targetInfo = eventData.target;
+  var xpath = targetInfo.xpath;
+
+  /* find the target */
+  var target = getTarget(targetInfo);
+
+  /* if no target exists, lets try to dispatch this event a little bit in
+   *the future, and hope the page changes */
+  if (!target) {
+    if (checkTimeout(events, i)) {
+      replayLog.warn('timeout finding target, skip event: ', events, i);
+      // we timed out with this target, so lets skip the event
+      i++;
+    }
+
+    setRetry(events, i, params.replay.defaultWait);
+    return;
+  }
+
+  if (params.replay.highlightTarget) {
+    highlightNode(target, 100);
+  }
+
+  /* If capture event, then scrape data */
+  if (eventName == 'capture') {
+    replayLog.log('found capture node:', target);
+
+    var msg = {innerHtml: target.innerHTML,
+               innerText: target.innerText,
+               nodeName: target.nodeName.toLowerCase(),
+               id: id};
+
+    port.postMessage({type: 'saveCapture', value: msg, state: recording});
+    continue;
+  }
+}
+
 /* Replays a set of events atomically
  *
  * @params events The current list of events to replay.
@@ -362,18 +416,9 @@ function simulate(events, startIndex) {
       highlightNode(target, 100);
     }
 
-    /* If capture event, then scrape data */
-    if (eventName == 'capture') {
-      replayLog.log('found capture node:', target);
-
-      var msg = {innerHtml: target.innerHTML,
-                 innerText: target.innerText,
-                 nodeName: target.nodeName.toLowerCase(),
-                 id: id};
-
-      port.postMessage({type: 'saveCapture', value: msg, state: recording});
-      continue;
-    }
+    /* Should not be replaying captures here */
+    if (eventName == 'capture')
+      throw 'should not have captures here';
 
     /* Create an event object to mimick the recorded event */
     var eventType = getEventType(eventName);
@@ -680,7 +725,7 @@ var handlers = {
     recording = v;
   },
   'params': updateParams,
-  'event': function(v) {
+  'dom': function(v) {
     simulate(v, 0);
   },
   'updateDeltas': updateDeltas,
