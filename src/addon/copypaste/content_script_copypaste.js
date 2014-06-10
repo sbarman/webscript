@@ -3,78 +3,72 @@
 
 'use strict';
 
-var annotationEvents = {};
+var replayClipboard = "";
 
-var replayClipboard = null;
+addonStartup.push(function() {
+  port.postMessage({type: 'getClipboard', value: null});
+});
 
-(function() {
-  annotationEvents = {
-    'copy': {
-      guard: function _copyGuard(eventMessage) {
-        return eventMessage.data.type == 'copy';
-      },
-      record: function _copyRecord(eventData, eventMessage) {
-        var selection = window.getSelection();
-        var selectionObj = {};
-        selectionObj.text = selection.toString();
-        var ranges = [];
-        for (var i = 0, ii = selection.rangeCount; i < ii; ++i) {
-          var range = selection.getRangeAt(i);
+addonPostRecord.push(function(eventData, eventMessage) {
+  if (eventMessage.data.type == 'copy') {
+    var selection = window.getSelection();
+    var selectionObj = {};
+    selectionObj.text = selection.toString();
+    var ranges = [];
+    for (var i = 0, ii = selection.rangeCount; i < ii; ++i) {
+      var range = selection.getRangeAt(i);
 
-          var start = range.startContainer;
-          if (start.nodeType != 1)
-            start = start.parentElement;
+      var start = range.startContainer;
+      if (start.nodeType != 1)
+        start = start.parentElement;
 
-          var end = range.endContainer;
-          if (end.nodeType != 1)
-            end = end.parentElement;
+      var end = range.endContainer;
+      if (end.nodeType != 1)
+        end = end.parentElement;
 
-          var rangeInfo = {start: saveTargetInfo(start),
-                           end: saveTargetInfo(end)};
-          ranges.push(rangeInfo);
-        }
-        selectionObj.ranges = ranges;
-        eventMessage.data.selection = selectionObj;
-      },
-      replay: function _copyReplay(element, eventMessage) {
-        var selectionObj = eventMessage.data.selection;
-        var rangeInfo = selectionObj.ranges[0];
-        var range = document.createRange();
-        range.setStartBefore(getTarget(rangeInfo.start));
-        range.setEndAfter(getTarget(rangeInfo.end));
+      var rangeInfo = {start: saveTargetInfo(start),
+                       end: saveTargetInfo(end)};
+      ranges.push(rangeInfo);
+    }
+    selectionObj.ranges = ranges;
+    eventMessage.data.selection = selectionObj;
+  }
+});
 
-        var selection = window.getSelection();
-        selection.removeAllRanges();
-        selection.addRange(range);
+addonPreReplay.push(function(element, eventData, eventMessage) {
+  if (eventMessage.data.type == 'copy') {
+    var selectionObj = eventMessage.data.selection;
+    var rangeInfo = selectionObj.ranges[0];
+    var range = document.createRange();
+    range.setStartBefore(getTarget(rangeInfo.start));
+    range.setEndAfter(getTarget(rangeInfo.end));
 
-        console.log(selection + '');
-        var text = selection + '';
-        replayClipboard = text;
-        port.postMessage({type: 'clipboard', value: text});
-      }
-    },
-    'paste': {
-      guard: function _pasteGuard(eventMessage) {
-        return eventMessage.data.type == 'paste';
-      },
-      record: function _pastRecord(eventData, eventMessage) {
-      },
-      replay: function _pasteReplay(element, eventMessage, events, index) {
-        console.log('paste replay');
-        for (var i = index, ii = events.length; i < ii; ++i) {
-          var e = events[i].value;
-          var deltas = e.meta.deltas;
-          if (deltas) {
-            for (var j = 0, jj = deltas.length; j < jj; ++j) {
-              var d = deltas[j];
-              if (d.divergingProp == 'value') {
-                d.changed.prop.value = replayClipboard;
-                return;
-              }
-            }
+    var selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    log.log(selection + '');
+    var text = selection + '';
+    replayClipboard = text;
+    port.postMessage({type: 'setClipboard', value: text});
+  }
+});
+
+addonPreReplay.push(function(element, eventData, eventMessage, events) {
+  if (eventMessage.data.type == 'paste') {
+    log.log('paste replay');
+    for (var i = 0, ii = events.length; i < ii; ++i) {
+      var e = events[i].value;
+      var deltas = e.meta.deltas;
+      if (deltas) {
+        for (var j = 0, jj = deltas.length; j < jj; ++j) {
+          var d = deltas[j];
+          if (d.divergingProp == 'value') {
+            d.changed.prop.value = replayClipboard;
+            return;
           }
         }
       }
     }
-  };
-})();
+  }
+});

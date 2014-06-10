@@ -30,7 +30,10 @@ var simulatedEventsIdx = 0;
 var timeoutInfo = {startTime: 0, startIndex: 0, events: null};
 
 /* Addon hooks */
+var addonStartup = [];
 var addonPreRecord = [];
+var addonPostRecord = [];
+var addonPreReplay = [];
 
 /* Loggers */
 var log = getLog('content');
@@ -185,6 +188,11 @@ function recordEvent(eventData) {
       if (prop in eventData)
         data[prop] = eventData[prop];
     }
+  }
+
+  /* handle any event recording the addons need */
+  for (var i = 0, ii = addonPostRecord.length; i < ii; ++i) {
+    addonPostRecord[i](eventData, eventMessage);
   }
 
   /* save the event record */
@@ -462,6 +470,11 @@ function simulate(events, startIndex) {
     /* update panel showing event was sent */
     sendAlert('Dispatched event: ' + eventData.type);
 
+    /* handle any event replaying the addons need */
+    for (var j = 0, jj = addonPreReplay.length; j < jj; ++j) {
+      addonPreReplay[j](target, oEvent, eventRecord, events);
+    }
+
     /* actually dispatch the event */ 
     dispatchingEvent = true;
     target.dispatchEvent(oEvent);
@@ -525,7 +538,7 @@ function fixDeltas(recordDeltas, replayDeltas, lastTarget) {
 
     if (delta.type == 'Property is different.') {
       var divProp = delta.divergingProp;
-      if (params.replay.compensation == Compensation.FORCED) {
+      if (params.replay.compensation == CompensationAction.FORCED) {
         element[divProp] = delta.orig.prop[divProp];
       }
     }
@@ -538,7 +551,7 @@ function fixDeltas(recordDeltas, replayDeltas, lastTarget) {
 
     if (delta.type == 'Property is different.') {
       var divProp = delta.divergingProp;
-      if (params.replay.compensation == Compensation.FORCED) {
+      if (params.replay.compensation == CompensationAction.FORCED) {
         element[divProp] = delta.changed.prop[divProp];
       }
     }
@@ -677,6 +690,11 @@ chrome.runtime.sendMessage({type: 'getId', value: value}, function(resp) {
   // see if recording is going on
   port.postMessage({type: 'getParams', value: null, state: recording});
   port.postMessage({type: 'getRecording', value: null, state: recording});
+
+  /* handle any startup the addons need */
+  for (var i = 0, ii = addonStartup.length; i < ii; ++i) {
+    addonStartup[i]();
+  }
 });
 
 var pollUrlId = window.setInterval(function() {

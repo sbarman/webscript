@@ -32,7 +32,8 @@
              "main/scripts/content/target.js",
              "main/scripts/content/relation.js",
              "main/scripts/content/content_script.js",
-             "addon/capture/content_script.js"],
+             "addon/capture/content_script_capture.js",
+             "addon/copypaste/content_script_copypaste.js"],
       "run_at": "document_start",
       // Bug with Chrome extensions doesn't allow extension code to access
       // frames within a page. Instead we need to load the content script
