@@ -56,7 +56,7 @@ var Panel = (function PanelClosure() {
         case 'simulate':
           this.scroll(value);
           break;
-        case 'capture':
+        case 'captureText':
           this.addMessage(value);
           break;
         default:

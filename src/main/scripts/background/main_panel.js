@@ -159,13 +159,11 @@ var Record = (function RecordClosure() {
 
   Record.prototype = {
     reset: function _reset() {
-      this.recordState = RecordState.STOPPED;
+      this.updateStatus(RecordState.STOPPED);
       this.scriptId = null;
       this.events = [];
       /* the time the last event was recorded */
       this.lastTime = 0;
-      /* whether a node capture is occuring */
-      this.capturing = false;
 
       this.updateListeners({type: 'reset', value: null});
       this.ports.sendToAll({type: 'reset', value: null});
@@ -184,10 +182,9 @@ var Record = (function RecordClosure() {
       return this.recordState;
     },
     updateStatus: function _updateStatus(newStatus) {
-      if (this.recordState != newStatus) {
-        this.recordState = newStatus;
-        this.updateListeners({type: 'status', value: newStatus});
-      }
+      this.recordState = newStatus;
+      this.updateListeners({type: 'status', value: newStatus});
+      this.ports.sendToAll({type: 'recording', value: newStatus});
     },
     /* Begin recording events.
      *
@@ -210,12 +207,6 @@ var Record = (function RecordClosure() {
       this.ports.sendToAll({type: 'updateDeltas', value: null});
       this.ports.sendToAll({type: 'recording', value: this.getStatus()});
     },
-    captureNode: function _captureNode() {
-      if (this.recordState == RecordState.RECORDING) {
-        this.ports.sendToAll({type: 'capture', value: null});
-        this.capturing = true;
-      }
-    },
     /* Add the event to be recorded
      *
      * @param {object} eventRequest Details of about the saved event
@@ -227,12 +218,6 @@ var Record = (function RecordClosure() {
      */
     addEvent: function _addEvent(eventRequest, portId, index) {
       recordLog.log('added event:', eventRequest, portId);
-
-      /* Tell other frames to stop capturing */
-      if (this.capturing && eventRequest.value.type == 'capture') {
-        this.ports.sendToAll({type: 'cancelCapture', value: null});
-        this.capturing = false;
-      }
 
       var e = eventRequest.value;
 
@@ -393,10 +378,6 @@ var Replay = (function ReplayClosure() {
     this.user = user;
     this.record = new Record(ports);
     this.listeners = [];
-    this.replayableEvents = {
-      dom: 'true',
-      capture: 'true'
-    }
 
     this.reset();
   }
@@ -412,6 +393,10 @@ var Replay = (function ReplayClosure() {
   }
 
   Replay.prototype = {
+    replayableEvents: {
+      dom: 'simulateDomEvent',
+    },
+    addonReset: [],
     reset: function _reset() {
       /* execution proceeds as callbacks so that the page's JS can execute, this
        * is the handle to the current callback */
@@ -429,14 +414,17 @@ var Replay = (function ReplayClosure() {
       /* maps between the record and replay time ports and tabs */
       this.portMapping = {};
       this.tabMapping = {};
-      /* data captured during replay */ 
-      this.captures = [];
       /* used to link the replayed events with the original recording */
       this.scriptId = null;
       /* callback executed after replay has finished */
       this.cont = null;
       this.firstEventReplayed = false;
       this.startTime = 0;
+
+      /* Call the resets for the addons */
+      var addonReset = this.addonReset;
+      for (var i = 0, ii = addonReset.length; i < ii; ++i)
+        addonReset[i].call(this);
 
       this.record.reset();
     },
@@ -487,14 +475,14 @@ var Replay = (function ReplayClosure() {
      * @param {object} portMapping Initial port mapping
      * @param {function} check Callback after subreplay is finished. The replay
      *     is passed in as an argument.
-     * @param {function} cont Callback after subreplay is finished and replayer's
-     *     state is reset to original.
+     * @param {function} cont Callback after subreplay is finished and 
+     *     replayer's state is reset to original.
      * @param {number} timeout Optional argument specifying a timeout for the
      *     subreplay.
      */
     subReplay: function _subReplay(events, scriptId, tabMapping, portMapping,
                                    check, cont, timeout) {
-      /* copy the properties of the replayer (so that they can be later reset) */
+      /* copy the properties of the replayer (so they can be later reset) */
       var props = Object.keys(this);
       var copy = {};
       for (var i = 0, ii = props.length; i < ii; ++i) {
@@ -587,10 +575,6 @@ var Replay = (function ReplayClosure() {
       var defaultTime = 0;
       for (var i = curIndex; i <= nextIndex; ++i)
         defaultTime += events[i].value.timing.waitTime;
-
-      if (events[nextIndex].type == 'capture' &&
-          typeof params.replay.captureWait == 'number')
-        defaultTime = Math.min(defaultTime, params.replay.captureWait);
 
       if (defaultTime > 10000)
         defaultTime = 10000;
@@ -686,7 +670,6 @@ var Replay = (function ReplayClosure() {
       var scriptServer = this.scriptServer;
       setTimeout(function() {
         var replayEvents = record.getEvents();
-        var captures = replay.captures;
         var scriptId = replay.scriptId;
 
         if (params.replay.saveReplay && scriptId &&
@@ -702,20 +685,6 @@ var Replay = (function ReplayClosure() {
         setTimeout(function() {
           replay.cont(replay);
         }, 0);
-      }
-    },
-    /* Store the data captured during the execution */
-    saveCapture: function _saveCapture(capture) {
-      replayLog.log('capture:', capture);
-      this.captures.push(capture);
-      this.updateListeners({type: 'capture', value: capture.innerText.trim()});
-
-      /* in case the server down, we can save it to local storage */
-      if (params.replay.saveCaptureLocal) {
-        var capId = this.scriptId + ':' + capture.id;
-        var storage = {};
-        storage[capId] = JSON.stringify(capture);
-        chrome.storage.local.set(storage);
       }
     },
     /* Given an event, find the corresponding port */
@@ -765,8 +734,8 @@ var Replay = (function ReplayClosure() {
             unusedTabs.push(tabId);
         }
 
-        /* if this is not the first event, and there is exactly one unmapped tab,
-         * then lets assume this new tab should match */
+        /* if this is not the first event, and there is exactly one unmapped
+         * tab, then lets assume this new tab should match */
         if (this.firstEventReplayed && unusedTabs.length == 1) {
           tabMapping[frame.tab] = unusedTabs[0];
           this.setNextTimeout(0);
@@ -791,7 +760,7 @@ var Replay = (function ReplayClosure() {
         /* automatically open up a new tab for the first event */
         if (!this.firstEventReplayed && params.replay.openNewTab) {
           openNewTab();
-        /* ask the user whether the page exists, or a new tab should be opened */
+        /* ask the user if the page exists, or a new tab should be opened */
         } else {
           var prompt = 'Does the page exist? If so select the tab then type ' +
                        "'yes'. Else type 'no'.";
@@ -885,70 +854,75 @@ var Replay = (function ReplayClosure() {
     },
     /* The main function which dispatches events to the content script */
     guts: function _guts() {
-      try {
-        if (this.checkTimeout()) {
-          /* lets call the end of this script */
-          var msg = 'event ' + this.index + ' has times out';
-          replayLog.log(msg);
-          this.finish(msg);
+      if (this.checkTimeout()) {
+        /* lets call the end of this script */
+        var msg = 'event ' + this.index + ' has times out';
+        replayLog.log(msg);
+        this.finish(msg);
+        return;
+      }
+
+      var replayState = this.replayState;
+
+      if (replayState == ReplayState.ACK) {
+        var ack = this.ack;
+        if (!ack) {
+          this.setNextTimeout(params.replay.defaultWait);
+          replayLog.log('continue waiting for replay ack');
           return;
         }
 
-        var replayState = this.replayState;
-
-        if (replayState == ReplayState.ACK) {
-          var ack = this.ack;
-          if (!ack) {
-            this.setNextTimeout(params.replay.defaultWait);
-            replayLog.log('continue waiting for replay ack');
-            return;
-          }
-
-          type = ack.type;
-          if (type == Ack.SUCCESS) {
-            replayLog.log('found replay ack');
-            this.incrementIndex();
-
-            if (!this.replayOne)
-              this.setNextTimeout();
-            else
-              this.pause();
-
-            this.replayState = ReplayState.REPLAYING;
-          } else if (type == Ack.PARTIAL) {
-            throw 'partially executed commands';
-          }
-          return;
-        }
-
-        var events = this.events;
-        var index = this.index;
-
-        /* check if the script finished */
-        if (index >= events.length) {
-          this.finish();
-          return;
-        }
-
-        var e = events[index];
-        var v = e.value;
-        var type = e.type;
-
-        if (type != 'dom' && type != 'capture') {
-          replayLog.log('skipping event:', e);
+        type = ack.type;
+        if (type == Ack.SUCCESS) {
+          replayLog.log('found replay ack');
           this.incrementIndex();
-          this.setNextTimeout(0);
-          return;
-        }
 
+          if (!this.replayOne)
+            this.setNextTimeout();
+          else
+            this.pause();
+
+          this.replayState = ReplayState.REPLAYING;
+        } else if (type == Ack.PARTIAL) {
+          throw 'partially executed commands';
+        }
+        return;
+      }
+
+      var events = this.events;
+      var index = this.index;
+
+      /* check if the script finished */
+      if (index >= events.length) {
+        this.finish();
+        return;
+      }
+
+      var e = events[index];
+      var type = e.type;
+
+      /* Find the replay function associated with the event type */
+      var replayFunctionName = this.replayableEvents[type];
+      var replayFunction = this[replayFunctionName];
+      if (!replayFunction) {
+        replayLog.log('skipping event:', e);
+        this.incrementIndex();
+        this.setNextTimeout(0);
+        return;
+      }
+
+      replayFunction.call(this, e);
+    },
+    /* The main function which dispatches events to the content script */
+    simulateDomEvent: function _simulateDomEvent(e) {
+      var v = e.value;
+
+      try {
         /* check if event has been replayed, if so skip it */
         if (params.replay.cascadeCheck && this.checkReplayed(v)) {
           replayLog.debug('skipping event: ' + e.id);
           this.incrementIndex();
-          if (!this.replayOne)
-            this.setNextTimeout();
-          else 
-            this.pause();
+          this.setNextTimeout();
 
           this.replayState = ReplayState.REPLAYING;
           return;
@@ -985,38 +959,39 @@ var Replay = (function ReplayClosure() {
           }
         }
 
-        /* we have hopefully found a matching port, lets dispatch to that port */
+        /* we hopefully found a matching port, lets dispatch to that port */
         var type = v.data.type;
+        var replayState = this.replayState;
 
         try {
           if (replayState == ReplayState.REPLAYING) {
+            /* clear ack */
             this.ack = null;
-            if (e.type == 'dom') {
-              /* group atomic events */
-              var eventGroup = [];
-              var endEvent = meta.endEventId;
-              if (params.replay.atomic && endEvent) {
-                var t = this.index;
-                var events = this.events;
-                while (t < events.length &&
-                       endEvent >= events[t].value.meta.pageEventId &&
-                       v.frame.port == events[t].value.frame.port) {
-                  eventGroup.push(events[t]);
-                  t++;
-                }
-              } else {
-                eventGroup = [e];
+
+            /* group atomic events */
+            var eventGroup = [];
+            var endEvent = meta.endEventId;
+            if (params.replay.atomic && endEvent) {
+              var t = this.index;
+              var events = this.events;
+              while (t < events.length &&
+                     endEvent >= events[t].value.meta.pageEventId &&
+                     v.frame.port == events[t].value.frame.port) {
+                eventGroup.push(events[t]);
+                t++;
               }
-
-              replayPort.postMessage({type: 'dom', value: eventGroup});
-              this.replayState = ReplayState.ACK;
-
-              this.firstEventReplayed = true;
-
-              replayLog.log('sent message', eventGroup);
-              replayLog.log('start waiting for replay ack');
-              this.setNextTimeout(0);
+            } else {
+              eventGroup = [e];
             }
+
+            replayPort.postMessage({type: 'dom', value: eventGroup});
+            this.replayState = ReplayState.ACK;
+
+            this.firstEventReplayed = true;
+
+            replayLog.log('sent message', eventGroup);
+            replayLog.log('start waiting for replay ack');
+            this.setNextTimeout(0);
           } else {
             throw 'unknown replay state';
           }
@@ -1164,10 +1139,6 @@ var Controller = (function ControllerClosure() {
       ctlLog.log('reset');
       this.record.reset();
     },
-    capture: function() {
-      ctlLog.log('capture');
-      this.record.captureNode();
-    },
     replayRecording: function _replayRecording(cont) {
       ctlLog.log('replay');
       this.stop();
@@ -1274,9 +1245,6 @@ var recordHandlers = {
   'dom': function(port, request) {
     record.addEvent(request, port.name);
   },
-  'capture': function(port, request) {
-    record.addEvent(request, port.name);
-  },
   'updateEvent': function(port, request) {
     record.updateEvent(request, port.name);
   }
@@ -1286,14 +1254,8 @@ var replayHandlers = {
   'dom': function(port, request) {
     replay.record.addEvent(request, port.name);
   },
-  'capture': function(port, request) {
-    replay.record.addEvent(request, port.name);
-  },
   'updateEvent': function(port, request) {
     replay.record.updateEvent(request, port.name);
-  },
-  'saveCapture': function(port, request) {
-    replay.saveCapture(request.value);
   },
   'ack': function(port, request) {
     replay.receiveAck(request.value);

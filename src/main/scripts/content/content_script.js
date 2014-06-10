@@ -1,4 +1,3 @@
-
 /* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
 /* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
 
@@ -29,6 +28,9 @@ var retryTimeout = null; /* handle to retry callback */
 var simulatedEvents = null; /* current events we need are trying to dispatch */
 var simulatedEventsIdx = 0;
 var timeoutInfo = {startTime: 0, startIndex: 0, events: null};
+
+/* Addon hooks */
+var addonPreRecord = [];
 
 /* Loggers */
 var log = getLog('content');
@@ -122,6 +124,12 @@ function recordEvent(eventData) {
   /* if we are not recording this type of event, we should exit */
   if (!shouldRecord)
     return true;
+
+  /* handle any event recording the addons need */
+  for (var i = 0, ii = addonPreRecord.length; i < ii; ++i) {
+    if (!addonPreRecord[i](eventData))
+      return false;
+  }
 
   /* continue recording the event */
   recordLog.debug('[' + id + '] process event:', type, dispatchType,
@@ -312,60 +320,6 @@ function checkTimeout(events, startIndex) {
   return false;
 }
 
-/* Execute a capture action
- *
- * @params captureEvent 
- */
-function capture(captureEvent) {
-  /* since we are simulating a new event, lets clear out any retries from
-   * the last request */
-  clearRetry();
-
-  var eventRecord = events[i].value;
-  var eventData = eventRecord.data;
-  var eventName = eventData.type;
-
-  var id = eventRecord.meta.id;
-
-  replayLog.debug('capturing:', eventName, eventData);
-
-  var targetInfo = eventData.target;
-  var xpath = targetInfo.xpath;
-
-  /* find the target */
-  var target = getTarget(targetInfo);
-
-  /* if no target exists, lets try to dispatch this event a little bit in
-   *the future, and hope the page changes */
-  if (!target) {
-    if (checkTimeout(events, i)) {
-      replayLog.warn('timeout finding target, skip event: ', events, i);
-      // we timed out with this target, so lets skip the event
-      i++;
-    }
-
-    setRetry(events, i, params.replay.defaultWait);
-    return;
-  }
-
-  if (params.replay.highlightTarget) {
-    highlightNode(target, 100);
-  }
-
-  /* If capture event, then scrape data */
-  if (eventName == 'capture') {
-    replayLog.log('found capture node:', target);
-
-    var msg = {innerHtml: target.innerHTML,
-               innerText: target.innerText,
-               nodeName: target.nodeName.toLowerCase(),
-               id: id};
-
-    port.postMessage({type: 'saveCapture', value: msg, state: recording});
-    continue;
-  }
-}
-
 /* Replays a set of events atomically
  *
  * @params events The current list of events to replay.
@@ -381,7 +335,15 @@ function simulate(events, startIndex) {
   simulatedEventsIdx = 0;
 
   for (var i = startIndex, ii = events.length; i < ii; ++i) {
-    var eventRecord = events[i].value;
+    var e = events[i];
+
+    /* Should not replay non-dom events here */
+    if (e.type != 'dom') {
+      replayLog.error('Simulating unknown event type');
+      throw 'Unknown event type';
+    }
+
+    var eventRecord = e.value;
     var eventData = eventRecord.data;
     var eventName = eventData.type;
 
@@ -415,10 +377,6 @@ function simulate(events, startIndex) {
     if (params.replay.highlightTarget) {
       highlightNode(target, 100);
     }
-
-    /* Should not be replaying captures here */
-    if (eventName == 'capture')
-      throw 'should not have captures here';
 
     /* Create an event object to mimick the recorded event */
     var eventType = getEventType(eventName);
@@ -588,68 +546,6 @@ function fixDeltas(recordDeltas, replayDeltas, lastTarget) {
 }
 
 // ***************************************************************************
-// Capture code
-// ***************************************************************************
-
-var domOutline = DomOutline({
-    borderWidth: 2,
-    onClick: onClickCapture
-  }
-);
-
-var domOutlineCallback = null;
-
-function startCapture(callback) {
-  domOutlineCallback = callback;
-  domOutline.start();
-}
-
-function cancelCapture() {
-  domOutlineCallback = null;
-  domOutline.stop();
-}
-
-function onClickCapture(node, event) {
-  var callback = domOutlineCallback;
-  if (callback) {
-    domOutlineCallback = null;
-    callback(node, event);
-  }
-}
-
-function captureNode() {
-  if (recording == RecordState.RECORDING) {
-    log.log('starting node capture');
-    startCapture(captureNodeReply);
-  }
-}
-
-function cancelCaptureNode() {
-  cancelCapture();
-}
-
-function captureNodeReply(target, event) {
-  var eventMessage = {
-    data: {},
-    frame: {},
-    meta: {},
-    timing: {}
-  };
-
-  eventMessage.data.target = saveTargetInfo(target, recording);
-  eventMessage.data.timeStamp = new Date().getTime();
-  eventMessage.frame.URL = document.URL;
-  eventMessage.meta.nodeName = target.nodeName.toLowerCase();
-  eventMessage.meta.recordState = recording;
-
-  log.log('capturing:', target, eventMessage);
-  port.postMessage({type: 'capture', value: eventMessage, state: recording});
-
-  event.preventDefault();
-  event.stopImmediatePropagation();
-}
-
-// ***************************************************************************
 // Misc code
 // ***************************************************************************
 
@@ -684,7 +580,6 @@ function highlightNode(target, time) {
 function dehighlightNode(id) {
   $('#' + id).remove();
 }
-
 
 /* Send an alert that will be displayed in the main panel */
 function sendAlert(msg) {
@@ -730,12 +625,11 @@ var handlers = {
   },
   'updateDeltas': updateDeltas,
   'reset': resetRecord,
+
+  'pauseReplay': clearRetry,
   'url': function() {
     port.postMessage({type: 'url', value: document.URL, state: recording});
   },
-  'capture': captureNode,
-  'cancelCapture': cancelCaptureNode,
-  'pauseReplay': clearRetry,
 };
 
 /* Handle messages coming from the background page */
@@ -763,7 +657,6 @@ function addListenersForRecording() {
     }
   }
 };
-
 
 /* We need to add all the events now before and other event listners are
  * added to the page. We will remove the unwanted handlers once params is
