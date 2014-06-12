@@ -1,21 +1,7 @@
+/* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
 
-recordEvent
-  // we are capturing a node from the user
-  if (domOutlineCallback) {
-    if (type == 'click') {
-      domOutline.raiseClick(eventData);
-      return false;
-    }
-    return true;
-  }
-
-
-    var generalize = eventRecord.generalize;
-
-    if (generalize && xpath.indexOf(generalize.orig) == 0) {
-      xpath = xpath.replace(generalize.orig, generalize.new);
-      targetInfo = {xpath: xpath};
-    }
+'use strict';
 
 // ***************************************************************************
 // Generalization code
@@ -52,7 +38,7 @@ function addExample(target, event) {
 }
 
 function generalizeFinish() {
-  cancelCapture();
+  cancelCaptureNode();
 
   for (var i = 0, ii = ids.length; i < ii; ++i)
     dehighlightNode(ids[i]);
@@ -125,7 +111,7 @@ function findPrefixes(origXPath, generalXPath) {
     prefixes.push(newPrefix);
   }
 
-  port.postMessage({type: 'ack', value: {
+  port.postMessage({type: 'setGeneralize', state: recording, value: {
     type: Ack.GENERALIZE,
     generalXPath: generalXPath,
     origXPath: origXPath,
@@ -133,25 +119,19 @@ function findPrefixes(origXPath, generalXPath) {
     origPrefix: origPrefix,
     setTimeout: true
   }});
-}
+};
 
-// ***************************************************************************
-// Prompt code
-// ***************************************************************************
+addonPreTarget.push(function(eventRecord) {
+  var generalize = eventRecord.generalize;
+  var target = eventRecord.data.target;
+  var xpath = target.xpath;
 
-var promptCallback = null;
+  if (generalize && xpath.indexOf(generalize.orig) == 0) {
+    target.xpath = xpath.replace(generalize.orig, generalize.new);
+  }
+});
 
-function promptUser(text, callback) {
-  if (!promptCallback)
-    log.warn('overwriting old prompt callback');
-
-  promptCallback = callback;
-  port.postMessage({type: 'prompt', value: text});
-}
-
-function promptResponse(text) {
-  if (promptCallback)
-    promptCallback(text);
-
-  promptCallback = null;
-}
+handlers['generalize'] = generalizeXPath;
+handlers['prefix'] =  function(v) {
+  findPrefixes(v.origXPath, v.generalXPath);
+};

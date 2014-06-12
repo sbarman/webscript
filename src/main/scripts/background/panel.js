@@ -271,7 +271,8 @@ var Panel = (function PanelClosure() {
       var id = eventInfo.meta.id;
       var type = eventRecord.type;
 
-      if (!params.panel.enableRequest && (type == 'completed' || type == 'start'))
+      if (!params.panel.enableRequest && 
+          (type == 'completed' || type == 'start'))
         return;
 
       var eventDiv = $('<div/>', {class: 'event wordwrap', id: id});

@@ -502,6 +502,10 @@ var Replay = (function ReplayClosure() {
         for (var key in copy) {
           replay[key] = copy[key];
         }
+
+        this.replayState = ReplayState.REPLAYING;
+        this.record.startRecording(true);
+
         cont(r);
       });
 

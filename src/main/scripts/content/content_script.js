@@ -34,6 +34,7 @@ var addonStartup = [];
 var addonPreRecord = [];
 var addonPostRecord = [];
 var addonPreReplay = [];
+var addonPreTarget = [];
 
 /* Loggers */
 var log = getLog('content');
@@ -361,6 +362,11 @@ function simulate(events, startIndex) {
     if (params.replay.cascadeCheck && events[i].replayed)
       continue;
 
+    /* handle any event replaying the addons need */
+    for (var j = 0, jj = addonPreTarget.length; j < jj; ++j) {
+      addonPreTarget[j](eventRecord);
+    }
+
     replayLog.debug('simulating:', eventName, eventData);
 
     var targetInfo = eventData.target;
@@ -559,6 +565,27 @@ function fixDeltas(recordDeltas, replayDeltas, lastTarget) {
 }
 
 // ***************************************************************************
+// Prompt code
+// ***************************************************************************
+
+var promptCallback = null;
+
+function promptUser(text, callback) {
+  if (!promptCallback)
+    log.warn('overwriting old prompt callback');
+
+  promptCallback = callback;
+  port.postMessage({type: 'prompt', value: text, state: recording});
+}
+
+function promptResponse(text) {
+  if (promptCallback)
+    promptCallback(text);
+
+  promptCallback = null;
+}
+
+// ***************************************************************************
 // Misc code
 // ***************************************************************************
 
@@ -638,11 +665,11 @@ var handlers = {
   },
   'updateDeltas': updateDeltas,
   'reset': resetRecord,
-
   'pauseReplay': clearRetry,
   'url': function() {
     port.postMessage({type: 'url', value: document.URL, state: recording});
   },
+  'promptResponse': promptResponse
 };
 
 /* Handle messages coming from the background page */

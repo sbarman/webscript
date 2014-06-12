@@ -23,7 +23,7 @@ function cancelCaptureNode() {
 addonPreRecord.push(function(eventData) {
   if (domOutlineCallback) {
     if (eventData.type == 'click') { 
-      onClickCapture(eventData.target, eventData);
+      domOutline.raiseClick(eventData);
     }
     return false;
   }
@@ -77,6 +77,11 @@ function simulateCapture(eventRecord) {
   /* since we are simulating a new event, lets clear out any retries from
    * the last request */
   clearRetry();
+
+  /* handle any event replaying the addons need */
+  for (var j = 0, jj = addonPreTarget.length; j < jj; ++j) {
+    addonPreTarget[j](eventRecord);
+  }
 
   var eventData = eventRecord.data;
   replayLog.debug('capturing:', eventData);
