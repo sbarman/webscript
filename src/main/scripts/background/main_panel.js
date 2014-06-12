@@ -397,6 +397,7 @@ var Replay = (function ReplayClosure() {
       dom: 'simulateDomEvent',
     },
     addonReset: [],
+    addonTiming: [],
     reset: function _reset() {
       /* execution proceeds as callbacks so that the page's JS can execute, this
        * is the handle to the current callback */
@@ -563,6 +564,15 @@ var Replay = (function ReplayClosure() {
     /* Return the time in the future the next replayable event should be
      * executed based upon the current timing strategy. */
     getNextTime: function _getNextTime() {
+      var time;
+      /*  */
+      var addonTiming = this.addonTiming;
+      for (var i = 0, ii = addonTiming.length; i < ii; ++i) {
+        time = addonTiming[i].call(this);
+        if (typeof time == 'number')
+          return time;
+      }
+
       var timing = params.replay.timingStrategy;
 
       var curIndex = this.index;

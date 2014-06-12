@@ -115,7 +115,7 @@ function simulateCapture(eventRecord) {
   var msg = {innerHtml: target.innerHTML,
              innerText: target.innerText,
              nodeName: target.nodeName.toLowerCase(),
-             id: id};
+             eventId: eventRecord.meta.id};
 
   port.postMessage({type: 'saveCapture', value: msg, state: recording});
 }

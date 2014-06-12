@@ -51,18 +51,9 @@ Controller.prototype.next = function _next(selectedEvents) {
   record.addNextLoop(selectedEvents);
 };
 
-/*
-          } else if (type == Ack.GENERALIZE) {
-            this.generalizeScript(ack);
-
-            if (replayState == ReplayState.REPLAY_ACK)
-              this.setNextTimeout();
-            else
-              this.pause();
-
-            this.replayState = ReplayState.REPLAYING;
-            replayLog.log('found replay ack');
-*/
+Replay.prototype.addonReset.push(function() {
+  this.loopPrefix = [];
+});
 
 Replay.prototype.replayableEvents.beginloop = 'simulateBeginLoop';
 Replay.prototype.replayableEvents.endloop = 'simulateEndLoop';
@@ -105,7 +96,7 @@ Replay.prototype.simulateBeginLoop = function _simulateBeginLoop(e) {
       return;
     }
 
-    // this.loopPrefix.push(prefixIndex);
+    this.loopPrefix.push(prefixIndex);
     var newPrefix = prefixes[prefixIndex];
     v.reset.index++;
 
@@ -177,7 +168,7 @@ Replay.prototype.simulateEndLoop = function _simulateEndLoop(e) {
   var v = e.value;
   replayLog.log('end loop');
 
-  // this.loopPrefix.pop();
+  this.loopPrefix.pop();
   var beginEvent = this.getEvent(v.data.begin);
   this.index = this.events.indexOf(beginEvent);
   this.setNextTimeout(0);
@@ -186,8 +177,6 @@ Replay.prototype.simulateEndLoop = function _simulateEndLoop(e) {
 
 replayHandlers['setGeneralize'] = function(port, request) {
   replay.generalizeScript(request.value);
-
-  replay.incrementIndex();
   replay.setNextTimeout();
 }
 
@@ -233,7 +222,7 @@ Replay.prototype.simulateBeginNext = function _simulateBeginNext(e) {
     var nextEvents = v.nextEvents;
     var index = v.reset.index;
 
-    // this.loopPrefix.push(index);
+    this.loopPrefix.push(index);
 
     if (index == 0) {
       v.reset.index++;
@@ -330,3 +319,7 @@ Replay.prototype.simulateBeginNext = function _simulateBeginNext(e) {
     return;
   }
 };
+
+Replay.prototype.addonCapture.push(function _addPrefix(capture) {
+  capture.eventId = '(' + this.loopPrefix + ':' + capture.eventId + ')';
+});

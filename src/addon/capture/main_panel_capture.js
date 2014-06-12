@@ -35,6 +35,13 @@ Replay.prototype.addonReset.push(function() {
   this.captures = [];
 });
 
+Replay.prototype.addonTiming.push(function() {
+  var index = this.index;
+  var events = this.events;
+  if (events[index].type == 'capture')
+    return 0;
+});
+
 Replay.prototype.simulateCapture = function _simulateCapture(e) {
   var v = e.value;
   var meta = v.meta;
@@ -71,8 +78,17 @@ Replay.prototype.simulateCapture = function _simulateCapture(e) {
   }
 };
 
+Replay.prototype.addonCapture = [];
+
 /* Store the data captured during the execution */
 Replay.prototype.saveCapture = function _saveCapture(capture) {
+
+  /* handle any event replaying the addons need */
+  var addonCapture = this.addonCapture;
+  for (var j = 0, jj = addonCapture.length; j < jj; ++j) {
+    addonCapture[j].call(this, capture);
+  }
+
   this.captures.push(capture);
   this.updateListeners({type: 'captureText', value: capture.innerText.trim()});
 
@@ -80,10 +96,10 @@ Replay.prototype.saveCapture = function _saveCapture(capture) {
   this.ack = {type: Ack.SUCCESS};
 
   /* in case the server down, we can save it to local storage */
-  if (params.replay.saveCaptureLocal) {
-    var capId = this.scriptId + ':' + capture.id;
+  if (params.capture.saveCaptureLocal) {
+    var captureId = this.scriptId + ':' + capture.eventId;
     var storage = {};
-    storage[capId] = JSON.stringify(capture);
+    storage[captureId] = JSON.stringify(capture);
     chrome.storage.local.set(storage);
   }
 },

@@ -168,7 +168,6 @@ var TimeoutStrategy = {
       listenToAllEvents: false
     },
     replay: {
-      saveCaptureLocal: false,
       openNewTab: true,
       saveReplay: true,
       cancelUnknownEvents: false,
@@ -187,6 +186,9 @@ var TimeoutStrategy = {
       cascadeCheck: true,
       urlSimilarity: 0.8,
       defaultUser: false
+    },
+    capture: {
+      saveCaptureLocal: true,
     },
     server: {
       // url: 'http://sbarman.webfactional.com/api/',
