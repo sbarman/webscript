@@ -1,0 +1,19 @@
+<html>
+  <head>
+    <input type='text' id='t'></input>
+  </head>
+  <body>
+    <script type="text/javascript">
+      // Test whether keyboard events are replayed in the right order
+      // Result: 
+      var events = ['keydown', 'keypress', 'keyup', '
+      document.addEventListener("mouseup", function(e) {
+        console.log(e);
+      }, true);
+
+      document.addEventListener("click", function(e) {
+        console.log(e);
+      }, true);
+    </script>
+  </body>
+</html>
