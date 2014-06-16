@@ -88,11 +88,14 @@ function getMatchingEvent(eventData) {
   var eventObject = simulatedEvents[simulatedEventsIdx];
   var eventRecord = eventObject.value;
   if (eventRecord.data.type == eventData.type) {
-    simulatedEventsIdx++;
     return eventObject;
   }
 
   return null;
+}
+
+function incrementMatchedEventIndex() {
+  simulatedEventsIdx++;
 }
 
 /* Create an event record given the data from the event handler */
@@ -104,6 +107,14 @@ function recordEvent(eventData) {
   var type = eventData.type;
   var dispatchType = getEventType(type);
   var shouldRecord = params.events[dispatchType][type];
+
+  var matched = getMatchingEvent(eventData);
+
+  if (!matched && type == 'change' && recording == RecordState.REPLAYING) {
+    eventData.stopImmediatePropagation();
+    eventData.preventDefault();
+    return false;
+  }
 
   /* cancel the affects of events which are not extension generated or are not
    * picked up by the recorder */
@@ -225,7 +236,8 @@ function recordEvent(eventData) {
 function replayUpdateDeltas(eventData, eventMessage) {
   var replayEvent = getMatchingEvent(eventData);
   if (replayEvent) {
-
+    incrementMatchedEventIndex();
+      
     replayEvent.replayed = true;
     replayEvent = replayEvent.value;
 
