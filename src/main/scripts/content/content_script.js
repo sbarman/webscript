@@ -663,7 +663,10 @@ var handlers = {
   'dom': function(v) {
     simulate(v, 0);
   },
-  'updateDeltas': updateDeltas,
+  'stop': function() {
+    updateDeltas();
+    resetRecord();
+  },
   'reset': resetRecord,
   'pauseReplay': clearRetry,
   'url': function() {
@@ -733,17 +736,22 @@ var pollUrlId = window.setInterval(function() {
   }
 }, 1000);
 
-function injectScript(path) {
-  // inject code into the pages domain
-  var s = document.createElement('script');
-  s.src = chrome.extension.getURL(path);
-  s.onload = function() {
-    this.parentNode.removeChild(this);
-  };
-  (document.head || document.documentElement).appendChild(s);
+function injectScripts(paths) {
+  function injectScript(index) {
+    // inject code into the pages domain
+    var s = document.createElement('script');
+    s.src = chrome.extension.getURL(paths[index]);
+    s.onload = function() {
+      this.parentNode.removeChild(this);
+      if (index + 1 < paths.length)
+        injectScript(index + 1);
+    };
+    (document.head || document.documentElement).appendChild(s);
+  }
+  injectScript(0);
 }
 
 // TODO(sbarman): need to wrap these so variables don't escape into the
 // enclosing scope
-injectScript('main/scripts/common/params.js');
-injectScript('main/scripts/content/injected.js');
+injectScripts(['main/scripts/common/params.js', 
+               'main/scripts/content/injected.js']);

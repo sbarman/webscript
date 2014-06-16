@@ -7,6 +7,7 @@ var log = getLog('background');
 
 Replay.prototype.addonReset.push(function() {
   this.clipboard = "";
+  this.ports.sendToAll({type: 'clipboard', value: ''});
 });
 
 Replay.prototype.setClipboard = function _setClipboard(text) {

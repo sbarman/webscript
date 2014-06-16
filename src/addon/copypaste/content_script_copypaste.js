@@ -6,7 +6,8 @@
 var replayClipboard = "";
 
 addonStartup.push(function() {
-  port.postMessage({type: 'getClipboard', value: null});
+  if (recording == RecordState.REPLAYING)
+    port.postMessage({type: 'getClipboard', value: null, state: recording});
 });
 
 addonPostRecord.push(function(eventData, eventMessage) {
@@ -50,7 +51,7 @@ addonPreReplay.push(function(element, eventData, eventMessage) {
     log.log(selection + '');
     var text = selection + '';
     replayClipboard = text;
-    port.postMessage({type: 'setClipboard', value: text});
+    port.postMessage({type: 'setClipboard', value: text, state: recording});
   }
 });
 

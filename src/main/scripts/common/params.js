@@ -160,7 +160,8 @@ var TimeoutStrategy = {
           'textContent', 'className', 'childElementCount', 'scrollHeight',
           'scrollWidth', 'clientHeight', 'clientWidth', 'clientTop',
           'clientLeft', 'offsetHeight', 'offsetWidth', 'offsetTop',
-          'offsetLeft', 'text', 'valueAsNumber', 'id', 'class', 'xpath'],
+          'offsetLeft', 'text', 'valueAsNumber', 'id', 'class', 'xpath', 
+          'baseURI'],
     },
     record: {
       recordAllEventProps: true,

@@ -227,7 +227,7 @@ var Record = (function RecordClosure() {
       this.updateStatus(RecordState.STOPPED);
 
       /* Tell the content scripts to stop recording */
-      this.ports.sendToAll({type: 'updateDeltas', value: null});
+      this.ports.sendToAll({type: 'stop', value: null});
       this.ports.sendToAll({type: 'recording', value: this.getStatus()});
     },
     /* Add the event to be recorded

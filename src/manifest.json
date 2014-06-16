@@ -30,7 +30,7 @@
              "main/scripts/content/compensation.js",
              "main/scripts/content/dom.js",
              "main/scripts/content/target.js",
-             "main/scripts/content/relation.js",
+//             "main/scripts/content/relation.js",
              "main/scripts/content/content_script.js",
              "addon/capture/content_script_capture.js",
              "addon/copypaste/content_script_copypaste.js",
