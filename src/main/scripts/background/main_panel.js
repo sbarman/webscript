@@ -59,6 +59,20 @@ var PortManager = (function PortManagerClosure() {
       delete this.tabIdToTab[tabId];
       delete this.tabIdToTabInfo[tabId];
     },
+    updateRemovedTabs: function _updateRemovedTabs(openTabs) {
+      var possiblyOpenTabs = {};
+      for (var tabId in this.tabIdToTab) {
+        possiblyOpenTabs[tabId] = false;
+      }
+
+      for (var i = 0, ii = openTabs.length; i < ii; ++i) {
+        possiblyOpenTabs[openTabs[i].id] = true;
+      }
+
+      for (var tabId in possiblyOpenTabs)
+        if (!possiblyOpenTabs[tabId])
+          this.removeTab(tabId);
+    },
     getNewId: function _getNewId(value, sender) {
       /* for some reason, the start page loads the content script but doesn't
        * have a tab id. in this case, don't assign an id */
@@ -66,6 +80,13 @@ var PortManager = (function PortManagerClosure() {
         portLog.warn('request for new id without a tab id');
         return;
       }
+
+      /* bug with listening to removed tabs, so lets actually check which
+       * tabs are open and then update our list appropriately */
+      var ports = this;
+      chrome.tabs.query({}, function(openTabs) {
+        ports.updateRemovedTabs(openTabs);
+      });
 
       this.numPorts++;
       var portId = '' + this.numPorts;
@@ -75,6 +96,8 @@ var PortManager = (function PortManagerClosure() {
       /* Update various mappings */
       var tabId = sender.tab.id;
       this.tabIdToTab[tabId] = sender.tab;
+      portLog.log('adding tab:', tabId, sender.tab);
+
       this.portIdToTabId[portId] = tabId;
       this.portIdToPortInfo[portId] = value;
       value.portId = portId;
