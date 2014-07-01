@@ -1262,8 +1262,6 @@ var user = new User(user);
 var record = new Record(ports);
 var replay = new Replay(ports, scriptServer, user);
 var controller = new Controller(record, replay, scriptServer, ports);
-var panel = new Panel(controller);
-user.setPanel(panel);
 
 /* Add event handlers */
 var bgLog = getLog('background');

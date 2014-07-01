@@ -391,3 +391,6 @@ var Panel = (function PanelClosure() {
 
   return Panel;
 })();
+
+var panel = new Panel(controller);
+user.setPanel(panel);

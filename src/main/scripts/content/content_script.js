@@ -35,6 +35,7 @@ var addonPreRecord = [];
 var addonPostRecord = [];
 var addonPreReplay = [];
 var addonPreTarget = [];
+var addonTarget = [];
 
 /* Loggers */
 var log = getLog('content');
@@ -381,11 +382,21 @@ function simulate(events, startIndex) {
 
     replayLog.debug('simulating:', eventName, eventData);
 
-    var targetInfo = eventData.target;
-    var xpath = targetInfo.xpath;
-
-    /* find the target */
-    var target = getTarget(targetInfo);
+    var target = null;
+    if (addonTarget.length > 0) {
+      /* use the addon's target */
+      for (var j = 0, jj = addonTarget.length; j < jj; ++j) {
+        target = addonTarget[j](eventRecord);
+        if (target)
+          break;
+      }
+    } else {
+      var targetInfo = eventData.target;
+      var xpath = targetInfo.xpath;
+  
+      /* find the target */
+      target = getTarget(targetInfo);
+    }
 
     /* if no target exists, lets try to dispatch this event a little bit in
      *the future, and hope the page changes */
