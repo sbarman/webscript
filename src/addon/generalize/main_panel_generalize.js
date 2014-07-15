@@ -262,6 +262,7 @@ Replay.prototype.simulateBeginNext = function _simulateBeginNext(e) {
             var endEvent = replay.getEvent(v.data.end);
             var endIndex = events.indexOf(endEvent);
 
+            replay.loopPrefix.pop();
             replay.index = endIndex;
           }
           replay.incrementIndex();

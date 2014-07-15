@@ -736,6 +736,7 @@ value.URL = document.URL;
 
 /* Add all the other handlers */
 chrome.runtime.sendMessage({type: 'getId', value: value}, function(resp) {
+  log.log(resp);
   id = resp.value;
   port = new Port(id);
   port.addListener(handleMessage);
