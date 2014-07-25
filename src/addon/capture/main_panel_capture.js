@@ -38,7 +38,8 @@ Replay.prototype.addonReset.push(function() {
 Replay.prototype.addonTiming.push(function() {
   var index = this.index;
   var events = this.events;
-  if (events[index].type == 'capture')
+
+  if (index < events.length && events[index].type == 'capture')
     return 0;
 });
 

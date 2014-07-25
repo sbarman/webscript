@@ -126,7 +126,7 @@ var ScriptServer = (function ScriptServerClosure() {
       var server = this.server;
       var postMsg = {};
       postMsg['name'] = name;
-      postMsg['user'] = {username: params.server.user};
+      postMsg['user'] = {username: window.params.server.user};
       postMsg['events'] = [];
 
       if (typeof parentId == 'number') {
