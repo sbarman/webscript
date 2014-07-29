@@ -706,8 +706,7 @@ var Replay = (function ReplayClosure() {
 
         if (params.replay.saveReplay && scriptId &&
             replayEvents.length > 0) {
-          scriptServer.saveScript('replay ' + scriptId, replayEvents, params,
-                                  scriptId);
+          scriptServer.saveScript('replay ' + scriptId, replayEvents, scriptId, "");
           replayLog.log('saving replay:', replayEvents);
         }
       }, 1000);
@@ -1195,14 +1194,14 @@ var Controller = (function ControllerClosure() {
     saveScript: function(name) {
       ctlLog.log('saving script');
       var events = this.record.getEvents();
-      this.scriptServer.saveScript(name, events, params);
+      this.scriptServer.saveScript(name, events, null, "");
     },
     getScript: function(name) {
       ctlLog.log('getting script');
       var controller = this;
-      this.scriptServer.getScript(name, true,
-          function(scriptId, events) {
-            controller.setEvents(scriptId, events);
+      this.scriptServer.getScript(name,
+          function(script) {
+            controller.setEvents(script.id, script.events);
           });
     },
     setEvents: function(scriptId, events) {
@@ -1223,9 +1222,9 @@ var Controller = (function ControllerClosure() {
         listeners[i](msg);
       }
     },
-    submitInput: function _submitInput(text) {
-      ctlLog.log(text);
-    },
+//    submitInput: function _submitInput(text) {
+//      ctlLog.log(text);
+//    },
     userUpdate: function _userUpdate(eventId, field, value) {
       ctlLog.log('update:', eventId, field, value);
       this.record.userUpdate(eventId, field, value);

@@ -9,113 +9,77 @@ var ScriptServer = (function ScriptServerClosure() {
 
   function ScriptServer(server) {
     this.server = server;
+    this.queue = [];
+    this.processing = false;
   }
 
   ScriptServer.prototype = {
+    process: function _process() {
+      if (this.processing)
+        return;
+
+      var queue = this.queue;
+      if (queue.length > 0) {
+        var item = queue.shift();
+        var retries = item.retries;
+        if (retries && retries > 3) {
+          scriptLog.error('Cannot reach server');
+          throw "Cannot reach server";
+        }
+
+        var scriptServer = this;
+        var type = item.type;
+        switch (type) {
+          case "event":
+            setTimeout(function() {
+              scriptServer.processEvent(item);
+            });
+            break;
+          case "script":
+            setTimeout(function() {
+              scriptServer.processScript(item);
+            });
+            break;
+        }
+      }
+    },
+    retry: function _retry(item) {
+      if ('retries' in item) {
+        item.retries++;
+      } else {
+        item.retries = 1;
+      }
+
+      this.queue.splice(0, 0, item);
+    },
+    saveScript: function _saveScript(name, events, parentId, notes) {
+      this.queue.push({
+        type: 'script',
+        name: name,
+        events: events,
+        parentId: parentId,
+        notes: notes
+      });
+      this.process();
+    },
     saveEvents: function _saveEvents(scriptId, events) {
-      var server = this.server;
-
-      function saveEvent(i) {
-        if (i >= events.length) {
-          scriptLog.log('Done saving script ' + scriptId);
-          return;
-        }
-
-        // need to create new scope to variables don't get clobbered
-        var postMsg = {};
-        var evtMsg = {};
-
-        var e = events[i];
-        var msgValue = e.value;
-        evtMsg['event_type'] = msgValue.data.type;
-        evtMsg['execution_order'] = i;
-
-        var parameters = [];
-        prop: for (var prop in e) {
-          if (prop == 'value') {
-            continue prop;
-          }
-          var propMsg = {};
-          var val = e[prop];
-          propMsg['name'] = '_' + prop;
-          propMsg['value'] = JSON.stringify(val);
-          propMsg['data_type'] = typeof val;
-          parameters.push(propMsg);
-        }
-
-        msgprop: for (var prop in msgValue) {
-          var propMsg = {};
-          var val = msgValue[prop];
-          propMsg['name'] = prop;
-          propMsg['value'] = JSON.stringify(val);
-          propMsg['data_type'] = typeof val;
-          parameters.push(propMsg);
-        }
-        evtMsg['parameters'] = parameters;
-
-        postMsg['script_id'] = scriptId;
-        postMsg['events'] = [evtMsg];
-
-        scriptLog.log('saving event:', postMsg);
-        $.ajax({
-          error: function(jqXHR, textStatus, errorThrown) {
-            scriptLog.log('error saving event', jqXHR, textStatus, errorThrown);
-          },
-          success: function(data, textStatus, jqXHR) {
-            scriptLog.log(data, jqXHR, textStatus);
-            saveEvent(i + 1);
-          },
-          contentType: 'application/json',
-          data: JSON.stringify(postMsg),
-          dataType: 'json',
-          processData: false,
-          type: 'POST',
-          url: server + 'event/'
+      for (var i = 0, ii = events.length; i < ii; ++i) {
+        this.queue.push({
+          type: 'event',
+          event: events[i],
+          index: i,
+          scriptId: scriptId
         });
       }
-      saveEvent(0);
     },
-    saveParams: function _saveParams(scriptId, params) {
-      var server = this.server;
+    processScript: function _processScript(item) {
+      this.processing = true;
 
-      function convertParams(param, prefix) {
-        prefix = prefix || '';
-        var list = [];
+      var name = item.name;
+      var events = item.events;
+      var parentId = item.parentId;
+      var notes = item.notes;
 
-        for (var p in param) {
-          var v = param[p];
-          if (typeof v == 'object')
-            list = list.concat(convertParams(v, prefix + p + '.'));
-          else
-            list.push({name: prefix + p, value: v});
-        }
-        return list;
-      }
-
-      var listParams = convertParams(params);
-
-      var postMsg = {};
-
-      postMsg['params'] = listParams;
-      postMsg['script_id'] = scriptId;
-
-      scriptLog.log('saving params:', postMsg);
-      $.ajax({
-        error: function(jqXHR, textStatus, errorThrown) {
-          scriptLog.log('error params', jqXHR, textStatus, errorThrown);
-        },
-        success: function(data, textStatus, jqXHR) {
-          scriptLog.log(data, jqXHR, textStatus);
-        },
-        contentType: 'application/json',
-        data: JSON.stringify(postMsg),
-        dataType: 'json',
-        processData: false,
-        type: 'POST',
-        url: server + 'script_param/'
-      });
-    },
-    saveScript: function _saveScript(name, events, params, parentId) {
       if (events.length == 0)
         return;
 
@@ -133,73 +97,170 @@ var ScriptServer = (function ScriptServerClosure() {
         postMsg['parent_id'] = parentId;
       }
 
+      if (typeof notes == 'string') {
+        postMsg['notes'] = notes;
+      }
+
       scriptLog.log('saving script:', postMsg);
 
+      var scriptServer = this;
       var req = $.ajax({
         error: function(jqXHR, textStatus, errorThrown) {
           scriptLog.log('error saving script', jqXHR, textStatus, errorThrown);
+          scriptServer.retry(item);
         },
         success: function(data, textStatus, jqXHR) {
           scriptLog.log(data, jqXHR, textStatus);
 
           var scriptId = data.id;
           scriptServer.saveEvents(scriptId, events);
-          scriptServer.saveParams(scriptId, params);
+        },
+        complete: function(jqXHR, textSataus) {
+          scriptServer.processing = false;
+          scriptServer.process();
         },
         contentType: 'application/json',
         data: JSON.stringify(postMsg),
         dataType: 'json',
         processData: false,
         type: 'POST',
-        url: server + 'script/'
+        timeout: 15000,
+        url: this.server + 'script/'
       });
       scriptLog.log(req);
     },
-    getEvents: function _getEvents(eventIds, cont) {
-      var events = null;
-      var server = this.server;
+    processEvent: function _saveEvent(item) {
+      this.processing = true;
 
-      function getEvent(i, retrievedEvents) {
-        if (i >= eventIds.length) {
-          scriptLog.log('Done getting');
-          cont(retrievedEvents);
-          return;
-        }
+      var e = item.event;
+      var i = item.index;
+      var scriptId = item.scriptId;
 
-        $.ajax({
-          error: function(jqXHR, textStatus, errorThrown) {
-            scriptLog.log(jqXHR, textStatus, errorThrown);
-            cont(retrievedEvents);
-          },
-          success: function(data, textStatus, jqXHR) {
-            scriptLog.log(data, textStatus, jqXHR);
-            var e = data;
-            retrievedEvents.push(e);
-            getEvent(i + 1, retrievedEvents);
-          },
-          url: server + 'event/' + eventIds[i].id + '/?format=json',
-          type: 'GET',
-          processData: false,
-          accepts: 'application/json',
-          dataType: 'json'
-        });
+      // need to create new scope to variables don't get clobbered
+      var postMsg = {};
+      var evtMsg = {};
+
+      evtMsg['event_type'] = e.type;
+      evtMsg['execution_order'] = i;
+
+      var parameters = [];
+
+      for (var prop in e) {
+        var propMsg = {};
+        var val = e[prop];
+        propMsg['name'] = prop;
+        propMsg['value'] = JSON.stringify(val);
+        propMsg['data_type'] = typeof val;
+        parameters.push(propMsg);
       }
+      evtMsg['parameters'] = parameters;
 
-      getEvent(0, []);
-      return null;
+      postMsg['script_id'] = scriptId;
+      postMsg['events'] = [evtMsg];
+
+      scriptLog.log('saving event:', postMsg);
+      var scriptServer = this;
+      $.ajax({
+        error: function(jqXHR, textStatus, errorThrown) {
+          scriptLog.log('error saving event', jqXHR, textStatus, errorThrown);
+          scriptServer.retry(item);
+        },
+        success: function(data, textStatus, jqXHR) {
+          scriptLog.log(data, jqXHR, textStatus);
+        },
+        complete: function(jqXHR, textSataus) {
+          scriptServer.processing = false;
+          scriptServer.process();
+        },
+        contentType: 'application/json',
+        data: JSON.stringify(postMsg),
+        dataType: 'json',
+        processData: false,
+        type: 'POST',
+        timeout: 15000,
+        url: this.server + 'event/'
+      });
     },
-    getScript: function _getScript(name, convert, cont) {
+//    processCapture: function _saveCapture(capture, scriptId) {
+//      var scriptServer = this;
+//      var server = this.server;
+//
+//      var postMsg = {};
+//      postMsg['script'] = scriptId;
+//      postMsg['innerHtml'] = capture.innerHtml;
+//      postMsg['innerText'] = capture.innerText;
+//      postMsg['nodeName'] = capture.nodeName;
+//
+//      $.ajax({
+//        error: function(jqXHR, textStatus, errorThrown) {
+//          scriptLog.log(jqXHR, textStatus, errorThrown);
+//        },
+//        success: function(data, textStatus, jqXHR) {
+//          scriptLog.log(data, textStatus, jqXHR);
+//        },
+//        contentType: 'application/json',
+//        data: JSON.stringify(postMsg),
+//        dataType: 'json',
+//        processData: false,
+//        type: 'POST',
+//        url: server + 'capture/'
+//      });
+//      return null;
+//    },
+//    saveParams: function _saveParams(scriptId, params) {
+//      var server = this.server;
+//
+//      function convertParams(param, prefix) {
+//        prefix = prefix || '';
+//        var list = [];
+//
+//        for (var p in param) {
+//          var v = param[p];
+//          if (typeof v == 'object')
+//            list = list.concat(convertParams(v, prefix + p + '.'));
+//          else
+//            list.push({name: prefix + p, value: v});
+//        }
+//        return list;
+//      }
+//
+//      var listParams = convertParams(params);
+//
+//      var postMsg = {};
+//
+//      postMsg['params'] = listParams;
+//      postMsg['script_id'] = scriptId;
+//
+//      scriptLog.log('saving params:', postMsg);
+//      $.ajax({
+//        error: function(jqXHR, textStatus, errorThrown) {
+//          scriptLog.log('error params', jqXHR, textStatus, errorThrown);
+//        },
+//        success: function(data, textStatus, jqXHR) {
+//          scriptLog.log(data, jqXHR, textStatus);
+//        },
+//        contentType: 'application/json',
+//        data: JSON.stringify(postMsg),
+//        dataType: 'json',
+//        processData: false,
+//        type: 'POST',
+//        url: server + 'script_param/'
+//      });
+//    },
+    getScript: function _getScript(name, cont) {
       var scriptServer = this;
       var server = this.server;
 
       $.ajax({
         error: function(jqXHR, textStatus, errorThrown) {
           scriptLog.log(jqXHR, textStatus, errorThrown);
+          cont(null);
         },
         success: function(data, textStatus, jqXHR) {
           scriptLog.log(data, textStatus, jqXHR);
           var scripts = data;
           if (scripts.length != 0) {
+            // find the lastest script saved with this name
             var script = scripts[0];
             for (var i = 0, ii = scripts.length; i < ii; ++i) {
               var s = scripts[i];
@@ -213,31 +274,25 @@ var ScriptServer = (function ScriptServerClosure() {
                 return a.execution_order - b.execution_order;
               });
 
-              if (!convert) {
-                cont(script.id, serverEvents);
-                return;
-              }
-
               var events = [];
               for (var i = 0, ii = serverEvents.length; i < ii; ++i) {
-                var e = serverEvents[i];
-                var serverParams = e.parameters;
-                var event = {};
-                event.value = {};
-
-                var msgValue = event.value;
+                var serverEvent = serverEvents[i];
+                var serverParams = serverEvent.parameters;
+                var e = {};
 
                 for (var j = 0, jj = serverParams.length; j < jj; ++j) {
                   var p = serverParams[j];
-                  if (p.name.charAt(0) == '_') {
-                    event[p.name.slice(1)] = JSON.parse(p.value);
-                  } else {
-                    msgValue[p.name] = JSON.parse(p.value);
-                  }
+                  e[p.name] = JSON.parse(p.value);
                 }
-                events.push(event);
+                events.push(e);
               }
-              cont(script.id, events);
+              cont({
+                name: script.name,
+                id: script.id,
+                events: events,
+                parentId: script.parentId,
+                notes: script.notes
+              });
             });
           }
         },
@@ -249,109 +304,120 @@ var ScriptServer = (function ScriptServerClosure() {
       });
       return null;
     },
-    getBenchmarks: function _getBenchmarks(cont) {
-      var scriptServer = this;
+    getEvents: function _getEvents(eventIds, cont) {
+      var events = null;
       var server = this.server;
 
-      $.ajax({
-        error: function(jqXHR, textStatus, errorThrown) {
-          scriptLog.log(jqXHR, textStatus, errorThrown);
-        },
-        success: function(data, textStatus, jqXHR) {
-          scriptLog.log(data, textStatus, jqXHR);
-          var benchmarks = data;
-          cont(benchmarks);
-        },
-        url: server + 'benchmark/?format=json',
-        type: 'GET',
-        processData: false,
-        accepts: 'application/json',
-        dataType: 'json'
-      });
+      function getEvent(i, retrievedEvents, retries) {
+        if (i >= eventIds.length) {
+          scriptLog.log('Done getting');
+          cont(retrievedEvents);
+          return;
+        }
+
+        if (retries > 3) {
+          cont(null);
+          return;
+        }
+
+        $.ajax({
+          error: function(jqXHR, textStatus, errorThrown) {
+            scriptLog.error(jqXHR, textStatus, errorThrown);
+            getEvent(i, rerievedEvents, retries + 1);
+          },
+          success: function(data, textStatus, jqXHR) {
+            scriptLog.log(data, textStatus, jqXHR);
+            retrievedEvents.push(data);
+            getEvent(i + 1, retrievedEvents);
+          },
+          url: server + 'event/' + eventIds[i].id + '/?format=json',
+          type: 'GET',
+          processData: false,
+          accepts: 'application/json',
+          dataType: 'json'
+        });
+      }
+
+      getEvent(0, [], 0);
       return null;
     },
-    saveBenchmarkRun: function _saveBenchmarkRun(benchmarkRun) {
-      var scriptServer = this;
-      var server = this.server;
-
-      var postMsg = {};
-      postMsg['benchmark'] = benchmarkRun.benchmark.id;
-      postMsg['successful'] = benchmarkRun.successful;
-      postMsg['events_executed'] = benchmarkRun.events_executed;
-      postMsg['events_total'] = benchmarkRun.events_total;
-
-      if (benchmarkRun.errors)
-        postMsg['errors'] = benchmarkRun.errors;
-
-      if (benchmarkRun.notes)
-        postMsg['notes'] = benchmarkRun.notes;
-
-      if (benchmarkRun.log)
-        postMsg['log'] = benchmarkRun.log;
-
-      $.ajax({
-        error: function(jqXHR, textStatus, errorThrown) {
-          scriptLog.log(jqXHR, textStatus, errorThrown);
-        },
-        success: function(data, textStatus, jqXHR) {
-          scriptLog.log(data, textStatus, jqXHR);
-        },
-        contentType: 'application/json',
-        data: JSON.stringify(postMsg),
-        dataType: 'json',
-        processData: false,
-        type: 'POST',
-        url: server + 'benchmark_run/'
-      });
-      return null;
-    },
-    saveCapture: function _saveCapture(capture, scriptId) {
-      var scriptServer = this;
-      var server = this.server;
-
-      var postMsg = {};
-      postMsg['script'] = scriptId;
-      postMsg['innerHtml'] = capture.innerHtml;
-      postMsg['innerText'] = capture.innerText;
-      postMsg['nodeName'] = capture.nodeName;
-
-      $.ajax({
-        error: function(jqXHR, textStatus, errorThrown) {
-          scriptLog.log(jqXHR, textStatus, errorThrown);
-        },
-        success: function(data, textStatus, jqXHR) {
-          scriptLog.log(data, textStatus, jqXHR);
-        },
-        contentType: 'application/json',
-        data: JSON.stringify(postMsg),
-        dataType: 'json',
-        processData: false,
-        type: 'POST',
-        url: server + 'capture/'
-      });
-      return null;
-    },
-    getCapture: function _getCapture(scriptId, cont) {
-      var scriptServer = this;
-      var server = this.server;
-
-      $.ajax({
-        error: function(jqXHR, textStatus, errorThrown) {
-          scriptLog.log(jqXHR, textStatus, errorThrown);
-        },
-        success: function(data, textStatus, jqXHR) {
-          scriptLog.log(data, textStatus, jqXHR);
-          var capture = data;
-          cont(capture);
-        },
-        url: server + 'capture/' + scriptId + '/?format=json',
-        type: 'GET',
-        processData: false,
-        accepts: 'application/json',
-        dataType: 'json'
-      });
-      return null;
-    }
+//    getBenchmarks: function _getBenchmarks(cont) {
+//      var scriptServer = this;
+//      var server = this.server;
+//
+//      $.ajax({
+//        error: function(jqXHR, textStatus, errorThrown) {
+//          scriptLog.log(jqXHR, textStatus, errorThrown);
+//        },
+//        success: function(data, textStatus, jqXHR) {
+//          scriptLog.log(data, textStatus, jqXHR);
+//          var benchmarks = data;
+//          cont(benchmarks);
+//        },
+//        url: server + 'benchmark/?format=json',
+//        type: 'GET',
+//        processData: false,
+//        accepts: 'application/json',
+//        dataType: 'json'
+//      });
+//      return null;
+//    },
+//    saveBenchmarkRun: function _saveBenchmarkRun(benchmarkRun) {
+//      var scriptServer = this;
+//      var server = this.server;
+//
+//      var postMsg = {};
+//      postMsg['benchmark'] = benchmarkRun.benchmark.id;
+//      postMsg['successful'] = benchmarkRun.successful;
+//      postMsg['events_executed'] = benchmarkRun.events_executed;
+//      postMsg['events_total'] = benchmarkRun.events_total;
+//
+//      if (benchmarkRun.errors)
+//        postMsg['errors'] = benchmarkRun.errors;
+//
+//      if (benchmarkRun.notes)
+//        postMsg['notes'] = benchmarkRun.notes;
+//
+//      if (benchmarkRun.log)
+//        postMsg['log'] = benchmarkRun.log;
+//
+//      $.ajax({
+//        error: function(jqXHR, textStatus, errorThrown) {
+//          scriptLog.log(jqXHR, textStatus, errorThrown);
+//        },
+//        success: function(data, textStatus, jqXHR) {
+//          scriptLog.log(data, textStatus, jqXHR);
+//        },
+//        contentType: 'application/json',
+//        data: JSON.stringify(postMsg),
+//        dataType: 'json',
+//        processData: false,
+//        type: 'POST',
+//        url: server + 'benchmark_run/'
+//      });
+//      return null;
+//    },
+//    getCapture: function _getCapture(scriptId, cont) {
+//      var scriptServer = this;
+//      var server = this.server;
+//
+//      $.ajax({
+//        error: function(jqXHR, textStatus, errorThrown) {
+//          scriptLog.log(jqXHR, textStatus, errorThrown);
+//        },
+//        success: function(data, textStatus, jqXHR) {
+//          scriptLog.log(data, textStatus, jqXHR);
+//          var capture = data;
+//          cont(capture);
+//        },
+//        url: server + 'capture/' + scriptId + '/?format=json',
+//        type: 'GET',
+//        processData: false,
+//        accepts: 'application/json',
+//        dataType: 'json'
+//      });
+//      return null;
+//    }
   };
 
   return ScriptServer;
