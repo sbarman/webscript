@@ -239,10 +239,8 @@ var Record = (function RecordClosure() {
      *
      * @returns {string} Id assigned to the event
      */
-    addEvent: function _addEvent(eventRequest, portId, index) {
-      recordLog.log('added event:', eventRequest, portId);
-
-      var e = eventRequest.value;
+    addEvent: function _addEvent(e, portId, index) {
+      recordLog.log('added event:', e, portId);
 
       /* Check if the event is coming from a content script */
       if (portId) {
@@ -296,12 +294,12 @@ var Record = (function RecordClosure() {
       e.meta.id = 'event' + events.length;
 
       if (typeof index == 'undefined') {
-        this.events.push(eventRequest);
-        this.updateListeners({type: 'event', value: {event: eventRequest}});
+        this.events.push(e);
+        this.updateListeners({type: 'event', value: {event: e}});
       } else {
-        this.events.splice(index, 0, eventRequest);
+        this.events.splice(index, 0, e);
         this.updateListeners({type: 'event', 
-            value: {event: eventRequest, index: index}});
+            value: {event: e, index: index}});
       }
       return e.meta.id;
     },
@@ -312,8 +310,7 @@ var Record = (function RecordClosure() {
      *     identify event
      * @param {string} portId Id of port which requests came through
      */
-    updateEvent: function _updateEvent(eventRequest, portId) {
-      var request = eventRequest.value;
+    updateEvent: function _updateEvent(request, portId) {
       var pageEventId = request.pageEventId;
       var updates = request.updates;
 
@@ -322,8 +319,7 @@ var Record = (function RecordClosure() {
       var events = this.events;
 
       for (var i = events.length - 1; i >= 0; --i) {
-        var e = events[i];
-        var value = e.value;
+        var value = events[i];
         /* Check if its the right event */
         if (value.frame && value.frame.port == portId &&
             value.meta && value.meta.pageEventId == pageEventId) {
@@ -348,8 +344,7 @@ var Record = (function RecordClosure() {
 
       var events = this.events;
       for (var i = events.length - 1; i >= 0; --i) {
-        var event = events[i];
-        var value = event.value;
+        var value = events[i];
         if (value.meta.id == eventId) {
           updateProp(value, field.split('.'), 0);
         }
@@ -551,7 +546,7 @@ var Replay = (function ReplayClosure() {
 
       for (var i = 0, ii = events.length; i < ii; ++i) {
         var e = events[i];
-        if (e.value.meta.id == eventId)
+        if (e.meta.id == eventId)
           return e;
       }
       return null;
@@ -566,7 +561,7 @@ var Replay = (function ReplayClosure() {
       var index = this.index;
       var events = this.events;
       if (index < events.length) {
-        var e = events[index].value;
+        var e = events[index];
         if (e.meta)
           this.updateListeners({type: 'simulate', value: e.meta.id});
       }
@@ -611,7 +606,7 @@ var Replay = (function ReplayClosure() {
 
       var defaultTime = 0;
       for (var i = curIndex; i <= nextIndex; ++i)
-        defaultTime += events[i].value.timing.waitTime;
+        defaultTime += events[i].timing.waitTime;
 
       if (defaultTime > 10000)
         defaultTime = 10000;
@@ -725,11 +720,10 @@ var Replay = (function ReplayClosure() {
       }
     },
     /* Given an event, find the corresponding port */
-    getMatchingPort: function _getMatchingPort(eventObj) {
+    getMatchingPort: function _getMatchingPort(v) {
       var portMapping = this.portMapping;
       var tabMapping = this.tabMapping;
 
-      var v = eventObj.value;
       var frame = v.frame;
       var port = frame.port;
       var tab = frame.tab;
@@ -865,7 +859,7 @@ var Replay = (function ReplayClosure() {
       var recordedEvents = this.record.events;
       for (var i = recordedEvents.length - 1; i >= 0; --i) {
         var recordedEvent = recordedEvents[i];
-        if (recordedEvent.value.meta.recordId == id)
+        if (recordedEvent.meta.recordId == id)
           return true;
       }
       return false;
@@ -951,13 +945,11 @@ var Replay = (function ReplayClosure() {
       replayFunction.call(this, e);
     },
     /* The main function which dispatches events to the content script */
-    simulateDomEvent: function _simulateDomEvent(e) {
-      var v = e.value;
-
+    simulateDomEvent: function _simulateDomEvent(v) {
       try {
         /* check if event has been replayed, if so skip it */
         if (params.replay.cascadeCheck && this.checkReplayed(v)) {
-          replayLog.debug('skipping event: ' + e.id);
+          replayLog.debug('skipping event: ' + v.type);
           this.incrementIndex();
           this.setNextTimeout();
 
@@ -969,7 +961,7 @@ var Replay = (function ReplayClosure() {
         replayLog.log('background replay:', meta.id, v);
 
         /* if no matching port, try again later */
-        var replayPort = this.getMatchingPort(e);
+        var replayPort = this.getMatchingPort(v);
         if (!replayPort)
           return;
 
@@ -982,9 +974,9 @@ var Replay = (function ReplayClosure() {
           for (var i = recordEvents.length - 1; i >= 0; --i) {
             var otherEvent = recordEvents[i];
             if (otherEvent.type == triggerEvent.type &&
-                otherEvent.value.data.type == triggerEvent.value.data.type &&
-                matchUrls(otherEvent.value.data.url,
-                          triggerEvent.value.data.url, 0.9)) {
+                otherEvent.data.type == triggerEvent.data.type &&
+                matchUrls(otherEvent.data.url,
+                          triggerEvent.data.url, 0.9)) {
               matchedEvent = otherEvent;
               break;
             }
@@ -1012,13 +1004,13 @@ var Replay = (function ReplayClosure() {
               var t = this.index;
               var events = this.events;
               while (t < events.length &&
-                     endEvent >= events[t].value.meta.pageEventId &&
-                     v.frame.port == events[t].value.frame.port) {
+                     endEvent >= events[t].meta.pageEventId &&
+                     v.frame.port == events[t].frame.port) {
                 eventGroup.push(events[t]);
                 t++;
               }
             } else {
-              eventGroup = [e];
+              eventGroup = [v];
             }
 
             replayPort.postMessage({type: 'dom', value: eventGroup});
@@ -1045,19 +1037,9 @@ var Replay = (function ReplayClosure() {
                 this.setNextTimeout(0);
               } else {
                 /* remove the mapping and try again */
-                delete this.portMapping[e.value.frame.port];
+                delete this.portMapping[e.frame.port];
                 this.setNextTimeout(0);
               }
-            } else if (strategy == BrokenPortStrategey.SKIP) {
-              /* we probably navigated away from the page so lets skip all
-               * events that use this same port */
-              while (index < events.length &&
-                     events[index].value.frameport == port) {
-                replayLog.log('skipping event:', index);
-                ++index;
-              }
-              this.index = index;
-              this.setNextTimeout(0);
             } else {
               throw 'unknown broken port strategy';
             }
@@ -1072,8 +1054,7 @@ var Replay = (function ReplayClosure() {
       }
     },
     /* Remove any information adding during replay */
-    resetEvent: function _resetEvent(e) {
-      var v = e.value;
+    resetEvent: function _resetEvent(v) {
       if (v.reset)
         v.reset = {};
     },
@@ -1277,20 +1258,20 @@ function handleIdMessage(request, sender, sendResponse) {
 }
 
 var recordHandlers = {
-  'dom': function(port, request) {
-    record.addEvent(request, port.name);
+  'event': function(port, request) {
+    record.addEvent(request.value, port.name);
   },
   'updateEvent': function(port, request) {
-    record.updateEvent(request, port.name);
+    record.updateEvent(request.value, port.name);
   }
 }
 
 var replayHandlers = {
-  'dom': function(port, request) {
-    replay.record.addEvent(request, port.name);
+  'event': function(port, request) {
+    replay.record.addEvent(request.value, port.name);
   },
   'updateEvent': function(port, request) {
-    replay.record.updateEvent(request, port.name);
+    replay.record.updateEvent(request.value, port.name);
   },
   'ack': function(port, request) {
     replay.receiveAck(request.value);
@@ -1369,10 +1350,7 @@ function addBackgroundEvent(e) {
 }
 
 function addWebRequestEvent(details, type) {
-  var e = {type: type};
-  var v = {};
   var data = {};
-
   data.requestId = details.requestId;
   data.method = details.method;
   data.parentFrameId = details.parentFrameId;
@@ -1382,10 +1360,11 @@ function addWebRequestEvent(details, type) {
   data.reqTimeStamp = details.timeStamp;
   data.timeStamp = (new Date()).getTime();
 
+  var v = {};
   v.data = data;
-  e.value = v;
+  v.type = type;
 
-  addBackgroundEvent(e);
+  addBackgroundEvent(v);
 }
 
 var filter = {urls: ['http://*/*', 'https://*/*'],

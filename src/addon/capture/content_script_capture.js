@@ -53,14 +53,15 @@ function captureNodeReply(target, event) {
     timing: {}
   };
 
-  eventMessage.data.target = saveTargetInfo(target, recording);
+  eventMessage.type = 'capture';
+  eventMessage.target = saveTargetInfo(target, recording);
   eventMessage.data.timeStamp = new Date().getTime();
   eventMessage.frame.URL = document.URL;
   eventMessage.meta.nodeName = target.nodeName.toLowerCase();
   eventMessage.meta.recordState = recording;
 
-  log.log('capturing:', target, eventMessage);
-  port.postMessage({type: 'capture', value: eventMessage, state: recording});
+  log.log('capturing:', eventMessage);
+  port.postMessage({type: 'event', value: eventMessage, state: recording});
 
   event.preventDefault();
   event.stopImmediatePropagation();
@@ -86,7 +87,7 @@ function simulateCapture(eventRecord) {
   var eventData = eventRecord.data;
   replayLog.debug('capturing:', eventData);
 
-  var targetInfo = eventData.target;
+  var targetInfo = eventRecord.target;
   var xpath = targetInfo.xpath;
 
   /* find the target */

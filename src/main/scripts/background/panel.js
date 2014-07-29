@@ -42,8 +42,6 @@ var Panel = (function PanelClosure() {
       var value = msg.value;
 
       switch (type) {
-        case 'dom':
-        case 'capture':
         case 'event':
           this.addEvent(value.event, value.index);
           break;
@@ -264,12 +262,11 @@ var Panel = (function PanelClosure() {
         return selectEvents.indexOf(this.id) >= 0;
       }).addClass('selected');
     },
-    addEvent: function _addEvent(eventRecord, index) {
-      this.events.push(eventRecord);
+    addEvent: function _addEvent(eventInfo, index) {
+      this.events.push(eventInfo);
 
-      var eventInfo = eventRecord.value;
       var id = eventInfo.meta.id;
-      var type = eventRecord.type;
+      var type = eventInfo.type;
 
       if (!params.panel.enableRequest && 
           (type == 'completed' || type == 'start'))
@@ -284,16 +281,20 @@ var Panel = (function PanelClosure() {
       });
       eventDiv.append(title);
 
-      if (type == 'dom' || type == 'capture') {
-        var type = eventInfo.data.type;
-        var xpath = eventInfo.data.target.xpath;
-        var URL = eventInfo.frame.URL;
-        var port = eventInfo.frame.port;
 
-        eventDiv.append('<b>type:' + '</b>' + type + '<br/>');
-        eventDiv.append('<b>xpath:' + '</b>' + xpath + '<br/>');
-        eventDiv.append('<b>URL:' + '</b>' + URL + '<br/>');
-        eventDiv.append('<b>port:' + '</b>' + port + '<br/>');
+      function addInfo(field, value) {
+        eventDiv.append('<b>' + field + ':</b>' + value + '<br/>');
+      }
+
+      if (type == 'dom' || type == 'capture') {
+        addInfo('type', eventInfo.data.type);
+        addInfo('xpath', eventInfo.target.xpath);
+        addInfo('URL' ,eventInfo.frame.URL);
+        addInfo('port', eventInfo.frame.port);
+      } else if (type == 'capture') {
+        addInfo('xpath', eventInfo.target.xpath);
+        addInfo('URL' ,eventInfo.frame.URL);
+        addInfo('port', eventInfo.frame.port);
       }
 
       function toggle(e) {

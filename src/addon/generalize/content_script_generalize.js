@@ -12,7 +12,7 @@ var examples;
 var ids;
 
 function generalizeXPath(eventObj) {
-  origXPath = eventObj.value.data.target.xpath;
+  origXPath = eventObj.target.xpath;
   examples = [];
   ids = [];
 
@@ -123,7 +123,7 @@ function findPrefixes(origXPath, generalXPath) {
 
 addonPreTarget.push(function(eventRecord) {
   var generalize = eventRecord.generalize;
-  var target = eventRecord.data.target;
+  var target = eventRecord.target;
   var xpath = target.xpath;
 
   if (generalize && xpath.indexOf(generalize.orig) == 0) {

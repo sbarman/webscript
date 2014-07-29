@@ -87,8 +87,7 @@ function getMatchingEvent(eventData) {
     return null;
 
   var eventObject = simulatedEvents[simulatedEventsIdx];
-  var eventRecord = eventObject.value;
-  if (eventRecord.data.type == eventData.type) {
+  if (eventObject.data.type == eventData.type) {
     return eventObject;
   }
 
@@ -171,12 +170,18 @@ function recordEvent(eventData) {
    * updates */
   updateDeltas(target);
 
-  eventMessage.data.target = saveTargetInfo(target, recording);
+  eventMessage.target = saveTargetInfo(target, recording);
+  var relatedTarget = eventData.relatedTarget;
+  if (relatedTarget) {
+    eventMessage.relatedTarget = saveTargetInfo(relatedTarget, recording);
+  }
+
   eventMessage.frame.URL = document.URL;
   eventMessage.meta.dispatchType = dispatchType;
   eventMessage.meta.nodeName = nodeName;
   eventMessage.meta.pageEventId = pageEventId++;
   eventMessage.meta.recordState = recording;
+  eventMessage.type = 'dom';
 
   var data = eventMessage.data;
   /* record all properties of the event object */
@@ -188,8 +193,6 @@ function recordEvent(eventData) {
         if (t == 'number' || t == 'boolean' || t == 'string' || 
             t == 'undefined') {
           data[prop] = value;
-        } else if (prop == 'relatedTarget' && isElement(value)) {
-          data[prop] = saveTargetInfo(value, recording);
         }
       } catch (err) {
         recordLog.error('[' + id + '] error recording property:', prop, err);
@@ -210,7 +213,7 @@ function recordEvent(eventData) {
 
   /* save the event record */
   recordLog.debug('[' + id + '] saving event message:', eventMessage);
-  port.postMessage({type: 'dom', value: eventMessage, state: recording});
+  port.postMessage({type: 'event', value: eventMessage, state: recording});
   lastRecordEvent = eventMessage;
 
   /* check to see if this event is part of a cascade of events. we do this 
@@ -357,15 +360,14 @@ function simulate(events, startIndex) {
   simulatedEventsIdx = 0;
 
   for (var i = startIndex, ii = events.length; i < ii; ++i) {
-    var e = events[i];
+    var eventRecord = events[i];
 
     /* Should not replay non-dom events here */
-    if (e.type != 'dom') {
+    if (eventRecord.type != 'dom') {
       replayLog.error('Simulating unknown event type');
       throw 'Unknown event type';
     }
 
-    var eventRecord = e.value;
     var eventData = eventRecord.data;
     var eventName = eventData.type;
 
@@ -391,7 +393,7 @@ function simulate(events, startIndex) {
           break;
       }
     } else {
-      var targetInfo = eventData.target;
+      var targetInfo = eventRecord.target;
       var xpath = targetInfo.xpath;
   
       /* find the target */
@@ -432,7 +434,7 @@ function simulate(events, startIndex) {
     } else if (eventType == 'FocusEvent') {
       var relatedTarget = null;
 
-      if (eventData.relatedTarget)
+      if (eventRecord.relatedTarget)
         relatedTarget = getTarget(eventData.relatedTarget);
 
       oEvent.initUIEvent(eventName, options.bubbles, options.cancelable,
@@ -441,8 +443,8 @@ function simulate(events, startIndex) {
     } else if (eventType == 'MouseEvent') {
       var relatedTarget = null;
 
-      if (eventData.relatedTarget)
-        relatedTarget = getTarget(eventData.relatedTarget);
+      if (eventRecord.relatedTarget)
+        relatedTarget = getTarget(eventRecord.relatedTarget);
 
       oEvent.initMouseEvent(eventName, options.bubbles, options.cancelable,
           document.defaultView, options.detail, options.screenX,

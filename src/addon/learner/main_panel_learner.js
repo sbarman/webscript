@@ -148,7 +148,7 @@ function collectCaptures(events) {
   var expCaptures = [];
   for (var i = 0, ii = events.length; i < ii; ++i) {
     var e = events[i];
-    if (e.value.data.type == 'capture') {
+    if (e.type == 'capture') {
       expCaptures.push(e);
     }
   }
@@ -156,9 +156,9 @@ function collectCaptures(events) {
 }
 
 function checkReplaySuccess(captureEvents, events, replay) {
-  if (replay.index != events.length) {
-    return false;
-  }
+  // if (replay.index != events.length) {
+  //   return false;
+  // }
 
   var captures = replay.captures;
   for (var i = 0, ii = captureEvents.length; i < ii; ++i) {
@@ -184,7 +184,7 @@ function saveScript(scriptName, debug) {
 }
 
 function runRemoveEvents(scriptName) {
-  params.replay.eventTimeout = 15;
+  params.replay.eventTimeout = 40;
   params.replay.defaultUser = true;
   params.panel.enableEdit = false;
   controller.updateParams();
@@ -292,8 +292,8 @@ function runMinWait(scriptName) {
 
 function runSynthWait(scriptName) {
   params = jQuery.extend(true, {}, defaultParams);
-  params.replay.eventTimeout = 15;
-  params.replay.defaultUser = true;
+  params.replay.eventTimeout = 40;
+  //params.replay.defaultUser = true;
   params.replay.timingStrategy = TimingStrategy.SLOWER;
   params.panel.enableEdit = false;
   controller.updateParams();
@@ -357,8 +357,8 @@ function runSynthWait(scriptName) {
       var count = 0;
       function testScript(scriptEvents, callback) {
         // lets make it replay a bit harder
-        params.replay.defaultWaitNewTab = 100;
-        params.replay.targetTimeout = 1;
+        // params.replay.defaultWaitNewTab = 100;
+        // params.replay.targetTimeout = 1;
         controller.updateParams();
 
         runScript(null, scriptEvents, 2, 300 * 1000,

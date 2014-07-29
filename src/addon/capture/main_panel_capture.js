@@ -43,20 +43,17 @@ Replay.prototype.addonTiming.push(function() {
     return 0;
 });
 
-Replay.prototype.simulateCapture = function _simulateCapture(e) {
-  var v = e.value;
+Replay.prototype.simulateCapture = function _simulateCapture(v) {
   var meta = v.meta;
 
   log.log('background replay:', meta.id, v);
 
   /* if no matching port, try again later */
-  var replayPort = this.getMatchingPort(e);
+  var replayPort = this.getMatchingPort(v);
   if (!replayPort)
     return;
 
   /* we hopefully found a matching port, lets dispatch to that port */
-  var type = v.data.type;
-
   try {
     replayPort.postMessage({type: 'simulateCapture', value: v});
     this.replayState = ReplayState.ACK;
@@ -71,7 +68,7 @@ Replay.prototype.simulateCapture = function _simulateCapture(e) {
      * navigated away from */
     if (err.message == 'Attempting to use a disconnected port object') {
       /* remove the mapping and try again */
-      delete this.portMapping[e.value.frame.port];
+      delete this.portMapping[v.frame.port];
       this.setNextTimeout(0);
     } else {
       err.printStackTrace();
@@ -109,10 +106,6 @@ Replay.prototype.saveCapture = function _saveCapture(capture) {
 Controller.prototype.capture = function() {
   this.record.captureNode();
 },
-
-replayHandlers['capture'] = function(port, request) {
-  replay.record.addEvent(request, port.name);
-};
 
 replayHandlers['saveCapture'] = function(port, request) {
   replay.saveCapture(request.value);
