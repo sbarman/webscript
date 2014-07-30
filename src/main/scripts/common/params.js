@@ -150,9 +150,9 @@ var TimeoutStrategy = {
     },
     logging: {
       level: 1,
-      enabled: ['ports', 'event', 'record', 'replay', 'script', 'background',
-                'content', 'synthesis', 'benchmark', 'target', 'controller',
-                'simpledebug']
+      enabled: 'all',
+      print: true,
+      saved: true
     },
     compensation: {
       enabled: true,

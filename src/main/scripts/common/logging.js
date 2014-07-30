@@ -9,6 +9,7 @@
  */
 
 var getLog = null;
+var logRecord = [];
 
 var LogLevel = {
   LOG: 1,
@@ -23,36 +24,46 @@ var LogLevel = {
 
   var Logger = (function LoggerClosure() {
     function Logger(tags) {
-      this.tags = tags;
+      var tagString = '';
+      for (var i = 0, ii = tags.length; i < ii; ++i) {
+        tagString += tags[i];
+        if (i != tags.length - 1)
+          tagString += ',';
+      }
+      this.tag = '[' +  tagString + ']';
     }
 
     Logger.prototype = {
-      print: function() {
-        var args = ['[' + this.tags[0] + ']'];
-        for (var i = 0, ii = arguments.length; i < ii; ++i) {
-          args.push(arguments[i]);
+      print: function(f, origArgs) {
+        var args = [this.tag];
+        for (var i = 0, ii = origArgs.length; i < ii; ++i) {
+          args.push(origArgs[i]);
         }
-        console.log.apply(console, args);
+
+        if (params.logging.saved)
+          logRecord.push(args.toString());
+        if (params.logging.print)
+          console[f].apply(console, args);
       },
       log: function() {
         if (level <= LogLevel.LOG)
-          this.print.apply(this, arguments);
+          this.print('log', arguments);
       },
       info: function() {
         if (level <= LogLevel.INFO)
-          this.print.apply(this, arguments);
+          this.print('info', arguments);
       },
       debug: function() {
         if (level <= LogLevel.DEBUG)
-          this.print.apply(this, arguments);
+          this.print('debug', arguments);
       },
       warn: function() {
         if (level <= LogLevel.WARN)
-          this.print.apply(this, arguments);
+          this.print('warn', arguments);
       },
       error: function() {
         if (level <= LogLevel.ERROR)
-          this.print.apply(this, arguments);
+          this.print('error', arguments);
       }
     };
 
@@ -81,6 +92,8 @@ var LogLevel = {
       return logger;
 
     var enabledLogs = params.logging.enabled;
+    if (enabledLogs == 'all')
+      return new Logger(names);
 
     for (var i = 0, ii = names.length; i < ii; ++i) {
       var name = names[i];

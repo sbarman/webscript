@@ -46,7 +46,8 @@ var Panel = (function PanelClosure() {
           this.addEvent(value.event, value.index);
           break;
         case 'status':
-          this.updateStatus(value);
+          //this.updateStatus(value);
+          this.addMessage('Status: ' + value);
           break;
         case 'reset':
           this.clearEvents();
@@ -55,7 +56,7 @@ var Panel = (function PanelClosure() {
           this.scroll(value);
           break;
         case 'captureText':
-          this.addMessage(value);
+          this.addMessage('Capture: ' + value);
           break;
         default:
           throw 'unknown controller update';
@@ -286,7 +287,7 @@ var Panel = (function PanelClosure() {
         eventDiv.append('<b>' + field + ':</b>' + value + '<br/>');
       }
 
-      if (type == 'dom' || type == 'capture') {
+      if (type == 'dom') {
         addInfo('type', eventInfo.data.type);
         addInfo('xpath', eventInfo.target.xpath);
         addInfo('URL' ,eventInfo.frame.URL);

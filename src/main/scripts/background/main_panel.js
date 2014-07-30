@@ -206,7 +206,7 @@ var Record = (function RecordClosure() {
     },
     updateStatus: function _updateStatus(newStatus) {
       this.recordState = newStatus;
-      this.updateListeners({type: 'status', value: newStatus});
+      this.updateListeners({type: 'status', value: 'record:' + newStatus});
       this.ports.sendToAll({type: 'recording', value: newStatus});
     },
     /* Begin recording events.
@@ -420,8 +420,7 @@ var Replay = (function ReplayClosure() {
       /* execution proceeds as callbacks so that the page's JS can execute, this
        * is the handle to the current callback */
       this.callbackHandle = null;
-      this.replayState = ReplayState.STOPPED;
-      this.replayOne = false;
+      this.replayState = this.updateStatus(ReplayState.STOPPED);
       /* record the first execution attempt of the first event */
       this.timeoutInfo = {startTime: 0, index: -1};
       /* stores responses from the content script */
@@ -457,6 +456,10 @@ var Replay = (function ReplayClosure() {
         listeners[i](msg);
       }
     },
+    updateStatus: function _updateStatus(newStatus) {
+      this.replayState = newStatus;
+      this.updateListeners({type: 'status', value: 'replay:' + newStatus});
+    },
     /* Begin replaying a list of events.
      *
      * @param {array} events List of events
@@ -479,7 +482,7 @@ var Replay = (function ReplayClosure() {
 
       this.scriptId = scriptId;
       this.cont = cont;
-      this.replayState = ReplayState.REPLAYING;
+      this.updateStatus(ReplayState.REPLAYING);
 
       this.record.startRecording(true);
       this.setNextTimeout(0);
@@ -522,7 +525,7 @@ var Replay = (function ReplayClosure() {
           replay[key] = copy[key];
         }
 
-        this.replayState = ReplayState.REPLAYING;
+        this.updateStatus(ReplayState.REPLAYING);
         this.record.startRecording(true);
 
         cont(r);
@@ -662,38 +665,37 @@ var Replay = (function ReplayClosure() {
     /* Restart by setting the next callback immediately */
     restart: function _restart() {
       if (this.callbackHandle == null) {
-        var replayState = this.replayState;
-        if (replayState == ReplayState.ACK) {
-          this.replayState = ReplayState.REPLAYING;
+        if (this.getStatus() == ReplayState.ACK) {
+          this.updateStatus(ReplayState.REPLAYING);
         }
 
         this.setNextTimeout(0);
       }
     },
     replayOne: function _replayOne() {
-      this.replayState = ReplayState.REPLAYING;
-      this.restart();
+//      this.updateStatus(ReplayState.REPLAYING);
+//      this.restart();
     },
     skip: function _skip() {
       this.incrementIndex();
-      this.replayState = ReplayState.REPLAYING;
+      this.updateStatus(ReplayState.REPLAYING);
     },
     resend: function _resend() {
-      if (this.replayState == ReplayState.ACK)
-        this.replayState = ReplayState.REPLAYING;
+      if (this.getStatus() == ReplayState.ACK)
+        this.updateStatus(ReplayState.REPLAYING);
     },
     /* Replay has finished, and now we need to call the continuation */
     finish: function _finish(errorMsg) {
       replayLog.log('finishing replay');
 
-      if (this.replayState == ReplayState.STOPPED)
+      if (this.getStatus() == ReplayState.STOPPED)
         return;
 
-      this.replayState = ReplayState.STOPPED;
+      this.updateStatus(ReplayState.STOPPED);
+
       this.pause();
       this.time = new Date().getTime() - this.startTime;
       this.record.stopRecording();
-      this.updateListeners({type: 'status', value: 'Finished'});
 
       var record = this.record;
       var replay = this;
@@ -892,9 +894,7 @@ var Replay = (function ReplayClosure() {
         return;
       }
 
-      var replayState = this.replayState;
-
-      if (replayState == ReplayState.ACK) {
+      if (this.getStatus() == ReplayState.ACK) {
         var ack = this.ack;
         if (!ack) {
           this.setNextTimeout(params.replay.defaultWait);
@@ -906,13 +906,9 @@ var Replay = (function ReplayClosure() {
         if (type == Ack.SUCCESS) {
           replayLog.log('found replay ack');
           this.incrementIndex();
+          this.setNextTimeout();
 
-          if (!this.replayOne)
-            this.setNextTimeout();
-          else
-            this.pause();
-
-          this.replayState = ReplayState.REPLAYING;
+          this.updateStatus(ReplayState.REPLAYING);
         } else if (type == Ack.PARTIAL) {
           throw 'partially executed commands';
         }
@@ -952,7 +948,7 @@ var Replay = (function ReplayClosure() {
           this.incrementIndex();
           this.setNextTimeout();
 
-          this.replayState = ReplayState.REPLAYING;
+          this.updateStatus(ReplayState.REPLAYING);
           return;
         }
 
@@ -989,10 +985,9 @@ var Replay = (function ReplayClosure() {
 
         /* we hopefully found a matching port, lets dispatch to that port */
         var type = v.data.type;
-        var replayState = this.replayState;
 
         try {
-          if (replayState == ReplayState.REPLAYING) {
+          if (this.getStatus() == ReplayState.REPLAYING) {
             /* clear ack */
             this.ack = null;
 
@@ -1013,7 +1008,7 @@ var Replay = (function ReplayClosure() {
             }
 
             replayPort.postMessage({type: 'dom', value: eventGroup});
-            this.replayState = ReplayState.ACK;
+            this.updateStatus(ReplayState.ACK);
 
             this.firstEventReplayed = true;
 

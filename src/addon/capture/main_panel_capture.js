@@ -100,12 +100,17 @@ Replay.prototype.saveCapture = function _saveCapture(capture) {
     storage[captureId] = JSON.stringify(capture);
     chrome.storage.local.set(storage);
   }
-},
+};
 
 /* Callback when capture button is clicked */
 Controller.prototype.capture = function() {
   this.record.captureNode();
-},
+};
+
+/* Callback when capture button is clicked */
+Controller.prototype.cancelCapture = function() {
+  this.record.cancelCapture();
+};
 
 replayHandlers['saveCapture'] = function(port, request) {
   replay.saveCapture(request.value);
