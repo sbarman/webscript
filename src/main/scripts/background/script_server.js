@@ -11,12 +11,14 @@ var ScriptServer = (function ScriptServerClosure() {
     this.server = server;
     this.queue = [];
     this.processing = false;
+    this.timeout = 50;
   }
 
   ScriptServer.prototype = {
     process: function _process() {
       if (this.processing)
         return;
+
 
       var queue = this.queue;
       if (queue.length > 0) {
@@ -29,16 +31,24 @@ var ScriptServer = (function ScriptServerClosure() {
 
         var scriptServer = this;
         var type = item.type;
+
+        var finish = function _finish() {
+          scriptServer.processing = false;
+          scriptServer.process();
+        }
+      
+        this.processing = true;
+
         switch (type) {
           case "event":
             setTimeout(function() {
-              scriptServer.processEvent(item);
-            });
+              scriptServer.processEvent(item, finish);
+            }, this.timeout);
             break;
           case "script":
             setTimeout(function() {
-              scriptServer.processScript(item);
-            });
+              scriptServer.processScript(item, finish);
+            }, this.timeout);
             break;
         }
       }
@@ -49,6 +59,8 @@ var ScriptServer = (function ScriptServerClosure() {
       } else {
         item.retries = 1;
       }
+
+      this.timeout *= 2;
 
       this.queue.splice(0, 0, item);
     },
@@ -72,9 +84,7 @@ var ScriptServer = (function ScriptServerClosure() {
         });
       }
     },
-    processScript: function _processScript(item) {
-      this.processing = true;
-
+    processScript: function _processScript(item, callback) {
       var name = item.name;
       var events = item.events;
       var parentId = item.parentId;
@@ -116,8 +126,7 @@ var ScriptServer = (function ScriptServerClosure() {
           scriptServer.saveEvents(scriptId, events);
         },
         complete: function(jqXHR, textSataus) {
-          scriptServer.processing = false;
-          scriptServer.process();
+          callback();
         },
         contentType: 'application/json',
         data: JSON.stringify(postMsg),
@@ -129,7 +138,7 @@ var ScriptServer = (function ScriptServerClosure() {
       });
       scriptLog.log(req);
     },
-    processEvent: function _saveEvent(item) {
+    processEvent: function _saveEvent(item, callback) {
       this.processing = true;
 
       var e = item.event;
@@ -169,8 +178,7 @@ var ScriptServer = (function ScriptServerClosure() {
           scriptLog.log(data, jqXHR, textStatus);
         },
         complete: function(jqXHR, textSataus) {
-          scriptServer.processing = false;
-          scriptServer.process();
+          callback();
         },
         contentType: 'application/json',
         data: JSON.stringify(postMsg),
