@@ -9,7 +9,7 @@
  * add-on doesn't pollute the scope. */
 
 var recording = RecordState.STOPPED;
-var id = 'setme';
+var frameId = 'setme';
 var port; /* port variable to send msgs to content script */
 
 /* Record variables */
@@ -120,7 +120,7 @@ function recordEvent(eventData) {
    * picked up by the recorder */
   if (params.replay.cancelUnknownEvents && 
       recording == RecordState.REPLAYING && !dispatchingEvent) {
-    recordLog.debug('[' + id + '] cancel unknown event during replay:',
+    recordLog.debug('[' + frameId + '] cancel unknown event during replay:',
          type, dispatchType, eventData);
     eventData.stopImmediatePropagation();
     eventData.preventDefault();
@@ -129,7 +129,7 @@ function recordEvent(eventData) {
 
   if (params.record.cancelUnrecordedEvents &&
       recording == RecordState.RECORDING && !shouldRecord) {
-    recordLog.debug('[' + id + '] cancel unrecorded event:', type, 
+    recordLog.debug('[' + frameId + '] cancel unrecorded event:', type, 
         dispatchType, eventData);
     eventData.stopImmediatePropagation();
     eventData.preventDefault();
@@ -147,7 +147,7 @@ function recordEvent(eventData) {
   }
 
   /* continue recording the event */
-  recordLog.debug('[' + id + '] process event:', type, dispatchType,
+  recordLog.debug('[' + frameId + '] process event:', type, dispatchType,
       eventData);
   sendAlert('Recorded event: ' + type);
 
@@ -195,7 +195,7 @@ function recordEvent(eventData) {
           data[prop] = value;
         }
       } catch (err) {
-        recordLog.error('[' + id + '] error recording property:', prop, err);
+        recordLog.error('[' + frameId + '] error recording property:', prop, err);
       }
     }
   /* only record the default event properties */
@@ -212,7 +212,7 @@ function recordEvent(eventData) {
   }
 
   /* save the event record */
-  recordLog.debug('[' + id + '] saving event message:', eventMessage);
+  recordLog.debug('[' + frameId + '] saving event message:', eventMessage);
   port.postMessage({type: 'event', value: eventMessage, state: recording});
   lastRecordEvent = eventMessage;
 
@@ -371,8 +371,6 @@ function simulate(events, startIndex) {
     var eventData = eventRecord.data;
     var eventName = eventData.type;
 
-    var id = eventRecord.meta.id;
-
     /* this event was detected by the recorder, so lets skip it */
     if (params.replay.cascadeCheck && events[i].replayed)
       continue;
@@ -479,7 +477,7 @@ function simulate(events, startIndex) {
       oEvent.cascadingOrigin = eventData.cascadingOrigin;
     }
 
-    replayLog.debug('[' + id + '] dispatchEvent', eventName, options, target,
+    replayLog.debug('[' + frameId + '] dispatchEvent', eventName, options, target,
                     oEvent);
 
     /* send the update to the injected script so that the event can be 
@@ -514,7 +512,7 @@ function simulate(events, startIndex) {
   /* let the background page know that all the events were replayed (its
    * possible some/all events were skipped) */
   port.postMessage({type: 'ack', value: {type: Ack.SUCCESS}, state: recording});
-  replayLog.debug('sent ack: ', id);
+  replayLog.debug('sent ack: ', frameId);
 }
 
 /* Stop the next execution of simulate */
@@ -670,10 +668,10 @@ function updateParams(newParams) {
     var oldListOfEvents = oldEvents[eventType];
     for (var e in listOfEvents) {
       if (listOfEvents[e] && !oldListOfEvents[e]) {
-        log.log('[' + id + '] extension listening for ' + e);
+        log.log('[' + frameId + '] extension listening for ' + e);
         document.addEventListener(e, recordEvent, true);
       } else if (!listOfEvents[e] && oldListOfEvents[e]) {
-        log.log('[' + id + '] extension stopped listening for ' + e);
+        log.log('[' + frameId + '] extension stopped listening for ' + e);
         document.removeEventListener(e, recordEvent, true);
       }
     }
@@ -704,7 +702,7 @@ var handlers = {
 function handleMessage(request) {
   var type = request.type;
 
-  log.log('[' + id + '] handle message:', request, type);
+  log.log('[' + frameId + '] handle message:', request, type);
 
   var callback = handlers[type];
   if (callback) {
@@ -739,8 +737,8 @@ value.URL = document.URL;
 /* Add all the other handlers */
 chrome.runtime.sendMessage({type: 'getId', value: value}, function(resp) {
   log.log(resp);
-  id = resp.value;
-  port = new Port(id);
+  frameId = resp.value;
+  port = new Port(frameId);
   port.addListener(handleMessage);
 
   // see if recording is going on

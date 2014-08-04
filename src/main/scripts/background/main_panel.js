@@ -466,7 +466,7 @@ var Replay = (function ReplayClosure() {
      * @param {string} scriptId Id of the original recording
      * @param {function} cont Callback thats executed after replay is finished
      */
-    replay: function _replay(events, scriptId, cont) {
+    replay: function _replay(events, config, cont) {
       replayLog.log('starting replay');
 
       /* Pause and reset and previous executions */
@@ -480,7 +480,19 @@ var Replay = (function ReplayClosure() {
       for (var i = 0, ii = events.length; i < ii; ++i)
         this.resetEvent(events[i]);
 
-      this.scriptId = scriptId;
+      if (config) {
+        if (config.scriptId)
+          this.scriptId = condif.scriptId;
+        
+        if (config.frameMapping) {
+          var frameMapping = config.frameMapping;
+          var portMapping = this.portMapping;
+          var ports = this.ports;
+          for (var k in frameMapping)
+            portMapping[k] = ports.getPort(frameMapping[k]);
+        }
+      }
+
       this.cont = cont;
       this.updateStatus(ReplayState.REPLAYING);
 
@@ -514,7 +526,7 @@ var Replay = (function ReplayClosure() {
 
       /* replay the events */
       var replay = this;
-      this.replay(events, scriptId, function(r) {
+      this.replay(events, {scriptId: scriptId}, function(r) {
         if (timeout) {
           clearTimeout(timeoutId);
         }
@@ -1151,19 +1163,25 @@ var Controller = (function ControllerClosure() {
       ctlLog.log('reset');
       this.record.reset();
     },
-    replayRecording: function _replayRecording(cont) {
+    replayRecording: function _replayRecording(config, cont) {
       ctlLog.log('replay');
       this.stop();
 
       var record = this.record;
       var events = record.getEvents();
+      
+      if (!config)
+        config = {};
 
-      this.replay.replay(record.getEvents(), record.getScriptId(), cont);
+      if (!config.scriptId)
+        config.scriptId = record.getScriptId();
+
+      this.replay.replay(record.getEvents(), config, cont);
       return replay;
     },
-    replayScript: function(scriptId, events, cont) {
-      this.setEvents(scriptId, events);
-      return this.replayRecording(cont);
+    replayScript: function(events, config, cont) {
+      this.setEvents(null, events);
+      return this.replayRecording(config, cont);
     },
     pause: function() {
       this.replay.pause();
@@ -1376,7 +1394,6 @@ chrome.webRequest.onCompleted.addListener(function(details) {
 
 ports.sendToAll({type: 'params', value: params});
 controller.stop();
-controller.getScript('test');
 
 /*
 function printEvents() {

@@ -17,8 +17,15 @@ var SimpleRecord = (function SimpleRecordClosure() {
       controller.stop();
       return record.getEvents();
     },
-    replay: function _replay(trace) {
-      controller.replayScript(null, trace, null);
+    /* Replay a trace of events
+     *
+     * @param {array} trace - An array of events to replay
+     * @param {object} config - Config for the trace. Currently accepts the following keys:
+     *   frameMapping
+     * @param {function} callback - callback function which should accept the replay object
+     */
+    replay: function _replay(trace, config, callback) {
+      controller.replayScript(trace, config, callback);
     }
   };
 
