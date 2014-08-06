@@ -106,7 +106,6 @@ function recordEvent(eventData) {
 
   var type = eventData.type;
   var dispatchType = getEventType(type);
-  var shouldRecord = params.events[dispatchType][type];
 
   var matched = getMatchingEvent(eventData);
 
@@ -137,6 +136,7 @@ function recordEvent(eventData) {
   }
 
   /* if we are not recording this type of event, we should exit */
+  var shouldRecord = params.events[dispatchType][type];
   if (!shouldRecord)
     return true;
 
@@ -236,6 +236,50 @@ function recordEvent(eventData) {
   return true;
 };
 
+function recordLoad(eventData) {
+  /* check if we are stopped, then just return */
+  if (recording == RecordState.STOPPED)
+    return true;
+
+  var target = eventData.target;
+  var nodeName = target.nodeName.toLowerCase();
+
+  var eventMessage = {
+    frame: {},
+    data: {},
+    timing: {},
+    meta: {}
+  };
+
+  eventMessage.frame.URL = document.URL;
+  eventMessage.meta.pageEventId = pageEventId++;
+  eventMessage.meta.recordState = recording;
+  eventMessage.type = 'load';
+  eventMessage.target = saveTargetInfo(target, recording);
+
+  var data = eventMessage.data;
+  /* record all properties of the event object */
+  for (var prop in eventData) {
+    try {
+      var value = eventData[prop];
+      var t = typeof(value);
+      if (t == 'number' || t == 'boolean' || t == 'string' || 
+          t == 'undefined') {
+        data[prop] = value;
+      }
+    } catch (err) {
+      recordLog.error('[' + frameId + '] error recording property:', prop, err);
+    }
+  }
+
+  /* save the event record */
+  recordLog.debug('[' + frameId + '] saving event message:', eventMessage);
+  port.postMessage({type: 'event', value: eventMessage, state: recording});
+  lastRecordEvent = eventMessage;
+
+  return true;
+};
+
 /* Fix deltas that did not occur during replay */
 function replayUpdateDeltas(eventData, eventMessage) {
   var replayEvent = getMatchingEvent(eventData);
@@ -243,7 +287,6 @@ function replayUpdateDeltas(eventData, eventMessage) {
     incrementMatchedEventIndex();
       
     replayEvent.replayed = true;
-    replayEvent = replayEvent.value;
 
     eventMessage.meta.recordId = replayEvent.meta.id;
     var target = eventData.target;
@@ -728,6 +771,7 @@ function addListenersForRecording() {
  * added to the page. We will remove the unwanted handlers once params is
  * updated */
 addListenersForRecording();
+document.addEventListener('load', recordLoad, true);
 
 /* need to check if we are in an iframe */
 var value = {};

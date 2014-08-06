@@ -1043,7 +1043,7 @@ var Replay = (function ReplayClosure() {
                 this.setNextTimeout(0);
               } else {
                 /* remove the mapping and try again */
-                delete this.portMapping[e.frame.port];
+                delete this.portMapping[v.frame.port];
                 this.setNextTimeout(0);
               }
             } else {
