@@ -120,13 +120,13 @@ function runScript(id, events, numRuns, timeout, callback) {
   var runs = [];
   function runOnce() {
     if (runs.length < numRuns) {
-      var r = controller.replayScript(id, events, function(replay) {
+      var r = controller.replayScript(events, {}, function(replay) {
         clearTimeout(timeoutId);
 
         var run = {
           index: replay.index,
-          events: replay.record.events,
-          captures: replay.captures
+          events: $.extend([], replay.record.events),
+          captures: $.extend([], replay.captures)
         };
         runs.push(run);
 
@@ -304,6 +304,8 @@ function runSynthWait(scriptName) {
     var scriptId = item.id;
     var events =  item.events;
 
+    scriptServer.saveScript(uniqueId, events, scriptId, 'original');
+
     runScript(null, events, 2, 300 * 1000, function(replays) {
 
       for (var i = 0, ii = replays.length; i < ii; ++i) {
@@ -381,7 +383,7 @@ function runSynthWait(scriptName) {
                 var r = replays[i];
                 var pass = checkReplaySuccess(captureEvents, modifiedEvents, r);
 
-                scriptServer.saveScript(uniqueId + ':' + delta.id, r.events, scriptId, 'test:' + pass);
+                scriptServer.saveScript(uniqueId + ':' + delta.id, r.events, scriptId, 'testing:' + pass);
                 passed = passed && pass;
               }
               callback(passed);

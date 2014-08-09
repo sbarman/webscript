@@ -1383,11 +1383,17 @@ var filter = {urls: ['http://*/*', 'https://*/*'],
   types: ['main_frame', 'sub_frame', 'script', 'object', 'xmlhttprequest']};
 
 chrome.webRequest.onBeforeRequest.addListener(function(details) {
+  if (details.url.indexOf(params.server.url) === 0)
+    return;
+
   bgLog.log('request start', details);
   addWebRequestEvent(details, 'start');
 }, filter, ['blocking']);
 
 chrome.webRequest.onCompleted.addListener(function(details) {
+  if (details.url.indexOf(params.server.url) === 0)
+    return;
+
   bgLog.log('completed', details);
   addWebRequestEvent(details, 'completed');
 }, filter);
