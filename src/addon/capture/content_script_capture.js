@@ -118,6 +118,22 @@ function simulateCapture(eventRecord) {
              nodeName: target.nodeName.toLowerCase(),
              eventId: eventRecord.meta.id};
 
+  var eventMessage = {
+    data: {},
+    frame: {},
+    meta: {},
+    timing: {}
+  };
+
+  eventMessage.type = 'capture';
+  eventMessage.target = saveTargetInfo(target, recording);
+  eventMessage.data.timeStamp = new Date().getTime();
+  eventMessage.frame.URL = document.URL;
+  eventMessage.meta.nodeName = target.nodeName.toLowerCase();
+  eventMessage.meta.recordState = recording;
+  eventMessage.capture = msg;
+
+  port.postMessage({type: 'event', value: eventMessage, state: recording});
   port.postMessage({type: 'saveCapture', value: msg, state: recording});
 }
 
