@@ -9,28 +9,28 @@ Record.prototype.addGeneralLoop = function _addGeneralLoop(type, eventIds) {
   var events = this.events;
 
   var begin = events.indexOf(this.getEvent(eventIds[0]));
-  var beginEvent = {type: 'begin' + type, value: {}};
-  beginEvent.value.data = {};
-  beginEvent.value.reset = {};
-  beginEvent.value.timing = {waitTime: 0};
+  var beginEvent = {type: 'begin' + type};
+  beginEvent.data = {};
+  beginEvent.reset = {};
+  beginEvent.timing = {waitTime: 0};
   var beginEventId = this.addEvent(beginEvent, null, begin);
 
   /* If only one event is selected, then assume we should loop from that event
    * until the end */
   var lastEventId;
   if (eventIds.length == 1) {
-    lastEventId = events[events.length - 1].value.meta.id;
+    lastEventId = events[events.length - 1].meta.id;
   } else {
     lastEventId = eventIds[eventIds.length - 1];
   }
 
   var end = events.indexOf(this.getEvent(lastEventId));
-  var endEvent = {type: 'end' + type, value: {}};
-  endEvent.value.data = {begin: beginEventId};
-  endEvent.value.timing = {waitTime: 0};
+  var endEvent = {type: 'end' + type};
+  endEvent.data = {begin: beginEventId};
+  endEvent.timing = {waitTime: 0};
   var endEventId = this.addEvent(endEvent, null, end + 1);
 
-  beginEvent.value.data.end = endEventId;
+  beginEvent.data.end = endEventId;
 
   this.setEvents(events);
 };
@@ -61,7 +61,7 @@ Replay.prototype.replayableEvents.beginnext = 'simulateBeginNext';
 Replay.prototype.replayableEvents.endnext = 'simulateEndLoop';
 
 Replay.prototype.simulateBeginLoop = function _simulateBeginLoop(e) {
-  var v = e.value;
+  var v = e;
   var events = this.events;
   var index = this.index;
 
@@ -106,7 +106,7 @@ Replay.prototype.simulateBeginLoop = function _simulateBeginLoop(e) {
     };
 
     for (var i = index + 1; i < endIndex; ++i) {
-      events[i].value.generalize = generalizeInfo;
+      events[i].generalize = generalizeInfo;
       this.resetEvent(events[i]);
     }
 
@@ -119,7 +119,7 @@ Replay.prototype.simulateBeginLoop = function _simulateBeginLoop(e) {
         nextEventIdx = i;
         break;
       } else if (events[i].type == 'dom') {
-        var eventType = events[i].value.data.type;
+        var eventType = events[i].data.type;
         if (eventType.indexOf('mouse') != -1) {
           nextEventIdx = i;
           break;
@@ -151,7 +151,7 @@ Replay.prototype.generalizeScript = function _generalize(ack) {
   var index = this.index;
   var e = events[index];
 
-  var value = e.value;
+  var value = e;
   value.generalXPath = ack.generalXPath;
   value.origXPath = ack.origXPath;
 
@@ -165,7 +165,7 @@ Replay.prototype.generalizeScript = function _generalize(ack) {
 };
 
 Replay.prototype.simulateEndLoop = function _simulateEndLoop(e) {
-  var v = e.value;
+  var v = e;
   replayLog.log('end loop');
 
   this.loopPrefix.pop();
@@ -191,7 +191,7 @@ function yesNoCheck(response) {
 }
 
 Replay.prototype.simulateBeginNext = function _simulateBeginNext(e) {
-  var v = e.value;
+  var v = e;
   var events = this.events;
   var index = this.index;
 
@@ -237,7 +237,7 @@ Replay.prototype.simulateBeginNext = function _simulateBeginNext(e) {
     var nextEvent = nextEvents[index];
 
     var nextTabMapping = {};
-    var tab = nextEvent[0].value.frame.tab;
+    var tab = nextEvent[0].frame.tab;
     var origTab = -1;
     var origTabMapping = v.origTabMapping;
     for (var t in origTabMapping) {

@@ -375,7 +375,7 @@ var Record = (function RecordClosure() {
 
       for (var i = 0, ii = events.length; i < ii; ++i) {
         var e = events[i];
-        if (e.value.meta.id == eventId)
+        if (e.meta.id == eventId)
           return e;
       }
       return null;

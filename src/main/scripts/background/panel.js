@@ -240,7 +240,7 @@ var Panel = (function PanelClosure() {
           var foundStart = false;
 
           for (var i = 0, ii = events.length; i < ii; ++i) {
-            var id = events[i].value.meta.id;
+            var id = events[i].meta.id;
             if (id == selectStart || id == selectEnd) {
               if (!foundStart) {
                 foundStart = true;
