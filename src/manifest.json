@@ -22,6 +22,7 @@
       "js": ["lib/jquery-1.7.2.js",
              "lib/underscore.js",
              "lib/outline/jquery.dom-outline-1.0.js",
+             "main/scripts/common/scope.js",
              "main/scripts/common/common.js",
              "main/scripts/common/params.js",
              "main/scripts/common/logging.js",
