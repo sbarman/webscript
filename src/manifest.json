@@ -34,7 +34,7 @@
              "main/scripts/content/content_script.js",
              "main/scripts/content/simple_record.js",
              "addon/capture/content_script_capture.js",
-             "addon/copypaste/content_script_copypaste.js",
+             "addon/copypaste/content_script_copypaste.js"
 //             "addon/generalize/content_script_generalize.js"
       ],
       "run_at": "document_start",

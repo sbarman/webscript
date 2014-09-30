@@ -178,118 +178,6 @@ function checkReplaySuccess(captureEvents, events, replay) {
   return true;
 }
 
-// function saveScript(scriptName, debug) {
-//   var finalEvents = debug.finished;
-//   scriptServer.saveScript(scriptName, finalEvents, params, null);
-// }
-
-// function runRemoveEvents(scriptName) {
-//   params.replay.eventTimeout = 40;
-//   params.replay.defaultUser = true;
-//   params.panel.enableEdit = false;
-//   controller.updateParams();
-// 
-//   scriptServer.getScript(scriptName, function(id, events) {
-// 
-//     var removeEvents = [];
-//     for (var i = 0, ii = events.length; i < ii; ++i) {
-//       var e = events[i];
-//       if (e.type == 'dom') {
-//         (function() {
-//           var eventId = e.value.meta.id;
-//           removeEvents.push({
-//             id: 'remove event:' + eventId,
-//             apply: function(origEvents) {
-//               for (var j = 0, jj = origEvents.length; j < jj; ++j) {
-//                 if (origEvents[j].value.meta.id == eventId) {
-//                   origEvents.splice(j, 1);
-//                   break;
-//                 }
-//               }
-//               return origEvents;
-//             }
-//           });
-//         })();
-//       }
-//     }
-// 
-//     var captureEvents = collectCaptures(events);
-// 
-//     function testScript(scriptEvents, callback) {
-//       runScript(id, scriptEvents, 1, 300 * 1000, function(replays) {
-//         var replay = replays[0];
-//         callback(checkReplaySuccess(captureEvents, scriptEvents, replay),
-//                  replay);
-//       });
-//     }
-// 
-//     console.log('trying to remove events:', removeEvents);
-//     var debug = new SimpleDebug(events, removeEvents, false, true, testScript,
-//         function(finalEvents) {
-//           saveScript(scriptName + '_remove', finalEvents);
-//         });
-//     debug.run();
-//   });
-// }
-// 
-// function runMinWait(scriptName) {
-//   params.replay.eventTimeout = 15;
-//   params.replay.defaultUser = true;
-//   params.panel.enableEdit = false;
-//   controller.updateParams();
-// 
-//   scriptServer.getScript(scriptName, function(id, events) {
-// 
-//     var removeWaits = [];
-//     for (var i = 0, ii = events.length; i < ii; ++i) {
-//       var e = events[i];
-//       if (e.type == 'dom') {
-//         (function() {
-//           var eventId = e.value.meta.id;
-//           var origWait = e.value.timing.waitTime;
-//           removeWaits.push({
-//             id: 'remove wait:' + eventId + ',' + origWait,
-//             apply: function(origEvents) {
-//               for (var j = 0, jj = origEvents.length; j < jj; ++j) {
-//                 if (origEvents[j].value.meta.id == eventId) {
-//                   origEvents[j].value.timing.waitTime = 0;
-//                   break;
-//                 }
-//               }
-//               return origEvents;
-//             }
-//           });
-//         })();
-//       }
-//     }
-// 
-//     var captureEvents = collectCaptures(events);
-// 
-//     function testScript(scriptEvents, callback) {
-//       runScript(id, scriptEvents, 1, 300 * 1000, function(replays) {
-//         /*
-//         var replay = replays[0];
-//         callback(checkReplaySuccess(captureEvents, scriptEvents, replay),
-//                  replay);
-//         */
-//         for (var i = 0, ii = replays.length; i < ii; ++i) {
-//           if (!checkReplaySuccess(captureEvents, scriptEvents, replay[i])) {
-//             callback(false);
-//           }
-//         }
-//         callback(true);
-//       });
-//     }
-// 
-//     console.log('trying to remove waits:', removeWaits);
-//     var debug = new SimpleDebug(events, removeWaits, false, true, testScript,
-//         function(debug) {
-//           saveScript(scriptName + '_waits', debug);
-//         });
-//     debug.run();
-//   });
-// }
-
 function runSynthWait(scriptName) {
   var uniqueId = scriptName + ':' + (new Date()).getTime();
 
@@ -439,4 +327,15 @@ function mapPossibleTriggerToEvent(orig, replays) {
     }
   }
   return mapping;
+}
+
+function runScriptLearn(scriptId) {
+  scriptServer.getScript(scriptName, function(item) {
+    var scriptId = item.id;
+    var events =  item.events;
+
+    runScript(null, events, 1, 300 * 1000, function(replays) {
+      console.log(replays);
+    })
+  });
 }
