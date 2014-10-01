@@ -8,18 +8,141 @@ var getTargetFunction;
 var targetFunctions;
 var saveTargetInfo;
 
+var matchLabel;
+var getAnchors;
+var createLabel;
+
 (function() {
   var log = getLog('target');
 
   /* Store information about the DOM node */
   saveTargetInfo = function _saveTargetInfo(target, recording) {
+    var allFeatures = ["tagName", "className", 
+      "left", "bottom", "right", "top", "width", "height",
+      "font-size", "font-family", "font-style", "font-weight", "color",
+      "background-color", 
+      "preceding-text",
+      "xpath",
+      "anchor"];
+
+    // if (recording == RecordState.RECORDING) {
+    //   allFeatures.push('branch');
+    // }
+
     var targetInfo = {};
-    targetInfo.xpath = nodeToXPath(target);
-    targetInfo.snapshot = snapshotNode(target);
-    if (recording == RecordState.RECORDING) {
-      targetInfo.branch = snapshotBranch(target);
+    for (var i = 0, ii = allFeatures.length; i < ii; ++i) {
+      var feature = allFeatures[i];
+      switch (feature) {
+        case "xpath":
+          targetInfo[feature] = nodeToXPath(target);
+          break;
+        case "snapshot":
+          targetInfo[feature] = snapshotNode(target);
+          break;
+        case "branch":
+          targetInfo[feature] = snapshotBranch(target);
+          break;
+        case "preceding-text":
+          targetInfo[feature] = $(target).prev().text();
+          break;
+        case "top":
+        case "right":
+        case "bottom":
+        case "left":
+        case "width":
+        case "height":
+          var rect = target.getBoundingClientRect();
+          targetInfo[feature] = rect[feature];
+          break;
+        case "tagName":
+        case "className":
+          targetInfo[feature] = target[feature];
+          break;
+        case "anchor":
+          targetInfo[feature] = getAnchors(target);
+          break;
+        default:
+          var style = getComputedStyle(target, null);
+          targetInfo[feature] = style.getPropertyValue(feature);
+      }
     }
     return targetInfo;
+  };
+
+  createLabel = function(e) {
+    var tagName = e.tagName;
+    var label = {tagName: tagName};
+
+    // list of tags taken from 
+    // https://developer.mozilla.org/en-US/docs/Web/HTML/Element
+    // these all add visual clues to the 
+    if (["A", "BUTTON", "LABEL", "OPTION"].indexOf(tagName) != -1) {
+      label.textContent = e.textContent;
+    } else if (["H1", "H2", "H3", "H4", "H5", "H6", "DIV", "SPAN"].
+        indexOf(tagName) != -1) {
+      var textContent = e.textContent;
+      if (textContent.length < 20)
+        label.textContent = textContent;
+    } else if (["IMG"].indexOf(tagName) != -1) {
+      if (e.alt)
+        label.alt = e.alt;
+    }
+    return label;
+  };
+
+  var getUniqueSubtree =  function(element, otherNodes) {
+    function checkContains(subtree, otherNodes) {
+      for (var i = 0, ii = otherNodes.length; i < ii; ++i) {
+        if (element.contains(otherNodes[i]))
+          return true;
+      }
+      return false;
+    }
+
+    var e = element;
+    var p = e.parentElement;
+    while (e != document.body && checkContains(p, otherNodes)) {
+      e = p;
+      p = e.parentElement;
+    }
+    return e;
+  };
+
+  getAnchors = function(target) {
+  // function getAnchors(target) {
+    var label = createLabel(target);
+    var otherConflictElements = matchLabel(label, document.body);
+    return {
+      label: label,
+      numConflicts: otherConflictElements.length
+    }
+  };
+
+  matchLabel = function(label, root) {
+//  function findMatchingElements(label, root) {
+    function evaluateXPath(aNode, aExpr) {
+      var xpe = new XPathEvaluator();
+      var nsResolver = xpe.createNSResolver(aNode.ownerDocument == null ?
+        aNode.documentElement : aNode.ownerDocument.documentElement);
+      var result = xpe.evaluate(aExpr, aNode, nsResolver, 0, null);
+      var found = [];
+      var res;
+      while (res = result.iterateNext())
+        found.push(res);
+      return found;
+    }
+
+    var query = nodeToXPath(root.parentElement);
+    var tagName = label.tagName;
+    query += '//' + tagName;
+    if (label.textContent)
+      query += '[text()="' + label.textContent + '"]';
+
+    var matches = evaluateXPath(document, query);
+    if (label.alt)
+      matches = matches.filter(function(e) { return e.alt == label.alt; });
+
+    return matches;
   };
 
   /* The following functions are different implementations to take a target
