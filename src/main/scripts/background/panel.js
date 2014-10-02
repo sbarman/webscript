@@ -121,6 +121,10 @@ var Panel = (function PanelClosure() {
         controller.next(panel.selectEvents);
       });
 
+      $('#clearcookie').click(function(eventObject) {
+        controller.clearCookie(panel.selectEvents);
+      });
+
       /*
       $('#paramsDiv').hide(1000);
 
@@ -264,7 +268,11 @@ var Panel = (function PanelClosure() {
       }).addClass('selected');
     },
     addEvent: function _addEvent(eventInfo, index) {
-      this.events.push(eventInfo);
+      var events = this.events;
+      if (typeof index != 'number')
+        index = events.length;
+
+      events.splice(index, 0, eventInfo);
 
       var id = eventInfo.meta.id;
       var type = eventInfo.type;
@@ -332,7 +340,12 @@ var Panel = (function PanelClosure() {
         return topDiv;
       }
 
-      $('#events').append(eventDiv);
+      if (index + 1 < events.length) {
+        var postEventId = events[index + 1].meta.id;
+        $('#'+ postEventId).before(eventDiv);
+      } else {
+        $('#events').append(eventDiv);
+      }
 
       if (params.panel.enableEdit) {
         eventDiv.append(createMenu(eventInfo, id));

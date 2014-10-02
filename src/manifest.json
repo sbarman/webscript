@@ -60,6 +60,7 @@
     "webRequestBlocking",
     "storage",
     "unlimitedStorage",
+    "cookies",
     "http://*/*",
     "https://*/*",
     "<all_urls>"
