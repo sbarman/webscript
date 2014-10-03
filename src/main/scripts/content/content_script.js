@@ -195,7 +195,8 @@ function recordEvent(eventData) {
           data[prop] = value;
         }
       } catch (err) {
-        recordLog.error('[' + frameId + '] error recording property:', prop, err);
+        recordLog.error('[' + frameId + '] error recording property:', prop, 
+            err);
       }
     }
   /* only record the default event properties */
@@ -213,7 +214,8 @@ function recordEvent(eventData) {
 
   /* save the event record */
   recordLog.debug('[' + frameId + '] saving event message:', eventMessage);
-  port.postMessage({type: 'event', value: eventMessage, state: recording});
+  port.postMessage({type: 'event', value: eventMessage, 
+      state: eventMessage.meta.recordState});
   lastRecordEvent = eventMessage;
 
   /* check to see if this event is part of a cascade of events. we do this 
@@ -227,7 +229,7 @@ function recordEvent(eventData) {
           {field: 'meta.endEventId', value: lastRecordEvent.meta.pageEventId}
         ]
       },
-      state: recording
+      state: lastRecordEvent.meta.recordState
     };
     port.postMessage(update);
   }, 0);
