@@ -46,7 +46,6 @@ var Panel = (function PanelClosure() {
           this.addEvent(value.event, value.index);
           break;
         case 'status':
-          //this.updateStatus(value);
           this.addMessage('Status: ' + value);
           break;
         case 'reset':
@@ -57,6 +56,9 @@ var Panel = (function PanelClosure() {
           break;
         case 'captureText':
           this.addMessage('Capture: ' + value);
+          break;
+        case 'message':
+          this.addMessage(value);
           break;
         default:
           throw 'unknown controller update';
