@@ -147,9 +147,9 @@ function recordEvent(eventData) {
   }
 
   /* continue recording the event */
-  recordLog.debug('[' + frameId + '] process event:', type, dispatchType,
+  recordLog.log('[' + frameId + '] process event:', type, dispatchType,
       eventData);
-  sendAlert('Recorded event: ' + type);
+  message('Recorded event: ' + type);
 
   var properties = getEventProps(type);
   var target = eventData.target;
@@ -296,7 +296,7 @@ function replayUpdateDeltas(eventData, eventMessage) {
     if (params.compensation.enabled && lastReplayEvent) {
       var recordDeltas = lastReplayEvent.meta.deltas;
       if (typeof recordDeltas == 'undefined') {
-        recordLog.error('no deltas found for last event:', lastReplayEvent);
+        recordLog.error('No deltas found for last event:', lastReplayEvent);
         recordDeltas = [];
       }
 
@@ -423,7 +423,7 @@ function simulate(events, startIndex) {
       addonPreTarget[j](eventRecord);
     }
 
-    replayLog.debug('simulating:', eventName, eventData);
+    replayLog.debug('Simulating:', eventName, eventData);
 
     var target = null;
     if (addonTarget.length > 0) {
@@ -445,7 +445,7 @@ function simulate(events, startIndex) {
      *the future, and hope the page changes */
     if (!target) {
       if (checkTimeout(events, i)) {
-        replayLog.warn('timeout finding target, skip event: ', events, i);
+        replayLog.warn('Timeout finding target, skip event: ', events, i);
         // we timed out with this target, so lets skip the event
         i++;
       }
@@ -463,7 +463,7 @@ function simulate(events, startIndex) {
     var defaultProperties = getEventProps(eventName);
 
     if (!eventType) {
-      replayLog.error("can't find event type ", eventName);
+      replayLog.error("Can't find event type ", eventName);
       return;
     }
 
@@ -510,7 +510,7 @@ function simulate(events, startIndex) {
           document.defaultView, options.data, options.inputMethod,
           options.locale);
     } else {
-      replayLog.error('unknown type of event');
+      replayLog.error('Unknown type of event');
     }
 
     /* used to detect extension generated events */
@@ -520,8 +520,8 @@ function simulate(events, startIndex) {
       oEvent.cascadingOrigin = eventData.cascadingOrigin;
     }
 
-    replayLog.debug('[' + frameId + '] dispatchEvent', eventName, options, target,
-                    oEvent);
+    replayLog.log('[' + frameId + '] dispatchEvent', eventName, options,
+        target, oEvent);
 
     /* send the update to the injected script so that the event can be 
      * updated on the pages's context */
@@ -540,7 +540,7 @@ function simulate(events, startIndex) {
     document.dispatchEvent(new CustomEvent('webscript', {detail: detail}));
 
     /* update panel showing event was sent */
-    sendAlert('Dispatched event: ' + eventData.type);
+    message('Dispatched event: ' + eventData.type);
 
     /* handle any event replaying the addons need */
     for (var j = 0, jj = addonPreReplay.length; j < jj; ++j) {
@@ -555,7 +555,7 @@ function simulate(events, startIndex) {
   /* let the background page know that all the events were replayed (its
    * possible some/all events were skipped) */
   port.postMessage({type: 'ack', value: {type: Ack.SUCCESS}, state: recording});
-  replayLog.debug('sent ack: ', frameId);
+  replayLog.log('Sent ack: ', frameId);
 }
 
 /* Stop the next execution of simulate */
@@ -576,7 +576,7 @@ function setRetry(events, startIndex, timeout) {
 
 /* Take a snapshot of the target */
 function snapshotReplay(target) {
-  replayLog.log('snapshot target:', target);
+  replayLog.log('Snapshot target:', target);
   lastReplaySnapshot = curReplaySnapshot;
   if (lastReplaySnapshot)
     lastReplaySnapshot.after = snapshotNode(lastReplaySnapshot.target);
@@ -591,22 +591,22 @@ function resnapshotBefore(target) {
 
 /* Update the lastTarget, so that the record and replay deltas match */
 function fixDeltas(recordDeltas, replayDeltas, lastTarget) {
-  replayLog.info('record deltas:', recordDeltas);
-  replayLog.info('replay deltas:', replayDeltas);
+  replayLog.log('Record deltas:', recordDeltas);
+  replayLog.log('Replay deltas:', replayDeltas);
 
   /* effects of events that were found in record but not replay */
   var recordDeltasNotMatched = filterDeltas(recordDeltas, replayDeltas);
   /* effects of events that were found in replay but not record */
   var replayDeltasNotMatched = filterDeltas(replayDeltas, recordDeltas);
 
-  replayLog.info('record deltas not matched: ', recordDeltasNotMatched);
-  replayLog.info('replay deltas not matched: ', replayDeltasNotMatched);
+  replayLog.log('Record deltas not matched: ', recordDeltasNotMatched);
+  replayLog.log('Replay deltas not matched: ', replayDeltasNotMatched);
 
   var element = lastTarget;
 
   for (var i = 0, ii = replayDeltasNotMatched.length; i < ii; ++i) {
     var delta = replayDeltasNotMatched[i];
-    replayLog.debug('unmatched replay delta', delta);
+    replayLog.debug('Unmatched replay delta', delta);
 
     if (delta.type == 'Property is different.') {
       var divProp = delta.divergingProp;
@@ -619,7 +619,7 @@ function fixDeltas(recordDeltas, replayDeltas, lastTarget) {
   /* the thing below is the stuff that's doing divergence synthesis */
   for (var i = 0, ii = recordDeltasNotMatched.length; i < ii; ++i) {
     var delta = recordDeltasNotMatched[i];
-    replayLog.debug('unmatched record delta', delta);
+    replayLog.debug('Unmatched record delta', delta);
 
     if (delta.type == 'Property is different.') {
       var divProp = delta.divergingProp;
@@ -638,7 +638,7 @@ var promptCallback = null;
 
 function promptUser(text, callback) {
   if (!promptCallback)
-    log.warn('overwriting old prompt callback');
+    log.warn('Overwriting old prompt callback');
 
   promptCallback = callback;
   port.postMessage({type: 'prompt', value: text, state: recording});
@@ -688,7 +688,7 @@ function dehighlightNode(id) {
 }
 
 /* Send an alert that will be displayed in the main panel */
-function sendAlert(msg) {
+function message(msg) {
   port.postMessage({type: 'alert', value: msg, state: recording});
 }
 
@@ -751,7 +751,7 @@ function handleMessage(request) {
   if (callback) {
     callback(request.value);
   } else {
-    log.error('cannot handle message:', request);
+    log.error('Cannot handle message:', request);
   }
 }
 
@@ -800,7 +800,7 @@ var pollUrlId = window.setInterval(function() {
     var url = document.URL;
     value.URL = url;
     port.postMessage({type: 'url', value: url, state: recording});
-    log.log('url change: ', url);
+    log.info('Url change: ', url);
   }
 }, 1000);
 

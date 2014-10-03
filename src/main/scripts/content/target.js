@@ -298,10 +298,10 @@ var createLabel;
   getTarget = function(targetInfo) {
     var targets = getTargetFunction(targetInfo);
     if (!targets) {
-      log.debug('No target found');
+      log.warn('No target found');
       return null;
     } else if (targets.length > 1) {
-      log.debug('Multiple targets found:', targets);
+      log.warn('Multiple targets found:', targets);
       return null;
     } else {
       return targets[0];

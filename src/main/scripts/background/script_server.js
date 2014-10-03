@@ -111,12 +111,12 @@ var ScriptServer = (function ScriptServerClosure() {
         postMsg['notes'] = notes;
       }
 
-      scriptLog.log('saving script:', postMsg);
+      scriptLog.log('Saving script:', postMsg);
 
       var scriptServer = this;
       var req = $.ajax({
         error: function(jqXHR, textStatus, errorThrown) {
-          scriptLog.log('error saving script', jqXHR, textStatus, errorThrown);
+          scriptLog.warn('Error saving script', jqXHR, textStatus, errorThrown);
           scriptServer.retry(item);
         },
         success: function(data, textStatus, jqXHR) {
@@ -167,11 +167,11 @@ var ScriptServer = (function ScriptServerClosure() {
       postMsg['script_id'] = scriptId;
       postMsg['events'] = [evtMsg];
 
-      scriptLog.log('saving event:', postMsg);
+      scriptLog.log('Saving event:', postMsg);
       var scriptServer = this;
       $.ajax({
         error: function(jqXHR, textStatus, errorThrown) {
-          scriptLog.log('error saving event', jqXHR, textStatus, errorThrown);
+          scriptLog.warn('Error saving event', jqXHR, textStatus, errorThrown);
           scriptServer.retry(item);
         },
         success: function(data, textStatus, jqXHR) {
@@ -261,11 +261,12 @@ var ScriptServer = (function ScriptServerClosure() {
 
       $.ajax({
         error: function(jqXHR, textStatus, errorThrown) {
-          scriptLog.log(jqXHR, textStatus, errorThrown);
+          scriptLog.error('Error getting script:', jqXHR, textStatus,
+            errorThrown);
           cont(null);
         },
         success: function(data, textStatus, jqXHR) {
-          scriptLog.log(data, textStatus, jqXHR);
+          scriptLog.info('Got script:', data, textStatus, jqXHR);
           var scripts = data;
           if (scripts.length != 0) {
             // find the lastest script saved with this name
@@ -318,7 +319,7 @@ var ScriptServer = (function ScriptServerClosure() {
 
       function getEvent(i, retrievedEvents, retries) {
         if (i >= eventIds.length) {
-          scriptLog.log('Done getting');
+          scriptLog.info('Done getting script');
           cont(retrievedEvents);
           return;
         }
@@ -330,11 +331,12 @@ var ScriptServer = (function ScriptServerClosure() {
 
         $.ajax({
           error: function(jqXHR, textStatus, errorThrown) {
-            scriptLog.error(jqXHR, textStatus, errorThrown);
+            scriptLog.error('Error getting event: ', jqXHR, textStatus,
+                errorThrown);
             getEvent(i, rerievedEvents, retries + 1);
           },
           success: function(data, textStatus, jqXHR) {
-            scriptLog.log(data, textStatus, jqXHR);
+            scriptLog.log('Got event: ', data, textStatus, jqXHR);
             retrievedEvents.push(data);
             getEvent(i + 1, retrievedEvents);
           },

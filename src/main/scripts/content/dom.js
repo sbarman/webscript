@@ -74,7 +74,7 @@ function simpleXPathToNode(xpath) {
         }
       }
     }
-    getLog('misc').error('xpath child cannot be found', xpath);
+    getLog('misc').error('xPath child cannot be found', xpath);
     return null;
   }
   return [currentNode];
@@ -85,7 +85,7 @@ function xPathToNode(xpath) {
   var nodes = xPathToNodes(xpath);
   //if we don't successfully find nodes, let's alert
   if (nodes.length != 1)
-    getLog('misc').error("xpath doesn't return strictly one node", xpath);
+    getLog('misc').error("xPath doesn't return strictly one node", xpath);
 
   if (nodes.length >= 1)
     return nodes[0];

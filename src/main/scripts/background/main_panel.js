@@ -21,7 +21,7 @@ var PortManager = (function PortManagerClosure() {
     /* Send a message to all content scripts. Messages should be in the form
      * {type: ..., value: ...} */
     sendToAll: function _sendToAll(message) {
-      portLog.log('sending to all:', message);
+      portLog.log('Sending to all:', message);
       var ports = this.portIdToPort;
       for (var portId in ports) {
         ports[portId].postMessage(message);
@@ -77,7 +77,7 @@ var PortManager = (function PortManagerClosure() {
       /* for some reason, the start page loads the content script but doesn't
        * have a tab id. in this case, don't assign an id */
       if (!sender.tab) {
-        portLog.warn('request for new id without a tab id');
+        portLog.warn('Request for new id without a tab id');
         return;
       }
 
@@ -91,12 +91,12 @@ var PortManager = (function PortManagerClosure() {
       this.numPorts++;
       var portId = '' + this.numPorts;
 
-      portLog.log('adding new id: ', portId, value);
+      portLog.log('Adding new id: ', portId, value);
 
       /* Update various mappings */
       var tabId = sender.tab.id;
       this.tabIdToTab[tabId] = sender.tab;
-      portLog.log('adding tab:', tabId, sender.tab);
+      portLog.log('Adding tab:', tabId, sender.tab);
 
       this.portIdToTabId[portId] = tabId;
       this.portIdToPortInfo[portId] = value;
@@ -133,7 +133,7 @@ var PortManager = (function PortManagerClosure() {
 
       var portManager = this;
       port.addDisconnectListener(function(evt) {
-        portLog.log('disconnect port:', port);
+        portLog.log('Disconnect port:', port);
 
         if (portId in ports) {
           delete ports[portId];
@@ -215,7 +215,7 @@ var Record = (function RecordClosure() {
      *     interactions or the events raised by the replayer. 
      */
     startRecording: function _startRecording(replaying) {
-      recordLog.log('starting record');
+      recordLog.log('Starting record');
       var s = replaying ? RecordState.REPLAYING : RecordState.RECORDING;
       this.updateStatus(s);
 
@@ -223,7 +223,7 @@ var Record = (function RecordClosure() {
       this.ports.sendToAll({type: 'recording', value: this.getStatus()});
     },
     stopRecording: function _stopRecording() {
-      recordLog.log('stopping record');
+      recordLog.log('Stopping record');
       this.updateStatus(RecordState.STOPPED);
 
       /* Tell the content scripts to stop recording */
@@ -240,7 +240,7 @@ var Record = (function RecordClosure() {
      * @returns {string} Id assigned to the event
      */
     addEvent: function _addEvent(e, portId, index) {
-      recordLog.log('added event:', e, portId);
+      recordLog.log('Added event:', e, portId);
 
       /* Check if the event is coming from a content script */
       if (portId) {
@@ -314,7 +314,7 @@ var Record = (function RecordClosure() {
       var pageEventId = request.pageEventId;
       var updates = request.updates;
 
-      recordLog.log('updating event:', updates, pageEventId);
+      recordLog.log('Updating event:', updates, pageEventId);
 
       var events = this.events;
 
@@ -467,7 +467,7 @@ var Replay = (function ReplayClosure() {
      * @param {function} cont Callback thats executed after replay is finished
      */
     replay: function _replay(events, config, cont) {
-      replayLog.log('starting replay');
+      replayLog.log('Starting replay');
 
       /* Pause and reset and previous executions */
       this.pause();
@@ -646,7 +646,7 @@ var Replay = (function ReplayClosure() {
       } else {
         throw 'unknown timing strategy';
       }
-      replayLog.log('wait time:', waitTime);
+      replayLog.log('Wait time:', waitTime);
       return waitTime;
     },
     /* Set the callback to replay the next event
@@ -698,7 +698,7 @@ var Replay = (function ReplayClosure() {
     },
     /* Replay has finished, and now we need to call the continuation */
     finish: function _finish(errorMsg) {
-      replayLog.log('finishing replay');
+      replayLog.log('Finishing replay');
 
       if (this.getStatus() == ReplayState.STOPPED)
         return;
@@ -720,8 +720,9 @@ var Replay = (function ReplayClosure() {
 
         if (params.replay.saveReplay && scriptId &&
             replayEvents.length > 0) {
-          scriptServer.saveScript('replay ' + scriptId, replayEvents, scriptId, "");
-          replayLog.log('saving replay:', replayEvents);
+          scriptServer.saveScript('replay ' + scriptId, replayEvents,
+              scriptId, "");
+          replayLog.log('Saving replay:', replayEvents);
         }
       }, 1000);
 
@@ -746,7 +747,7 @@ var Replay = (function ReplayClosure() {
       /* we have already seen this port, reuse existing mapping */
       if (port in portMapping) {
         replayPort = portMapping[port];
-        replayLog.log('port already seen', replayPort);
+        replayLog.log('Port already seen', replayPort);
 
       /* we have already seen this tab, find equivalent port for tab
        * for now we will just choose the last port added from this tab */
@@ -755,10 +756,10 @@ var Replay = (function ReplayClosure() {
 
         if (replayPort) {
           portMapping[port] = replayPort;
-          replayLog.log('tab already seen, found port:', replayPort);
+          replayLog.log('Tab already seen, found port:', replayPort);
         } else {
           this.setNextTimeout(params.replay.defaultWait);
-          replayLog.log('tab already seen, no port found');
+          replayLog.log('Tab already seen, no port found');
         }
       /* nothing matched, so we need to open new tab */
       } else {
@@ -789,10 +790,10 @@ var Replay = (function ReplayClosure() {
         /* create a new tab, and update the mapping */
         var replay = this;
         var openNewTab = function() {
-          replayLog.log('need to open new tab');
+          replayLog.log('Need to open new tab');
           chrome.tabs.create({url: frame.topURL, active: true},
             function(newTab) {
-              replayLog.log('new tab opened:', newTab);
+              replayLog.log('New tab opened:', newTab);
               var newTabId = newTab.id;
               replay.tabMapping[frame.tab] = newTabId;
               replay.ports.tabIdToTab[newTabId] = newTab;
@@ -815,7 +816,7 @@ var Replay = (function ReplayClosure() {
             } else if (answer == 'yes') {
               var tabInfo = user.getActivatedTab();
               chrome.tabs.get(tabInfo.tabId, function(tab) {
-                replayLog.log('mapping tab:', tab);
+                replayLog.log('Mapping tab:', tab);
                 var tabId = tab.id;
                 replay.tabMapping[frame.tab] = tabId;
                 replay.setNextTimeout(0);
@@ -831,14 +832,14 @@ var Replay = (function ReplayClosure() {
     findPortInTab: function _findPortInTab(newTabId, frame) {
       var ports = this.ports;
       var portInfo = ports.getTabInfo(newTabId);
-      replayLog.log('trying to find port in tab:', portInfo);
+      replayLog.log('Trying to find port in tab:', portInfo);
 
       if (!portInfo)
         return null;
 
       /* if its the top frame, then ensure the urls match */
       if (frame.topFrame) {
-        replayLog.log('assume port is top level page');
+        replayLog.log('Assume port is top level page');
         var topFrame = portInfo.top;
         if (topFrame) {
           if (matchUrls(frame.URL, topFrame.URL))
@@ -846,7 +847,7 @@ var Replay = (function ReplayClosure() {
         }
       /* if its an iframe, find all frames with matching urls */
       } else {
-        replayLog.log('try to find port in one of the iframes');
+        replayLog.log('Try to find port in one of the iframes');
         var frames = portInfo.frames;
         var urlFrames = [];
         for (var i = 0, ii = frames.length; i < ii; i++) {
@@ -862,7 +863,7 @@ var Replay = (function ReplayClosure() {
           return ports.getPort(urlFrames[0].portId);
         }
 
-        replayLog.warn('multiple iframes with same url:', urlFrames);
+        replayLog.warn('Multiple iframes with same url:', urlFrames);
       }
       return null;
     },
@@ -900,8 +901,8 @@ var Replay = (function ReplayClosure() {
     guts: function _guts() {
       if (this.checkTimeout()) {
         /* lets call the end of this script */
-        var msg = 'event ' + this.index + ' has times out';
-        replayLog.log(msg);
+        var msg = 'Event ' + this.index + ' has timed out';
+        replayLog.warn(msg);
         this.finish(msg);
         return;
       }
@@ -910,13 +911,13 @@ var Replay = (function ReplayClosure() {
         var ack = this.ack;
         if (!ack) {
           this.setNextTimeout(params.replay.defaultWait);
-          replayLog.log('continue waiting for replay ack');
+          replayLog.info('Continue waiting for replay ack');
           return;
         }
 
         type = ack.type;
         if (type == Ack.SUCCESS) {
-          replayLog.log('found replay ack');
+          replayLog.log('Found replay ack');
           this.incrementIndex();
           this.setNextTimeout();
 
@@ -943,7 +944,7 @@ var Replay = (function ReplayClosure() {
       var replayFunctionName = this.replayableEvents[type];
       var replayFunction = this[replayFunctionName];
       if (!replayFunction) {
-        replayLog.log('skipping event:', e);
+        replayLog.debug('Skipping event:', type, e);
         this.incrementIndex();
         this.setNextTimeout(0);
         return;
@@ -956,7 +957,7 @@ var Replay = (function ReplayClosure() {
       try {
         /* check if event has been replayed, if so skip it */
         if (params.replay.cascadeCheck && this.checkReplayed(v)) {
-          replayLog.debug('skipping event: ' + v.type);
+          replayLog.debug('Skipping event: ', v.type, v);
           this.incrementIndex();
           this.setNextTimeout();
 
@@ -965,7 +966,7 @@ var Replay = (function ReplayClosure() {
         }
 
         var meta = v.meta;
-        replayLog.log('background replay:', meta.id, v);
+        replayLog.log('Background replay:', meta.id, v);
 
         /* if no matching port, try again later */
         var replayPort = this.getMatchingPort(v);
@@ -1024,14 +1025,14 @@ var Replay = (function ReplayClosure() {
 
             this.firstEventReplayed = true;
 
-            replayLog.log('sent message', eventGroup);
-            replayLog.log('start waiting for replay ack');
+            replayLog.log('Sent message', eventGroup);
+            replayLog.log('Start waiting for replay ack');
             this.setNextTimeout(0);
           } else {
             throw 'unknown replay state';
           }
         } catch (err) {
-          replayLog.error('error:', err.message, err);
+          replayLog.error('Error:', err.message, err);
           /* a disconnected port generally means that the page has been
            * navigated away from */
           if (err.message == 'Attempting to use a disconnected port object') {
@@ -1055,7 +1056,7 @@ var Replay = (function ReplayClosure() {
           }
         }
       } catch (err) {
-        replayLog.error('error:', err.message, err);
+        replayLog.error('Error:', err.message, err);
         this.finish(err.toString());
       }
     },
@@ -1144,7 +1145,7 @@ var Controller = (function ControllerClosure() {
   Controller.prototype = {
     /* The user started recording */
     start: function() {
-      ctlLog.log('start');
+      ctlLog.log('Start');
       this.record.startRecording();
 
       /* Update the UI */
@@ -1152,7 +1153,7 @@ var Controller = (function ControllerClosure() {
       chrome.browserAction.setBadgeText({text: 'ON'});
     },
     stop: function() {
-      ctlLog.log('stop');
+      ctlLog.log('Stop');
       this.record.stopRecording();
 
       /* Update the UI */
@@ -1160,11 +1161,11 @@ var Controller = (function ControllerClosure() {
       chrome.browserAction.setBadgeText({text: 'OFF'});
     },
     reset: function() {
-      ctlLog.log('reset');
+      ctlLog.log('Reset');
       this.record.reset();
     },
     replayRecording: function _replayRecording(config, cont) {
-      ctlLog.log('replay');
+      ctlLog.log('Replay');
       this.stop();
 
       var record = this.record;
@@ -1205,12 +1206,12 @@ var Controller = (function ControllerClosure() {
       this.record.addNextLoop(eventIds);
     },
     saveScript: function(name) {
-      ctlLog.log('saving script');
+      ctlLog.log('Saving script');
       var events = this.record.getEvents();
       this.scriptServer.saveScript(name, events, null, "");
     },
     getScript: function(name) {
-      ctlLog.log('getting script');
+      ctlLog.log('Getting script');
       var controller = this;
       this.scriptServer.getScript(name,
           function(script) {
@@ -1239,7 +1240,7 @@ var Controller = (function ControllerClosure() {
 //      ctlLog.log(text);
 //    },
     userUpdate: function _userUpdate(eventId, field, value) {
-      ctlLog.log('update:', eventId, field, value);
+      ctlLog.log('Update:', eventId, field, value);
       this.record.userUpdate(eventId, field, value);
     }
   };
@@ -1261,7 +1262,7 @@ var bgLog = getLog('background');
 
 /* The first message content scripts send is to get a unique id */
 function handleIdMessage(request, sender, sendResponse) {
-  bgLog.log('background receiving:', request, 'from', sender);
+  bgLog.log('Background receiving:', request, 'from', sender);
   if (request.type == 'getId') {
     var portId = ports.getNewId(request.value, sender);
     if (portId)
@@ -1321,7 +1322,7 @@ function handleMessage(port, request) {
   var type = request.type;
   var state = request.state;
 
-  bgLog.log('handle message:', request, type, state);
+  bgLog.log('Handle message:', request, type, state);
 
   if (state == RecordState.RECORDING && type in recordHandlers) {
     recordHandlers[type](port, request);
@@ -1330,7 +1331,7 @@ function handleMessage(port, request) {
   } else if (type in handlers) {
     handlers[type](port, request);
   } else {
-    bgLog.error('cannot handle message:', request);
+    bgLog.error('Cannot handle message:', request);
   }
 }
 
@@ -1386,7 +1387,7 @@ chrome.webRequest.onBeforeRequest.addListener(function(details) {
   if (details.url.indexOf(params.server.url) === 0)
     return;
 
-  bgLog.log('request start', details);
+  bgLog.log('Request start', details);
   addWebRequestEvent(details, 'start');
 }, filter, ['blocking']);
 
@@ -1394,7 +1395,7 @@ chrome.webRequest.onCompleted.addListener(function(details) {
   if (details.url.indexOf(params.server.url) === 0)
     return;
 
-  bgLog.log('completed', details);
+  bgLog.log('Request complete: ', details);
   addWebRequestEvent(details, 'completed');
 }, filter);
 

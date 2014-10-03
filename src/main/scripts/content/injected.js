@@ -40,7 +40,7 @@
   function checkEvent(event) {
 
     if (scriptEvent && event.type == scriptEvent.type) {
-      console.log('[inject] found matching event: ', scriptEvent, event);
+      console.log('[inject] Found matching event: ', scriptEvent, event);
 
       for (var prop in scriptEvent) {
         try {
@@ -48,15 +48,15 @@
           var eventData = event[prop];
 
           if (scriptData != eventData) {
-            console.log('[inject] fixing property: ', prop);
+            console.log('[inject] Fixing property: ', prop);
             if (prop in whiteListProps) {
               setEventProp(event, prop, scriptData);
             } else {
-              console.log('[inject] prop not whitelisted');
+              console.log('[inject] Prop not whitelisted');
             }
           }
         } catch (e) {
-          recordLog.error('[' + id + '] error recording property:', prop, e);
+          console.error('[inject] Error recording property:', prop, e);
         }
       }
 
@@ -88,7 +88,7 @@
     if (relatedTarget)
       scriptEvent.relatedTarget = simpleXPathToNode(relatedTarget);
 
-    console.log('[inject] handle message:', scriptEvent);
+    console.log('[inject] Handle message:', scriptEvent);
     return;
   }
 

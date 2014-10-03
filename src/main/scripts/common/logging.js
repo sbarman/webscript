@@ -100,7 +100,8 @@ var LogLevel = {
       if (enabledLogs.indexOf(name) != -1)
         return new Logger(names);
     }
-
+    
+    console.log('Cannot find logger for: ' + names);
     return new NoopLogger();
   };
 })();
