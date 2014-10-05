@@ -944,11 +944,12 @@ var Replay = (function ReplayClosure() {
       var replayFunctionName = this.replayableEvents[type];
       var replayFunction = this[replayFunctionName];
       if (!replayFunction) {
-        replayLog.debug('Skipping event:', type, e);
+        replayLog.debug('Skipping event (no replay function):', type, e);
         this.incrementIndex();
         this.setNextTimeout(0);
         return;
       }
+      replayLog.debug('Replaying event:', type, e);
 
       replayFunction.call(this, e);
     },
@@ -957,7 +958,7 @@ var Replay = (function ReplayClosure() {
       try {
         /* check if event has been replayed, if so skip it */
         if (params.replay.cascadeCheck && this.checkReplayed(v)) {
-          replayLog.debug('Skipping event: ', v.type, v);
+          replayLog.debug('Skipping event (replayed already): ', v.type, v);
           this.incrementIndex();
           this.setNextTimeout();
 
@@ -1296,7 +1297,8 @@ var replayHandlers = {
 
 var handlers = {
   'alert': function(port, request) {
-    panel.addMessage('[' + port.name + '] ' + request.value);
+    replay.updateListeners({type: 'message',
+        value: '[' + port.name + '] ' + request.value});
   },
   'getRecording': function(port, request) {
     var recStatus = record.getStatus();
@@ -1401,7 +1403,7 @@ chrome.webRequest.onCompleted.addListener(function(details) {
 
 ports.sendToAll({type: 'params', value: params});
 controller.stop();
-controller.getScript('test');
+controller.getScript('amazon');
 /*
 function printEvents() {
   var events = record.events;

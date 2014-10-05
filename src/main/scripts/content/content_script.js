@@ -346,7 +346,7 @@ function updateDeltas(target) {
            value: snapshotNode(lastRecordSnapshot.target)}
         ]
       },
-      state: recording
+      state: lastRecordEvent.meta.recordState
     };
     port.postMessage(update);
   }
