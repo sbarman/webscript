@@ -23,7 +23,8 @@ var createLabel;
       "background-color", 
       "preceding-text",
       "xpath",
-      "anchor"];
+      "anchor",
+      "snapshot"];
 
     // if (recording == RecordState.RECORDING) {
     //   allFeatures.push('branch');
@@ -111,7 +112,13 @@ var createLabel;
   getAnchors = function(target) {
   // function getAnchors(target) {
     var label = createLabel(target);
-    var otherConflictElements = matchLabel(label, document.body);
+    // sometimes we try to find anchors of the head element, which means the
+    // body doesnt exist
+    if (document.body)
+      var otherConflictElements = matchLabel(label, document.body);
+    else
+      var otherConflictElements = [];
+
     return {
       label: label,
       numConflicts: otherConflictElements.length

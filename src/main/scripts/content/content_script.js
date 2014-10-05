@@ -231,6 +231,7 @@ function recordEvent(eventData) {
       },
       state: lastRecordEvent.meta.recordState
     };
+    console.log('Update:', update);
     port.postMessage(update);
   }, 0);
 
@@ -346,7 +347,7 @@ function updateDeltas(target) {
            value: snapshotNode(lastRecordSnapshot.target)}
         ]
       },
-      state: recording
+      state: lastRecordEvent.meta.recordState
     };
     port.postMessage(update);
   }
