@@ -231,6 +231,7 @@ function recordEvent(eventData) {
       },
       state: lastRecordEvent.meta.recordState
     };
+    console.log('Update:', update);
     port.postMessage(update);
   }, 0);
 
