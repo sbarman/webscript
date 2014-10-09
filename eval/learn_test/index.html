@@ -1,0 +1,40 @@
+<html>
+  <head>
+    <script>
+      function sendRequest(url, callback) {
+        var oReq = new XMLHttpRequest();
+        oReq.onload = function(r) {
+          var response = oReq.responseText;
+          callback(response);
+        }
+        oReq.open("get", url, true);
+        oReq.send();
+      }
+
+      window.addEventListener('load', function() {
+        var button = document.getElementById('button');
+        button.addEventListener('click', function() {
+          var outputDiv = document.getElementById('output');
+          outputDiv.textContent = "";
+
+          sendRequest("cgi-bin/random_wait.py", function(text) {
+            outputDiv.textContent = text
+          });
+        });
+
+        function randomRequest() {
+          sendRequest('cgi-bin/request.py', function(text) {
+            setTimeout(randomRequest, Math.random() * 3000);
+          });
+        }
+        randomRequest();
+      });
+    </script>
+  </head>
+  <body>
+    <div>Testing 1</div>
+    <div><textarea id='textarea'></textarea></div>
+    <div><input type='button' id='button' value='Click'></input></div>
+    <div id= output></div>
+  </body>
+</html>

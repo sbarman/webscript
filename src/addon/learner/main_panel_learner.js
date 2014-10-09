@@ -3,7 +3,6 @@
 
 'use strict';
 
-
 // find maximum number of deltas that can be applied
 var SimpleDebug = (function SimpleDebugClosure() {
   var log = getLog('simpledebug');
@@ -32,7 +31,7 @@ var SimpleDebug = (function SimpleDebugClosure() {
     },
     runTest: function _runTest() {
       if (this.isFinished()) {
-        log.log('finished minimizing:', this.enabled, this.disabled);
+        log.debug('Finished minimizing:', this.enabled, this.disabled);
         var finished = jQuery.extend(true, [], this.orig);
         var enabled = this.enabled;
         for (var i = 0, ii = enabled.length; i < ii; ++i) {
@@ -117,6 +116,7 @@ var SimpleDebug = (function SimpleDebugClosure() {
 })();
 
 function runScript(id, events, numRuns, timeout, callback) {
+  log.debug('Running script:', id, events, numRuns, timeout);
   var runs = [];
   function runOnce() {
     if (runs.length < numRuns) {
@@ -138,6 +138,7 @@ function runScript(id, events, numRuns, timeout, callback) {
         r.finish();
       }, timeout);
     } else {
+      log.debug('Finished running script:', id, events, numRuns, timeout);
       callback(runs);
     }
   }
@@ -155,10 +156,9 @@ function collectCaptures(events) {
   return expCaptures;
 }
 
-function checkReplaySuccess(captureEvents, events, replay) {
-  // if (replay.index != events.length) {
-  //   return false;
-  // }
+function checkReplaySuccess(origEvents, replay) {
+  var captureEvents = collectCaptures(origEvents); 
+  log.debug('Check replay success:', captureEvents, origEvents, replay);
 
   var captures = replay.captures;
   for (var i = 0, ii = captureEvents.length; i < ii; ++i) {
@@ -179,8 +179,11 @@ function checkReplaySuccess(captureEvents, events, replay) {
 }
 
 function runSynthWait(scriptName) {
+  // create a unique id for this suite of replays
   var uniqueId = scriptName + ':' + (new Date()).getTime();
+  log.debug('Running synthesis on:', uniqueId);
 
+  // update the params so things will go faster
   params = jQuery.extend(true, {}, defaultParams);
   params.replay.eventTimeout = 40;
   //params.replay.defaultUser = true;
@@ -188,105 +191,134 @@ function runSynthWait(scriptName) {
   params.panel.enableEdit = false;
   controller.updateParams();
 
-  scriptServer.getScript(scriptName, function(item) {
-    var scriptId = item.id;
-    var events =  item.events;
+  scriptServer.getScript(scriptName, function(script) {
+    var scriptId = script.id;
+    var events =  script.events;
 
     scriptServer.saveScript(uniqueId, events, scriptId, 'original');
+    runSynthWait_getPassingRuns(uniqueId, script);
+  });
+}
 
-    runScript(null, events, 2, 300 * 1000, function(replays) {
+function runSynthWait_getPassingRuns(uniqueId, script) {
+  // run baseline scripts
+  // check if these scripts executed correctly
+  var passingRuns = [];
+  var reqPassingRuns = 2;
 
-      for (var i = 0, ii = replays.length; i < ii; ++i) {
-        var r = replays[i];
-        scriptServer.saveScript(uniqueId, r.events, scriptId, 'testing');
-      }
+  function getPassingRuns(callback) {
+    if (passingRuns.length >= reqPassingRuns) {
+      return callback();
+    }
+    runScript(null, events, 1, 300 * 1000, function(runs) {
+      var run = runs[0];
+      // check if passing
+      passingRuns.push(run);
+      scriptServer.saveScript(uniqueId, run.events, script.id,
+          'replay,find_trigger');
+      getPassingRuns(callback);
+    });
+  }
+  getPassingRuns(function() {
+    runSynthWait_getTriggers(uniqueId, script, passingRuns);
+  });
+}
 
-      var triggers = mapPossibleTriggerToEvent(events, replays);
-      console.log(triggers);
+function runSynthWait_getTriggers(uniqueId, script, passingRuns) {
+  var events = script.events;
+  // get trigger mapping
+  var triggers = mapPossibleTriggerToEvent(events, passingRuns);
+  log.debug("All triggers:", triggers);
 
-      var triggerChanges = [];
-      for (var i = 0, ii = events.length; i < ii; ++i) {
-        var e = events[i];
-        var id = e.meta.id;
-        if (id in triggers) {
-          var eventTriggers = triggers[id];
-          var triggerGroup = [];
-          for (var j = 0, jj = eventTriggers.length; j < jj; ++j) {
-            var triggerEvent = eventTriggers[j];
-            if (triggerEvent != 'nowait') {
-              (function() {
-                var eventId = id;
-                var triggerEventId = triggerEvent;
-                triggerGroup.push({
-                  id: 'add wait:' + eventId + ',' + triggerEventId,
-                  apply: function(origEvents) {
-                    for (var j = 0, jj = origEvents.length; j < jj; ++j) {
-                      if (origEvents[j].meta.id == eventId) {
-                        origEvents[j].timing.waitEvent = triggerEventId;
-                        origEvents[j].timing.waitTime = 0;
-                        break;
-                      }
-                    }
-                    return origEvents;
+  var triggerChanges = [];
+  for (var i = 0, ii = events.length; i < ii; ++i) {
+    var e = events[i];
+    var id = e.meta.id;
+    if (id in triggers) {
+      var eventTriggers = triggers[id];
+      var triggerGroup = [];
+      for (var j = 0, jj = eventTriggers.length; j < jj; ++j) {
+        var triggerEvent = eventTriggers[j];
+        if (triggerEvent != 'nowait') {
+          (function() {
+            var eventId = id;
+            var triggerEventId = triggerEvent;
+            triggerGroup.push({
+              id: 'add_trigger_' + eventId + '_' + triggerEventId,
+                apply: function(origEvents) {
+                for (var j = 0, jj = origEvents.length; j < jj; ++j) {
+                  if (origEvents[j].meta.id == eventId) {
+                    origEvents[j].timing.waitEvent = triggerEventId;
+                    origEvents[j].timing.waitTime = 0;
+                    break;
                   }
-                });
-              })();
-            } else {
-              (function() {
-                var eventId = id;
-                triggerGroup.push({
-                  id: 'remove wait:' + eventId,
-                  apply: function(origEvents) {
-                    for (var j = 0, jj = origEvents.length; j < jj; ++j) {
-                      if (origEvents[j].meta.id == eventId) {
-                        origEvents[j].timing.waitTime = 0;
-                        break;
-                      }
-                    }
-                    return origEvents;
+                }
+                return origEvents;
+              }
+            });
+          })();
+        } else {
+          (function() {
+            var eventId = id;
+            triggerGroup.push({
+              id: 'no_wait_' + eventId,
+              apply: function(origEvents) {
+                for (var j = 0, jj = origEvents.length; j < jj; ++j) {
+                  if (origEvents[j].meta.id == eventId) {
+                    origEvents[j].timing.waitTime = 0;
+                    break;
                   }
-                });
-              })();
-            }
-          }
-          triggerChanges.push(triggerGroup);
+                }
+                return origEvents;
+              }
+            });
+          })();
         }
       }
+      triggerChanges.push(triggerGroup);
+    }
+  }
+  runSynthWait_main(uniqueId, script, passingRuns, triggerChanges);
+}
 
-      // test whether the modified script still passes
-      var captureEvents = collectCaptures(events);
-      function testScript(modifiedEvents, enabled, delta, callback) {
-        // lets make it replay a bit harder
-        // params.replay.defaultWaitNewTab = 100;
-        // params.replay.targetTimeout = 1;
-        controller.updateParams();
+function runSynthWait_main(uniqueId, script, passingRuns, triggerChanges) {
+  var events = script.events;
+  var scriptId = script.id;
 
-        scriptServer.saveScript(uniqueId + ':' + delta.id, modifiedEvents, scriptId, 'original');
+  // test whether the modified script still passes
+  var captureEvents = collectCaptures(events);
+  function testScript(modifiedEvents, enabled, delta, callback) {
+    // lets make it replay a bit harder
+    // params.replay.defaultWaitNewTab = 100;
+    // params.replay.targetTimeout = 1;
+    // controller.updateParams();
 
-        runScript(null, modifiedEvents, 2, 300 * 1000,
-            function(replays) {
-              var passed = true;
+    scriptServer.saveScript(uniqueId, modifiedEvents, scriptId,
+        'original,' + delta.id);
 
-              for (var i = 0, ii = replays.length; i < ii; ++i) {
-                var r = replays[i];
-                var pass = checkReplaySuccess(captureEvents, modifiedEvents, r);
+    runScript(null, modifiedEvents, 2, 300 * 1000,
+        function(replays) {
+          var passed = true;
 
-                scriptServer.saveScript(uniqueId + ':' + delta.id, r.events, scriptId, 'testing:' + pass);
-                passed = passed && pass;
-              }
-              callback(passed);
-            });
-      }
+          for (var i = 0, ii = replays.length; i < ii; ++i) {
+            var r = replays[i];
+            var pass = checkReplaySuccess(events, r);
 
-      console.log('trying to synthesize waits:');
-      var debug = new SimpleDebug(events, triggerChanges, true, true, testScript,
-          function(debug) {
-            console.log(debug);
-            scriptServer.saveScript(uniqueId + ':final', debug.finished, scriptId, 'trigger synthesized');
-          });
-      debug.run();
-    });
-  });
+            scriptServer.saveScript(uniqueId, r.events, scriptId,
+                'replay,' + delta.id + ',' + pass);
+            passed = passed && pass;
+          }
+          callback(passed);
+        });
+  }
+
+  log.debug('Trying to synthesize waits');
+  var debug = new SimpleDebug(events, triggerChanges, true, true, testScript,
+      function(debug) {
+        console.log(debug);
+        scriptServer.saveScript(uniqueId, debug.finished, scriptId, 'final');
+      });
+  debug.run();
 }
 
 function getCompletedUrls(replay) {
@@ -329,13 +361,3 @@ function mapPossibleTriggerToEvent(orig, replays) {
   return mapping;
 }
 
-function runScriptLearn(scriptId) {
-  scriptServer.getScript(scriptName, function(item) {
-    var scriptId = item.id;
-    var events =  item.events;
-
-    runScript(null, events, 1, 300 * 1000, function(replays) {
-      console.log(replays);
-    })
-  });
-}

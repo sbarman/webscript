@@ -1403,7 +1403,7 @@ chrome.webRequest.onCompleted.addListener(function(details) {
 
 ports.sendToAll({type: 'params', value: params});
 controller.stop();
-controller.getScript('amazon');
+controller.getScript('test');
 /*
 function printEvents() {
   var events = record.events;

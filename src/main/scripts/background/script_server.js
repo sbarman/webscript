@@ -51,6 +51,8 @@ var ScriptServer = (function ScriptServerClosure() {
             }, this.timeout);
             break;
         }
+      } else {
+        scriptLog.debug('Finished processing queue');
       }
     },
     retry: function _retry(item) {
@@ -120,7 +122,7 @@ var ScriptServer = (function ScriptServerClosure() {
           scriptServer.retry(item);
         },
         success: function(data, textStatus, jqXHR) {
-          scriptLog.log(data, jqXHR, textStatus);
+          scriptLog.log('Saved script:', data, jqXHR, textStatus);
 
           var scriptId = data.id;
           scriptServer.saveEvents(scriptId, events);
@@ -266,7 +268,7 @@ var ScriptServer = (function ScriptServerClosure() {
           cont(null);
         },
         success: function(data, textStatus, jqXHR) {
-          scriptLog.info('Got script:', data, textStatus, jqXHR);
+          scriptLog.debug('Got script:', data, textStatus, jqXHR);
           var scripts = data;
           if (scripts.length != 0) {
             // find the lastest script saved with this name
