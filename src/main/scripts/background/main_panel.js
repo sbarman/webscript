@@ -658,6 +658,8 @@ var Replay = (function ReplayClosure() {
       if (typeof time == 'undefined')
         time = this.getNextTime();
 
+      replayLog.debug('Set timeout:', time);
+
       var replay = this;
       this.callbackHandle = setTimeout(function() {
         replay.guts();
@@ -944,7 +946,7 @@ var Replay = (function ReplayClosure() {
       var replayFunctionName = this.replayableEvents[type];
       var replayFunction = this[replayFunctionName];
       if (!replayFunction) {
-        replayLog.debug('Skipping event (no replay function):', type, e);
+        replayLog.info('Skipping event (no replay function):', type, e);
         this.incrementIndex();
         this.setNextTimeout(0);
         return;

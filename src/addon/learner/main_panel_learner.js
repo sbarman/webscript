@@ -123,9 +123,29 @@ function runScript(id, events, numRuns, timeout, callback) {
       var r = controller.replayScript(events, {}, function(replay) {
         clearTimeout(timeoutId);
 
+        // remove any tabs related with the replay, so that web requests don't
+        // from these tabs don't show up in future replays
+        var events = replay.record.events;
+        var allTabs = [];
+        for (var i = 0, ii = events.length; i < ii; ++i) {
+          var e = events[i];
+          var tab = "";
+          if (e.frame && e.frame.tab)
+            tab = e.frame.tab;
+          if (e.data && e.data.tabId)
+            tab = e.data.tabId;
+
+          if (tab && allTabs.indexOf(tab) < 0)
+            allTabs.push(tab);
+        }
+
+        for (var i = 0, ii = allTabs.length; i < ii; ++i) {
+          chrome.tabs.remove(parseInt(allTabs[i]));
+        }
+
         var run = {
           index: replay.index,
-          events: $.extend([], replay.record.events),
+          events: $.extend([], events),
           captures: $.extend([], replay.captures)
         };
         runs.push(run);
@@ -205,6 +225,7 @@ function runSynthWait_getPassingRuns(uniqueId, script) {
   // check if these scripts executed correctly
   var passingRuns = [];
   var reqPassingRuns = 2;
+  var events = script.events;
 
   function getPassingRuns(callback) {
     if (passingRuns.length >= reqPassingRuns) {
@@ -212,8 +233,10 @@ function runSynthWait_getPassingRuns(uniqueId, script) {
     }
     runScript(null, events, 1, 300 * 1000, function(runs) {
       var run = runs[0];
-      // check if passing
-      passingRuns.push(run);
+      // check if run passed
+      if (checkReplaySuccess(events, run))
+        passingRuns.push(run);
+
       scriptServer.saveScript(uniqueId, run.events, script.id,
           'replay,find_trigger');
       getPassingRuns(callback);
@@ -224,10 +247,12 @@ function runSynthWait_getPassingRuns(uniqueId, script) {
   });
 }
 
+var triggers = [];
 function runSynthWait_getTriggers(uniqueId, script, passingRuns) {
   var events = script.events;
   // get trigger mapping
-  var triggers = mapPossibleTriggerToEvent(events, passingRuns);
+  triggers = mapPossibleTriggerToEvent(events, passingRuns);
+  localStorage.setItem('triggers', JSON.stringify(triggers));
   log.debug("All triggers:", triggers);
 
   var triggerChanges = [];
@@ -281,12 +306,15 @@ function runSynthWait_getTriggers(uniqueId, script, passingRuns) {
   runSynthWait_main(uniqueId, script, passingRuns, triggerChanges);
 }
 
+// store all the replays
+var learningReplays = [];
 function runSynthWait_main(uniqueId, script, passingRuns, triggerChanges) {
   var events = script.events;
   var scriptId = script.id;
 
+  learningReplays = [];
+
   // test whether the modified script still passes
-  var captureEvents = collectCaptures(events);
   function testScript(modifiedEvents, enabled, delta, callback) {
     // lets make it replay a bit harder
     // params.replay.defaultWaitNewTab = 100;
@@ -302,6 +330,7 @@ function runSynthWait_main(uniqueId, script, passingRuns, triggerChanges) {
 
           for (var i = 0, ii = replays.length; i < ii; ++i) {
             var r = replays[i];
+            learningReplays.push(r);
             var pass = checkReplaySuccess(events, r);
 
             scriptServer.saveScript(uniqueId, r.events, scriptId,
@@ -317,6 +346,7 @@ function runSynthWait_main(uniqueId, script, passingRuns, triggerChanges) {
       function(debug) {
         console.log(debug);
         scriptServer.saveScript(uniqueId, debug.finished, scriptId, 'final');
+        localStorage.setItem('learningReplays', JSON.stringify(learningReplays));
       });
   debug.run();
 }
