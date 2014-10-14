@@ -187,16 +187,20 @@ function recordEvent(eventData) {
   /* record all properties of the event object */
   if (params.record.allEventProps) {
     for (var prop in eventData) {
-      try {
-        var value = eventData[prop];
-        var t = typeof(value);
-        if (t == 'number' || t == 'boolean' || t == 'string' || 
-            t == 'undefined') {
-          data[prop] = value;
+      // check if its a constant by seeing if property name starts with a
+      // lower case letter
+      if (prop[0] === prop[0].toUpperCase()) {
+        try {
+          var value = eventData[prop];
+          var t = typeof(value);
+          if (t == 'number' || t == 'boolean' || t == 'string' || 
+              t == 'undefined') {
+            data[prop] = value;
+          }
+        } catch (err) {
+          recordLog.error('[' + frameId + '] error recording property:', prop,
+              err);
         }
-      } catch (err) {
-        recordLog.error('[' + frameId + '] error recording property:', prop, 
-            err);
       }
     }
   /* only record the default event properties */
@@ -774,7 +778,12 @@ function addListenersForRecording() {
  * added to the page. We will remove the unwanted handlers once params is
  * updated */
 addListenersForRecording();
+window.addEventListener('load', recordLoad, true);
 document.addEventListener('load', recordLoad, true);
+document.addEventListener('DOMContentLoaded', recordLoad, true);
+window.onload = recordLoad;
+document.onload = recordLoad;
+
 
 /* need to check if we are in an iframe */
 var value = {};
