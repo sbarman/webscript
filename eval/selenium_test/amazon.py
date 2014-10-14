@@ -28,13 +28,16 @@ def scrapePrice(site):
     colors = driver.find_elements_by_xpath('//form[@id="twister"]//img')
     if colors:
       for color in colors:
-        color.click()
-        colorText = color.get_attribute('alt')
-        print colorText
-        title = driver.find_element_by_id("productTitle")
-        WebDriverWait(driver, 10).until(EC.text_to_be_present_in_element((By.ID,
-          "productTitle"),
-          colorText))
+        try:
+          color.click()
+          colorText = color.get_attribute('alt')
+          print colorText
+          title = driver.find_element_by_id("productTitle")
+          WebDriverWait(driver, 10).until(EC.text_to_be_present_in_element(
+            (By.ID, "productTitle"), colorText))
+        except:
+          print "problem clicking"
+
         try:
           inputElement = driver.find_element_by_id("priceblock_ourprice")
 
