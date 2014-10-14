@@ -19,10 +19,13 @@ def scrapePrice(site):
     print driver.title
     
     # find the element that's name attribute is q (the google search box)
-    inputElement = driver.find_element_by_id("priceblock_ourprice")
-    print inputElement.text
+    try:
+      inputElement = driver.find_element_by_id("priceblock_ourprice")
+      print inputElement.text
+    except:
+      print "no element"
 
-    colors =  driver.find_elements_by_xpath('//form[@id="twister"]//img')
+    colors = driver.find_elements_by_xpath('//form[@id="twister"]//img')
     if colors:
       for color in colors:
         color.click()
@@ -41,11 +44,17 @@ def scrapePrice(site):
     else:
       print "no colors"
     
-    
-    try:
-        # WebDriverWait(driver, 10).until(EC.title_contains("cheese!"))
-        pass
-    finally:
-        driver.quit()
+driver.get(top_site)
+WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.ID, "resultsCol")))
+import time
+time.sleep(2)
 
-scrapePrice(camera_site)
+links = driver.find_elements_by_xpath('//h3[@class="newaps"]/a')
+links = [a.get_attribute('href') for a in links]
+print links
+for link in links:
+  scrapePrice(link)
+    
+
+#scrapePrice(camera_site)
+#driver.quit()
