@@ -482,7 +482,7 @@ var Replay = (function ReplayClosure() {
 
       if (config) {
         if (config.scriptId)
-          this.scriptId = condif.scriptId;
+          this.scriptId = config.scriptId;
         
         if (config.frameMapping) {
           var frameMapping = config.frameMapping;

@@ -6,6 +6,11 @@
 /* Convert a node to a xpath expression representing the path from the
  * document element */
 function nodeToXPath(element) {
+  if (!element.tagName) {
+    getLog('misc').error('No tag name.');
+    return "";
+  }
+
   if (element.tagName.toLowerCase() === 'html')
     return element.tagName;
 
