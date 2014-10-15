@@ -285,91 +285,94 @@ var Panel = (function PanelClosure() {
 
       var eventDiv = $('<div/>', {class: 'event wordwrap', id: id});
 
-      var title = $('<div><b>[' + id + ']type:' + '</b>' + type + '</div>');
-      var panel = this;
-      title.click(function(e) {
-        panel.updateSelectedEvents(e);
-      });
-      eventDiv.append(title);
-
-
-      function addInfo(field, value) {
-        eventDiv.append('<b>' + field + ':</b>' + value + '<br/>');
-      }
-
-      if (type == 'dom') {
-        addInfo('type', eventInfo.data.type);
-        addInfo('xpath', eventInfo.target.xpath);
-        addInfo('URL' ,eventInfo.frame.URL);
-        addInfo('port', eventInfo.frame.port);
-      } else if (type == 'capture') {
-        addInfo('xpath', eventInfo.target.xpath);
-        addInfo('URL' ,eventInfo.frame.URL);
-        addInfo('port', eventInfo.frame.port);
-      }
-
-      function toggle(e) {
-        $(e.target).next().toggle(300);
-      };
-
-      function createMenu(obj, idPrefix) {
-        var topDiv = $('<div/>');
-        for (var key in obj) {
-          var val = obj[key];
-          if (typeof val == 'object'/* && key != 'snapshot'*/) {
-            var catDiv = $('<div/>');
-            var title = $('<div/>', {class: 'catTitle'});
-            title.text(key);
-            title.click(toggle);
-            var menu = createMenu(val, idPrefix + '.' + key);
-
-            catDiv.append(title);
-            catDiv.append(menu);
-            menu.hide();
-            menu.addClass('catMenu');
-            topDiv.append(catDiv);
-          } else {
-            var propDiv = $('<div/>');
-            propDiv.append('<b>' + key + ':' + '</b>');
-            var valSpan = $('<span/>',
-                            {class: 'editable', id: idPrefix + '.' + key});
-            valSpan.text(val);
-            propDiv.append(valSpan);
-            propDiv.append('<br/>');
-            topDiv.append(propDiv);
-          }
-        }
-        return topDiv;
-      }
-
       if (index + 1 < events.length) {
         var postEventId = events[index + 1].meta.id;
         $('#'+ postEventId).before(eventDiv);
       } else {
         $('#events').append(eventDiv);
       }
+ 
+      // do this in a timeout so it doesn't block the main thread
+      setTimeout(function() {
+        var title = $('<div><b>[' + id + ']type:' + '</b>' + type + '</div>');
+        var panel = this;
+        title.click(function(e) {
+          panel.updateSelectedEvents(e);
+        });
+        eventDiv.append(title);
 
-      if (params.panel.enableEdit) {
-        eventDiv.append(createMenu(eventInfo, id));
 
-        var controller = this.controller;
-        var edited = function(value, settings) {
-          var id = this.id;
-          var parts = id.split('.');
-          var event = parts[0];
-          var field = parts.slice(1).join('.');
-          controller.userUpdate(event, field, value);
-          return value;
+        function addInfo(field, value) {
+          eventDiv.append('<b>' + field + ':</b>' + value + '<br/>');
+        }
+
+        if (type == 'dom') {
+          addInfo('type', eventInfo.data.type);
+          addInfo('xpath', eventInfo.target.xpath);
+          addInfo('URL' ,eventInfo.frame.URL);
+          addInfo('port', eventInfo.frame.port);
+        } else if (type == 'capture') {
+          addInfo('xpath', eventInfo.target.xpath);
+          addInfo('URL' ,eventInfo.frame.URL);
+          addInfo('port', eventInfo.frame.port);
+        }
+
+        function toggle(e) {
+          $(e.target).next().toggle(300);
         };
 
-        eventDiv.find('span.editable').editable(edited, {
-          type: 'textarea',
-          width: '100%',
-          cancel: 'Cancel',
-          submit: 'OK',
-          tooltip: 'Click to edit...'
-        });
-      }
+        function createMenu(obj, idPrefix) {
+          var topDiv = $('<div/>');
+          for (var key in obj) {
+            var val = obj[key];
+            if (typeof val == 'object'/* && key != 'snapshot'*/) {
+              var catDiv = $('<div/>');
+              var title = $('<div/>', {class: 'catTitle'});
+              title.text(key);
+              title.click(toggle);
+              var menu = createMenu(val, idPrefix + '.' + key);
+
+              catDiv.append(title);
+              catDiv.append(menu);
+              menu.hide();
+              menu.addClass('catMenu');
+              topDiv.append(catDiv);
+            } else {
+              var propDiv = $('<div/>');
+              propDiv.append('<b>' + key + ':' + '</b>');
+              var valSpan = $('<span/>',
+                              {class: 'editable', id: idPrefix + '.' + key});
+              valSpan.text(val);
+              propDiv.append(valSpan);
+              propDiv.append('<br/>');
+              topDiv.append(propDiv);
+            }
+          }
+          return topDiv;
+        }
+
+        if (params.panel.enableEdit) {
+          eventDiv.append(createMenu(eventInfo, id));
+
+          var controller = this.controller;
+          var edited = function(value, settings) {
+            var id = this.id;
+            var parts = id.split('.');
+            var event = parts[0];
+            var field = parts.slice(1).join('.');
+            controller.userUpdate(event, field, value);
+            return value;
+          };
+
+          eventDiv.find('span.editable').editable(edited, {
+            type: 'textarea',
+            width: '100%',
+            cancel: 'Cancel',
+            submit: 'OK',
+            tooltip: 'Click to edit...'
+          });
+        }
+      }, 0);
     },
     addMessage: function _addMessage(message) {
       var newDiv = $('<div/>', {class: 'message wordwrap'});

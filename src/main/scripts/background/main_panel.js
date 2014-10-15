@@ -1209,6 +1209,7 @@ var Controller = (function ControllerClosure() {
       this.record.addNextLoop(eventIds);
     },
     saveScript: function(name) {
+      chrome.storage.local.set({scriptName: name});
       ctlLog.log('Saving script');
       var events = this.record.getEvents();
       this.scriptServer.saveScript(name, events, null, "");
@@ -1218,7 +1219,10 @@ var Controller = (function ControllerClosure() {
       var controller = this;
       this.scriptServer.getScript(name,
           function(script) {
-            controller.setEvents(script.id, script.events);
+            if (script) {
+              chrome.storage.local.set({scriptName: name});
+              controller.setEvents(script.id, script.events);
+            }
           });
     },
     setEvents: function(scriptId, events) {
@@ -1405,7 +1409,12 @@ chrome.webRequest.onCompleted.addListener(function(details) {
 
 ports.sendToAll({type: 'params', value: params});
 controller.stop();
-controller.getScript('test');
+
+chrome.storage.local.get('scriptName', function(info) {
+  var name = info.scriptName;
+  if (name)
+    controller.getScript(name);
+});
 /*
 function printEvents() {
   var events = record.events;

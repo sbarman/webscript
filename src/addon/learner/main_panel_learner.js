@@ -247,12 +247,12 @@ function runSynthWait_getPassingRuns(uniqueId, script) {
   });
 }
 
-var triggers = [];
+var learningTriggers = [];
 function runSynthWait_getTriggers(uniqueId, script, passingRuns) {
   var events = script.events;
   // get trigger mapping
-  triggers = mapPossibleTriggerToEvent(events, passingRuns);
-  localStorage.setItem('triggers', JSON.stringify(triggers));
+  var triggers = mapPossibleTriggerToEvent(events, passingRuns);
+  learningTriggers = triggers;
   log.debug("All triggers:", triggers);
 
   var triggerChanges = [];
@@ -303,12 +303,12 @@ function runSynthWait_getTriggers(uniqueId, script, passingRuns) {
       triggerChanges.push(triggerGroup);
     }
   }
-  runSynthWait_main(uniqueId, script, passingRuns, triggerChanges);
+  runSynthWait_main(uniqueId, script, triggerChanges);
 }
 
 // store all the replays
 var learningReplays = [];
-function runSynthWait_main(uniqueId, script, passingRuns, triggerChanges) {
+function runSynthWait_main(uniqueId, script, triggerChanges) {
   var events = script.events;
   var scriptId = script.id;
 
@@ -344,11 +344,42 @@ function runSynthWait_main(uniqueId, script, passingRuns, triggerChanges) {
   log.debug('Trying to synthesize waits');
   var debug = new SimpleDebug(events, triggerChanges, true, true, testScript,
       function(debug) {
-        console.log(debug);
+        log.debug(debug);
         scriptServer.saveScript(uniqueId, debug.finished, scriptId, 'final');
-        localStorage.setItem('learningReplays', JSON.stringify(learningReplays));
+        saveReplayInfo();
+        learnFromReplays(uniqueId, script);
       });
   debug.run();
+}
+
+function saveReplayInfo() {
+  chrome.storage.local.set({
+    learningReplays: learningReplays,
+    learningTriggers: learningTriggers
+  })
+}
+
+function loadReplayInfo() {
+  chrome.storage.local.get(["learningReplays", "learningTriggers"], 
+      function(info) {
+        learningReplays = info.learningReplays;
+        learningTriggers = info.learningTriggers;
+      }
+  );
+}
+
+function learnFromReplays(uniqueId, script) {
+  var replays = learningReplays;
+  var triggers = learningTriggers;
+  var filteredTriggers = {};
+  for (e in triggers) {
+    var t = triggers[e].filter(function(v) {
+        return v != 'nowait';
+    });
+    if (t.length != 0)
+      filteredTriggers[e] = t;
+  }
+  triggers = filteredTriggers
 }
 
 function getCompletedUrls(replay) {
