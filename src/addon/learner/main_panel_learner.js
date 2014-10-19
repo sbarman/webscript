@@ -249,6 +249,31 @@ function runSynthWait_getPassingRuns(uniqueId, script) {
 
 var learningTriggers = [];
 function runSynthWait_getTriggers(uniqueId, script, passingRuns) {
+  // given a script, modify script so that eventId fires immediately after
+  // the previous event
+  function clearWaits(events, eventId, triggerEventId) {
+    var lastEventIndex = 0;
+    var eventIndex = -1;
+
+    for (var j = 0, jj = events.length; j < jj; ++j) {
+      var e = events[j];
+      if (e.meta.id == eventId) {
+        eventIndex = j;
+        break;
+      } else if (e.type == 'dom' || e.type == 'capture') {
+        lastEventIndex = j;
+      }
+    }
+
+    for (var j = lastEventIndex + 1; j <= eventIndex; ++j)  
+      events[j].timing.waitTime = 0;
+    
+    if (typeof triggerEventId == 'string')
+      events[eventIndex].timing.waitEvent = triggerEventId;
+
+    return events;
+  }
+
   var events = script.events;
   // get trigger mapping
   var triggers = mapPossibleTriggerToEvent(events, passingRuns);
@@ -270,15 +295,8 @@ function runSynthWait_getTriggers(uniqueId, script, passingRuns) {
             var triggerEventId = triggerEvent;
             triggerGroup.push({
               id: 'add_trigger_' + eventId + '_' + triggerEventId,
-                apply: function(origEvents) {
-                for (var j = 0, jj = origEvents.length; j < jj; ++j) {
-                  if (origEvents[j].meta.id == eventId) {
-                    origEvents[j].timing.waitEvent = triggerEventId;
-                    origEvents[j].timing.waitTime = 0;
-                    break;
-                  }
-                }
-                return origEvents;
+              apply: function(origEvents) {
+                return clearWaits(origEvents, eventId, triggerEventId);
               }
             });
           })();
@@ -288,13 +306,7 @@ function runSynthWait_getTriggers(uniqueId, script, passingRuns) {
             triggerGroup.push({
               id: 'no_wait_' + eventId,
               apply: function(origEvents) {
-                for (var j = 0, jj = origEvents.length; j < jj; ++j) {
-                  if (origEvents[j].meta.id == eventId) {
-                    origEvents[j].timing.waitTime = 0;
-                    break;
-                  }
-                }
-                return origEvents;
+                return clearWaits(origEvents, eventId);
               }
             });
           })();
