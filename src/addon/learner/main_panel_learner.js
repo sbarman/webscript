@@ -277,6 +277,12 @@ function runSynthWait_getTriggers(uniqueId, script, passingRuns) {
   var events = script.events;
   // get trigger mapping
   var triggers = mapPossibleTriggerToEvent(events, passingRuns);
+  // remove all the other trigger events that aren't really used
+  var filteredEvents = clearUnusedTriggers(script.events, triggers);
+  script.events = filtereEvents;
+  scriptServer.saveScript(uniqueId, events, scriptId, 'filtered');
+
+  // save to global variable so we can mess around on console
   learningTriggers = triggers;
   log.debug("All triggers:", triggers);
 
