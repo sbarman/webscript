@@ -198,6 +198,7 @@ function checkReplaySuccess(origEvents, replay) {
   return true;
 }
 
+var learningScript = null;
 function runSynthWait(scriptName) {
   // create a unique id for this suite of replays
   var uniqueId = scriptName + ':' + (new Date()).getTime();
@@ -216,6 +217,7 @@ function runSynthWait(scriptName) {
     var events =  script.events;
 
     scriptServer.saveScript(uniqueId, events, scriptId, 'original');
+    learningScript = script;
     runSynthWait_getPassingRuns(uniqueId, script);
   });
 }
@@ -249,38 +251,14 @@ function runSynthWait_getPassingRuns(uniqueId, script) {
 
 var learningTriggers = [];
 function runSynthWait_getTriggers(uniqueId, script, passingRuns) {
-  // given a script, modify script so that eventId fires immediately after
-  // the previous event
-  function clearWaits(events, eventId, triggerEventId) {
-    var lastEventIndex = 0;
-    var eventIndex = -1;
-
-    for (var j = 0, jj = events.length; j < jj; ++j) {
-      var e = events[j];
-      if (e.meta.id == eventId) {
-        eventIndex = j;
-        break;
-      } else if (e.type == 'dom' || e.type == 'capture') {
-        lastEventIndex = j;
-      }
-    }
-
-    for (var j = lastEventIndex + 1; j <= eventIndex; ++j)  
-      events[j].timing.waitTime = 0;
-    
-    if (typeof triggerEventId == 'string')
-      events[eventIndex].timing.waitEvent = triggerEventId;
-
-    return events;
-  }
-
   var events = script.events;
+
   // get trigger mapping
   var triggers = mapPossibleTriggerToEvent(events, passingRuns);
   // remove all the other trigger events that aren't really used
   var filteredEvents = clearUnusedTriggers(script.events, triggers);
+  scriptServer.saveScript(uniqueId, filteredEvents, scriptId, 'filtered');
   script.events = filtereEvents;
-  scriptServer.saveScript(uniqueId, events, scriptId, 'filtered');
 
   // save to global variable so we can mess around on console
   learningTriggers = triggers;
@@ -372,14 +350,17 @@ function runSynthWait_main(uniqueId, script, triggerChanges) {
 
 function saveReplayInfo() {
   chrome.storage.local.set({
+    learningScript: learningScript,
     learningReplays: learningReplays,
     learningTriggers: learningTriggers
-  })
+  });
 }
 
 function loadReplayInfo() {
-  chrome.storage.local.get(["learningReplays", "learningTriggers"], 
+  chrome.storage.local.get(["learningReplays", "learningTriggers",
+      "learningScript"], 
       function(info) {
+        learningScript = info.learningScript;
         learningReplays = info.learningReplays;
         learningTriggers = info.learningTriggers;
       }
@@ -416,6 +397,50 @@ function getPossibleTriggerUrls(replays) {
     });
   }
   return intersectList;
+}
+
+function clearUnusedTriggers(events, triggerMapping) {
+  var triggerEvents = [];
+  for (var userEvent in triggerMapping) {
+    var triggers = triggerMapping[userEvent];
+    for (var i = 0, ii = triggers.length; i < ii; ++i)
+      triggerEvents.push(triggers[i]);
+  }
+
+  var filteredEvents = [];
+  for (var i = 0, ii = events.length; i < ii; ++i) {
+    var e = events[i];
+    if (e.type == 'dom' || e.type == 'capture' || 
+        triggerEvents.indexOf(e.meta.id) >= 0) {
+      filteredEvents.push(e);
+    }
+  }
+  return filteredEvents;
+}
+
+// given a script, modify script so that eventId fires immediately after
+// the previous event
+function clearWaits(events, eventId, triggerEventId) {
+  var lastEventIndex = 0;
+  var eventIndex = -1;
+
+  for (var j = 0, jj = events.length; j < jj; ++j) {
+    var e = events[j];
+    if (e.meta.id == eventId) {
+      eventIndex = j;
+      break;
+    } else if (e.type == 'dom' || e.type == 'capture') {
+      lastEventIndex = j;
+    }
+  }
+
+  for (var j = lastEventIndex + 1; j <= eventIndex; ++j)  
+    events[j].timing.waitTime = 0;
+  
+  if (typeof triggerEventId == 'string')
+    events[eventIndex].timing.waitEvent = triggerEventId;
+
+  return events;
 }
 
 function mapPossibleTriggerToEvent(orig, replays) {
