@@ -976,6 +976,8 @@ var Replay = (function ReplayClosure() {
         if (!replayPort)
           return;
 
+        // TODO: generalize so it works for captures
+
         /* if there is a trigger, then check if trigger was observed */
         var triggerEvent = this.getEvent(v.timing.triggerEvent);
         if (triggerEvent) {
@@ -1004,30 +1006,41 @@ var Replay = (function ReplayClosure() {
         if (triggerCondition) {
           var recordEvents = this.record.events;
 
-          var matched = false;
-          var startSeen = false;
-          if (!triggerCondition.start)
-            startSeen = true;
+          for (var j = 0, jj = triggerCondition.length; j < jj; ++j) {
 
-          for (var i = recordEvents.length - 1; i >= 0; --i) {
-            var e = recordEvents[i];
-            if (e.meta.recordId == triggerCondititon.start) {
-              startSeen = true;
+            var getPrefix = function(url) {
+              var a = $('<a>', {href:url})[0];
+              return a.hostname + a.pathname;
             }
 
-            if (startSeen && e.type == "completed") {
-              var a = $('<a>', {href:e.data.url})[0];
-              var prefix = a.hostname + a.pathname;
-              if (prefix == triggerCondition.prefix) {
-                matched = true;
-                break;
+            var trigger = triggerCondition[j];
+            var triggerEvent = this.getEvent(trigger.eventId);
+            var triggerPrefix = getPrefix(triggerEvent.data.url);
+
+            var matched = false;
+            var startSeen = false;
+            if (!trigger.start)
+              startSeen = true;
+
+            for (var i = recordEvents.length - 1; i >= 0; --i) {
+              var e = recordEvents[i];
+              if (e.meta.recordId && e.meta.recordId == trigger.start) {
+                startSeen = true;
+              }
+
+              if (startSeen && e.type == "completed") {
+                var prefix = getPrefix(e.data.url);
+                if (prefix == triggerPrefix) {
+                  matched = true;
+                  break;
+                }
               }
             }
-          }
 
-          if (!matched) {
-            this.setNextTimeout(params.replay.defaultWait);
-            return;
+            if (!matched) {
+              this.setNextTimeout(params.replay.defaultWait);
+              return;
+            }
           }
         }
 

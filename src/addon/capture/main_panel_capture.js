@@ -57,6 +57,7 @@ Replay.prototype.simulateCapture = function _simulateCapture(v) {
   try {
     replayPort.postMessage({type: 'simulateCapture', value: v});
     this.replayState = ReplayState.ACK;
+    this.ack = null;
 
     this.firstEventReplayed = true;
 

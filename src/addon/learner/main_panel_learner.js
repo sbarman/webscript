@@ -393,18 +393,18 @@ function checkReplaySuccess(origEvents, replay) {
 
 // augment run script so that it only returns passing scripts
 function runScriptPassing(events, numRuns, timeout, callback) {
-  function runOnce(runs) {
-    if (runs.length < numRuns) {
+  function runOnce(allRuns) {
+    if (allRuns.length < numRuns) {
       runScript(events, 1, timeout, function(err, runs) {
         var run = runs[0];
         if (checkReplaySuccess(events, run)) {
           // add run
-          runs.push(run);
+          allRuns.push(run);
         }
-        return runOnce(runs);
+        return runOnce(allRuns);
       });
     } else {
-      return callback(null, runs);
+      return callback(null, allRuns);
     }
   }
   return runOnce([]);
@@ -521,6 +521,17 @@ function getPotentialTriggers(origEvents, passingRuns) {
       var eventIdx = run.index;
       var events = run.events;
       var prefixToTrigger = run.prefixToTrigger;
+
+      // check if current event exists in the replay
+      var exists = false;
+      for (var j = 0, jj = events.length; j < jj; ++j) {
+        if (events[j].meta.recordId == curEventId) {
+          exists = true;
+          break;
+        }
+      }
+      if (!exists)
+        return;
 
       while (events[eventIdx].meta.recordId != curEventId) {
         if (isTriggerEvent(events[eventIdx])) {
@@ -805,13 +816,14 @@ function learnTriggers(uniqueId, script) {
   var learningTriggers = [];
   var learningPassingRuns = [];
 
+  var numInitialRuns = 4;
   var numRuns = 2;
   var timeout = 300 * 1000; // 5 minutes
   var scriptId = script.id;
 
   // get passing runs of the script
   scriptServer.saveScript(uniqueId, script.events, scriptId, 'original');
-  runScriptPassing(script.events, numRuns, timeout, function(err, runs) {
+  runScriptPassing(script.events, numInitialRuns, timeout, function(err, runs) {
     learningReplays.push(runs);
     for (var i = 0, ii = runs.length; i < ii; ++i) {
       scriptServer.saveScript(uniqueId, runs[i].events, scriptId,
@@ -909,6 +921,10 @@ function learnTriggers(uniqueId, script) {
         }
 
         if (allPassed) {
+
+          if (userEventId == "event271")
+            console.log("here");
+
           // find all triggers before the current user event
           var updatedTriggers = getPotentialTriggers(testEvents, runs);
           var userEvents = testEvents.filter(isUserEvent); 
