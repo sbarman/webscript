@@ -52,8 +52,10 @@ var createLabel;
         case "left":
         case "width":
         case "height":
-          var rect = target.getBoundingClientRect();
-          targetInfo[feature] = rect[feature];
+          if (target.getBoundingClientRect) {
+            var rect = target.getBoundingClientRect();
+            targetInfo[feature] = rect[feature];
+          }
           break;
         case "tagName":
         case "className":
@@ -64,7 +66,8 @@ var createLabel;
           break;
         default:
           var style = getComputedStyle(target, null);
-          targetInfo[feature] = style.getPropertyValue(feature);
+          if (style)
+            targetInfo[feature] = style.getPropertyValue(feature);
       }
     }
     return targetInfo;

@@ -801,7 +801,7 @@ function runSynthWait2(scriptName) {
   params = jQuery.extend(true, {}, defaultParams);
   params.replay.eventTimeout = 40;
   //params.replay.defaultUser = true;
-  params.replay.timingStrategy = TimingStrategy.SLOWER;
+  // params.replay.timingStrategy = TimingStrategy.SLOWER;
   params.panel.enableEdit = false;
   controller.updateParams();
 
@@ -921,10 +921,6 @@ function learnTriggers(uniqueId, script) {
         }
 
         if (allPassed) {
-
-          if (userEventId == "event271")
-            console.log("here");
-
           // find all triggers before the current user event
           var updatedTriggers = getPotentialTriggers(testEvents, runs);
           var userEvents = testEvents.filter(isUserEvent); 
@@ -967,6 +963,7 @@ function learnTriggers(uniqueId, script) {
       });
     }
     testTriggersLoop(-1);
+    return;
   }
 }
 

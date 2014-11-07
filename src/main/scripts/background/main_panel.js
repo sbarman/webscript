@@ -955,6 +955,72 @@ var Replay = (function ReplayClosure() {
 
       replayFunction.call(this, e);
     },
+    triggerCheck: function _triggerCheck(v) {
+      /* if there is a trigger, then check if trigger was observed */
+      var triggerEvent = this.getEvent(v.timing.triggerEvent);
+      if (triggerEvent) {
+        var recordEvents = this.record.events;
+
+        var matchedEvent = null;
+        for (var i = recordEvents.length - 1; i >= 0; --i) {
+          var otherEvent = recordEvents[i];
+          if (otherEvent.type == triggerEvent.type &&
+              otherEvent.data.type == triggerEvent.data.type &&
+              matchUrls(otherEvent.data.url,
+                        triggerEvent.data.url, 0.9)) {
+            matchedEvent = otherEvent;
+            break;
+          }
+        }
+
+        if (!matchedEvent) {
+          return false;
+        }
+      }
+
+      /* if there is a trigger, then check if trigger was observed */
+      var triggerCondition = v.timing.triggerCondition;
+      if (triggerCondition) {
+        var recordEvents = this.record.events;
+
+        for (var j = 0, jj = triggerCondition.length; j < jj; ++j) {
+
+          var getPrefix = function(url) {
+            var a = $('<a>', {href:url})[0];
+            return a.hostname + a.pathname;
+          }
+
+          var trigger = triggerCondition[j];
+          var triggerEvent = this.getEvent(trigger.eventId);
+          var triggerPrefix = getPrefix(triggerEvent.data.url);
+
+          var matched = false;
+          var startSeen = false;
+          if (!trigger.start)
+            startSeen = true;
+
+          for (var i = recordEvents.length - 1; i >= 0; --i) {
+            var e = recordEvents[i];
+            if (e.meta.recordId && e.meta.recordId == trigger.start) {
+              startSeen = true;
+            }
+
+            if (startSeen && e.type == "completed") {
+              var prefix = getPrefix(e.data.url);
+              if (prefix == triggerPrefix) {
+                matched = true;
+                break;
+              }
+            }
+          }
+
+          if (!matched) {
+            return false;
+          }
+        }
+      }
+      return true;
+    },
     /* The main function which dispatches events to the content script */
     simulateDomEvent: function _simulateDomEvent(v) {
       try {
@@ -977,71 +1043,9 @@ var Replay = (function ReplayClosure() {
           return;
 
         // TODO: generalize so it works for captures
-
-        /* if there is a trigger, then check if trigger was observed */
-        var triggerEvent = this.getEvent(v.timing.triggerEvent);
-        if (triggerEvent) {
-          var recordEvents = this.record.events;
-
-          var matchedEvent = null;
-          for (var i = recordEvents.length - 1; i >= 0; --i) {
-            var otherEvent = recordEvents[i];
-            if (otherEvent.type == triggerEvent.type &&
-                otherEvent.data.type == triggerEvent.data.type &&
-                matchUrls(otherEvent.data.url,
-                          triggerEvent.data.url, 0.9)) {
-              matchedEvent = otherEvent;
-              break;
-            }
-          }
-
-          if (!matchedEvent) {
-            this.setNextTimeout(params.replay.defaultWait);
-            return;
-          }
-        }
-
-        /* if there is a trigger, then check if trigger was observed */
-        var triggerCondition = v.timing.triggerCondition;
-        if (triggerCondition) {
-          var recordEvents = this.record.events;
-
-          for (var j = 0, jj = triggerCondition.length; j < jj; ++j) {
-
-            var getPrefix = function(url) {
-              var a = $('<a>', {href:url})[0];
-              return a.hostname + a.pathname;
-            }
-
-            var trigger = triggerCondition[j];
-            var triggerEvent = this.getEvent(trigger.eventId);
-            var triggerPrefix = getPrefix(triggerEvent.data.url);
-
-            var matched = false;
-            var startSeen = false;
-            if (!trigger.start)
-              startSeen = true;
-
-            for (var i = recordEvents.length - 1; i >= 0; --i) {
-              var e = recordEvents[i];
-              if (e.meta.recordId && e.meta.recordId == trigger.start) {
-                startSeen = true;
-              }
-
-              if (startSeen && e.type == "completed") {
-                var prefix = getPrefix(e.data.url);
-                if (prefix == triggerPrefix) {
-                  matched = true;
-                  break;
-                }
-              }
-            }
-
-            if (!matched) {
-              this.setNextTimeout(params.replay.defaultWait);
-              return;
-            }
-          }
+        if (!this.triggerCheck(v)) {
+          this.setNextTimeout(params.replay.defaultWait);
+          return;
         }
 
         /* we hopefully found a matching port, lets dispatch to that port */
@@ -1444,7 +1448,8 @@ chrome.webRequest.onBeforeRequest.addListener(function(details) {
   addWebRequestEvent(details, 'start');
 }, filter, ['blocking']);
 
-chrome.webRequest.onCompleted.addListener(function(details) {
+// chrome.webRequest.onCompleted.addListener(function(details) {
+chrome.webRequest.onResponseStarted.addListener(function(details) {
   if (details.url.indexOf(params.server.url) === 0)
     return;
 

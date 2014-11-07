@@ -53,6 +53,11 @@ Replay.prototype.simulateCapture = function _simulateCapture(v) {
   if (!replayPort)
     return;
 
+  if (!this.triggerCheck(v)) {
+    this.setNextTimeout(params.replay.defaultWait);
+    return;
+  }
+
   /* we hopefully found a matching port, lets dispatch to that port */
   try {
     replayPort.postMessage({type: 'simulateCapture', value: v});

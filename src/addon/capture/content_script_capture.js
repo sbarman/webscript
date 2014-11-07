@@ -96,9 +96,10 @@ function simulateCapture(eventRecord) {
   /* if no target exists, lets try to dispatch this event a little bit in
    *the future, and hope the page changes */
   if (!target) {
-    if (checkTimeout(events, i)) {
-      replayLog.warn('timeout finding target, skip event: ', events, i);
-    }
+    // check if we have timed out when trying to find the target
+    // if (checkTimeout(eventRecord)) {
+    //  replayLog.warn('timeout finding target, skip event: ', events, i);
+    // }
 
     setTimeout(function() {
       simulateCapture(eventRecord);
@@ -136,6 +137,23 @@ function simulateCapture(eventRecord) {
 
   port.postMessage({type: 'event', value: eventMessage, state: recording});
   port.postMessage({type: 'saveCapture', value: msg, state: recording});
+}
+
+var timeoutInfoCapture = {startTime: 0, captureEvent: null};
+function checkTimeoutCapture(captureEvent) {
+  var timeout = params.replay.targetTimeout;
+  if (timeout != null && timeout > 0) {
+    var curTime = new Date().getTime();
+
+    /* we havent changed event */
+    if (timeoutInfoCapture.captureEvent == captureEvent) {
+      if (curTime - timeoutInfoCapture.startTime > timeout * 1000)
+        return true;
+    } else {
+      timeoutInfoCapture = {startTime: curTime, captureEvent: events};
+    }
+  }
+  return false;
 }
 
 handlers['simulateCapture'] = simulateCapture;

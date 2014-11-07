@@ -335,7 +335,7 @@ var ScriptServer = (function ScriptServerClosure() {
           error: function(jqXHR, textStatus, errorThrown) {
             scriptLog.error('Error getting event: ', jqXHR, textStatus,
                 errorThrown);
-            getEvent(i, rerievedEvents, retries + 1);
+            getEvent(i, retrievedEvents, retries + 1);
           },
           success: function(data, textStatus, jqXHR) {
             scriptLog.log('Got event: ', data, textStatus, jqXHR);
