@@ -999,6 +999,38 @@ var Replay = (function ReplayClosure() {
           }
         }
 
+        /* if there is a trigger, then check if trigger was observed */
+        var triggerCondition = v.timing.triggerCondition;
+        if (triggerCondition) {
+          var recordEvents = this.record.events;
+
+          var matched = false;
+          var startSeen = false;
+          if (!triggerCondition.start)
+            startSeen = true;
+
+          for (var i = recordEvents.length - 1; i >= 0; --i) {
+            var e = recordEvents[i];
+            if (e.meta.recordId == triggerCondititon.start) {
+              startSeen = true;
+            }
+
+            if (startSeen && e.type == "completed") {
+              var a = $('<a>', {href:e.data.url})[0];
+              var prefix = a.hostname + a.pathname;
+              if (prefix == triggerCondition.prefix) {
+                matched = true;
+                break;
+              }
+            }
+          }
+
+          if (!matched) {
+            this.setNextTimeout(params.replay.defaultWait);
+            return;
+          }
+        }
+
         /* we hopefully found a matching port, lets dispatch to that port */
         var type = v.data.type;
 

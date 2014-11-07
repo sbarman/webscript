@@ -131,6 +131,7 @@ function simulateCapture(eventRecord) {
   eventMessage.frame.URL = document.URL;
   eventMessage.meta.nodeName = target.nodeName.toLowerCase();
   eventMessage.meta.recordState = recording;
+  eventMessage.meta.recordId = eventRecord.meta.id;
   eventMessage.capture = msg;
 
   port.postMessage({type: 'event', value: eventMessage, state: recording});
