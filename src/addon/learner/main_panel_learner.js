@@ -821,6 +821,8 @@ function learnTriggers(uniqueId, script) {
   var timeout = 300 * 1000; // 5 minutes
   var scriptId = script.id;
 
+  var allPassingRuns = [];
+
   // get passing runs of the script
   scriptServer.saveScript(uniqueId, script.events, scriptId, 'original');
   runScriptPassing(script.events, numInitialRuns, timeout, function(err, runs) {
@@ -830,6 +832,7 @@ function learnTriggers(uniqueId, script) {
           'replay, original');
     }
 
+    allPassingRuns = allPassingRuns.concat(runs);
     learnTriggersLoop(runs, script.events, 0);
   });
 
@@ -857,7 +860,8 @@ function learnTriggers(uniqueId, script) {
     console.log('Finding triggers for event:', userEventId);
 
     // mapping between user events and potential trigger events
-    var triggerMapping = getPotentialTriggers(events, passingRuns);
+    // var triggerMapping = getPotentialTriggers(events, passingRuns);
+    var triggerMapping = getPotentialTriggers(events, allPassingRuns);
     learningTriggers.push(triggerMapping);
 
     var potentialTriggers = triggerMapping[userEventId];
@@ -921,8 +925,14 @@ function learnTriggers(uniqueId, script) {
         }
 
         if (allPassed) {
+          allPassingRuns = allPassingRuns.concat(runs);
+
+          if (userEventId == "event275")
+            console.log("here");
+
           // find all triggers before the current user event
-          var updatedTriggers = getPotentialTriggers(testEvents, runs);
+          // var updatedTriggers = getPotentialTriggers(testEvents, runs);
+          var updatedTriggers = getPotentialTriggers(testEvents, allPassingRuns);
           var userEvents = testEvents.filter(isUserEvent); 
 
           var seenTriggers = [];
