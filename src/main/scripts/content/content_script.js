@@ -778,11 +778,14 @@ function addListenersForRecording() {
  * added to the page. We will remove the unwanted handlers once params is
  * updated */
 addListenersForRecording();
-window.addEventListener('load', recordLoad, true);
-document.addEventListener('load', recordLoad, true);
-document.addEventListener('DOMContentLoaded', recordLoad, true);
-window.onload = recordLoad;
-document.onload = recordLoad;
+
+if (params.record.captureLoads) {
+  window.addEventListener('load', recordLoad, true);
+  document.addEventListener('load', recordLoad, true);
+  document.addEventListener('DOMContentLoaded', recordLoad, true);
+  window.onload = recordLoad;
+  document.onload = recordLoad;
+}
 
 
 /* need to check if we are in an iframe */

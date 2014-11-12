@@ -166,7 +166,8 @@ var TimeoutStrategy = {
     record: {
       recordAllEventProps: true,
       cancelUnrecordedEvents: false,
-      listenToAllEvents: false
+      listenToAllEvents: false,
+      captureLoads: false
     },
     replay: {
       openNewTab: true,

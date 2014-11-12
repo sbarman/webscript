@@ -1065,7 +1065,8 @@ var Replay = (function ReplayClosure() {
               while (t < events.length &&
                      endEvent >= events[t].meta.pageEventId &&
                      v.frame.port == events[t].frame.port) {
-                eventGroup.push(events[t]);
+                if (events[t].type == 'dom')
+                  eventGroup.push(events[t]);
                 t++;
               }
             } else {
