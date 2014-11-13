@@ -1431,6 +1431,12 @@ function addWebRequestEvent(details, type) {
   data.reqTimeStamp = details.timeStamp;
   data.timeStamp = (new Date()).getTime();
 
+  if (details.requestBody)
+    data.requestBody = details.requestBody;
+
+  if (details.responseHeaders)
+    data.responseHeaders = details.responseHeaders;
+
   var v = {};
   v.data = data;
   v.type = type;
@@ -1447,10 +1453,17 @@ chrome.webRequest.onBeforeRequest.addListener(function(details) {
 
   bgLog.log('Request start', details);
   addWebRequestEvent(details, 'start');
-}, filter, ['blocking']);
+}, filter, ['requestBody'/*, 'blocking'*/]);
 
-// chrome.webRequest.onCompleted.addListener(function(details) {
 chrome.webRequest.onResponseStarted.addListener(function(details) {
+  if (details.url.indexOf(params.server.url) === 0)
+    return;
+
+  bgLog.log('Request complete: ', details);
+  addWebRequestEvent(details, 'responseStarted');
+}, filter);
+
+chrome.webRequest.onCompleted.addListener(function(details) {
   if (details.url.indexOf(params.server.url) === 0)
     return;
 
