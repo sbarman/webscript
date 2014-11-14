@@ -208,6 +208,23 @@ function getPrefix(evnt) {
   return a.hostname + a.pathname;
 }
 
+function getParams(evnt) {
+  var url = evnt.data.url;
+  var a = $('<a>', {href:url})[0];
+
+  var pl = /\+/g;  // Regex for replacing addition symbol with a space
+  var search = /([^&=]+)=?([^&]*)/g;
+  var decode = function (s) { return decodeURIComponent(s.replace(pl, " ")); },
+  var query  = window.location.search.substring(1);
+
+    var match;
+    var params = {};
+    while (match = search.exec(query))
+       urlParams[decode(match[1])] = decode(match[2]);
+})();
+
+}
+
 function getPotentialTriggers(origEvents, passingRuns) {
   var baseRun = {
     events: origEvents,
@@ -228,6 +245,8 @@ function getPotentialTriggers(origEvents, passingRuns) {
   var prefixToLastUserEvent = {};
   var triggerMapping = {};
   var userEvents = baseRun.events.filter(isUserEvent);
+
+
 
   for (var i = 0, ii = userEvents.length; i < ii; ++i) {
     var curEvent = userEvents[i];
