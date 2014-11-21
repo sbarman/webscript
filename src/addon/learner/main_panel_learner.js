@@ -46,6 +46,10 @@ function isCaptureEvent(e) {
   return e.type == 'capture';
 }
 
+function isStartEvent(e) {
+  return e.type == 'start';
+}
+
 function copyEvents(events) {
   return jQuery.extend(true, [], events);
 }
@@ -202,27 +206,60 @@ function getTriggers(evnt) {
   return [];
 }
 
-function getPrefix(evnt) {
-  var url = evnt.data.url;
-  var a = $('<a>', {href:url})[0];
-  return a.hostname + a.pathname;
+function getUrlData(evnt) {
+  var uri = new URI(evnt.data.url);
+  var data = {};
+  data.domain = uri.domain();
+  data.path = uri.pathname();
+  var method = evnt.data.method;
+  data.method = method;
+
+  // find parameters if they exist
+  if (method == "GET") {
+    data.search = uri.search(true);
+  } else if (method == "POST") {
+    if (evnt.data.requestBody && evnt.data.requestBody.formData) {
+      data.search = evnt.data.requestBody.formData;
+    }
+  }
+
+  if (!data.search) {
+    data.search = {};
+  }
+
+  return data;
 }
 
-function getParams(evnt) {
-  var url = evnt.data.url;
-  var a = $('<a>', {href:url})[0];
+function findUniqueParams(events) {
+  // add search params to all events (not just the start event)
+  var startEvents = events.filter(isStartEvent);
+  var requestIdToData = {};
+  for (var i = 0, ii = startEvents.length; i < ii; ++i) {
+    var e = startEvents[i];
+    requestIdToData[e.data.requestId] = getUrlData(e);
+  }
 
-  var pl = /\+/g;  // Regex for replacing addition symbol with a space
-  var search = /([^&=]+)=?([^&]*)/g;
-  var decode = function (s) { return decodeURIComponent(s.replace(pl, " ")); },
-  var query  = window.location.search.substring(1);
+  for (var i = 0, ii = events.length; i < ii; ++i) {
+    var e = events[i];
+    var type = e.type;
+    if (type == 'completed') {
+      // add search data to event
+      e.learningData = requestIdToData[e.data.requestId];
+    }
+  }
 
-    var match;
-    var params = {};
-    while (match = search.exec(query))
-       urlParams[decode(match[1])] = decode(match[2]);
-})();
+  var completedEvents = events.filter(isCompletedEvent);
+  var prefixToEvents = {};
 
+  // bin events by prefix
+  // for each bin
+  //   create mapping for query param to value
+  //   iterate through
+  //     check if values are different
+  //     if not, remove param
+  //     if so, add value
+  //
+  // now we have a list of unique params for each prefix in each trace   
 }
 
 function getPotentialTriggers(origEvents, passingRuns) {
@@ -245,8 +282,6 @@ function getPotentialTriggers(origEvents, passingRuns) {
   var prefixToLastUserEvent = {};
   var triggerMapping = {};
   var userEvents = baseRun.events.filter(isUserEvent);
-
-
 
   for (var i = 0, ii = userEvents.length; i < ii; ++i) {
     var curEvent = userEvents[i];
