@@ -9,6 +9,9 @@ var learningReplays = [];
 var learningTriggers = [];
 var learningPassingRuns = [];
 
+// Average reaction time for visual recognition
+var reactionTime = 190 // in ms
+
 function saveReplayInfo() {
   chrome.storage.local.set({
     learningScript: learningScript,
@@ -211,6 +214,7 @@ function getUrlData(evnt) {
   var data = {};
   data.domain = uri.domain();
   data.path = uri.pathname();
+  data.prefix = data.domain + data.path;
   var method = evnt.data.method;
   data.method = method;
 
@@ -244,22 +248,41 @@ function findUniqueParams(events) {
     var type = e.type;
     if (type == 'completed') {
       // add search data to event
-      e.learningData = requestIdToData[e.data.requestId];
+      e.processedData = requestIdToData[e.data.requestId];
     }
   }
 
   var completedEvents = events.filter(isCompletedEvent);
   var prefixToEvents = {};
 
-  // bin events by prefix
-  // for each bin
-  //   create mapping for query param to value
-  //   iterate through
-  //     check if values are different
-  //     if not, remove param
-  //     if so, add value
-  //
-  // now we have a list of unique params for each prefix in each trace   
+  for (var i = 0, ii = completedEvents.length; i < ii; ++i) {
+    var e = completedEvents[i];
+    var prefix = e.processedData.prefix;
+    if (!(prefix in prefixToEvents)) {
+      prefixToEvents = [];
+    }
+    prefixToEvents[prefix].push(e);
+  }
+
+  for (var prefix in prefixToEvents) {
+    var events = prefixToEvents[prefix];
+    var paramToValues = {};
+
+    // initialize paramToValues
+    var e = events[0];
+    var search = e.processedData.search;
+    for (var k in search) {
+      paramToValues[
+
+    for (var i = 0, ii = events.length; i < ii; ++i) {
+      var e = events[i];
+      var search = e.processedData.search;
+      for (var k in search) {
+
+
+      }
+    }
+  }
 }
 
 function getPotentialTriggers(origEvents, passingRuns) {
