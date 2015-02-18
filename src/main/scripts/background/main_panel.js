@@ -719,11 +719,12 @@ var Replay = (function ReplayClosure() {
       setTimeout(function() {
         var replayEvents = record.getEvents();
         var scriptId = replay.scriptId;
+        var captures = replay.captures;
 
         if (params.replay.saveReplay && scriptId &&
             replayEvents.length > 0) {
           scriptServer.saveScript('replay ' + scriptId, replayEvents,
-              scriptId, "");
+              scriptId, params, captures, "");
           replayLog.log('Saving replay:', replayEvents);
         }
       }, 1000);
@@ -1262,7 +1263,7 @@ var Controller = (function ControllerClosure() {
       chrome.storage.local.set({scriptName: name});
       ctlLog.log('Saving script');
       var events = this.record.getEvents();
-      this.scriptServer.saveScript(name, events, null, "");
+      this.scriptServer.saveScript(name, events, null, params, {}, "");
     },
     getScript: function(name) {
       ctlLog.log('Getting script');
