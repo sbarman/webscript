@@ -8,8 +8,10 @@ from scrapy.item import Item, Field
 class AlexaItem(Item):
     # define the fields for your item here like:
     # name = Field()
-    category = Field()
     name = Field()
-    link = Field()
-    desc = Field()
     rank = Field()
+    category = Field()
+    category_rank = Field()
+    country = Field()
+    country_rank = Field()
+    desc = Field()
