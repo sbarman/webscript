@@ -50,6 +50,10 @@ var ScriptServer = (function ScriptServerClosure() {
               scriptServer.processScript(item, finish);
             }, this.timeout);
             break;
+          case "benchmark":
+            setTimeout(function() {
+              scriptServer.processBenchmark(item, finish);
+            }, this.timeout);
           case "benchmarkrun":
             setTimeout(function() {
               scriptServer.processBenchmarkRun(item, finish);
@@ -94,17 +98,23 @@ var ScriptServer = (function ScriptServerClosure() {
         });
       }
     },
+    saveBenchmark: function _saveEvents(scriptId, captures, enabled) {
+      this.queue.push({
+        type: 'benchmark',
+        scriptId: scriptId,
+        captures: captures,
+        enabled: enabled
+      });
+    },
     saveBenchmarkRun: function _saveBenchmarkRun(benchmarkId, successful, 
-        eventsExecuted, eventsTotal, errors, notes, log) {
+        eventsExecuted, eventsTotal, notes) {
       this.queue.push({
         type: 'benchmarkrun',
         id: benchmarkId,
         successful: successful,
         eventsExecuted: eventsExecuted,
         eventsTotal: eventsTotal,
-        errors: errors,
         notes: notes,
-        log: log
       });
       this.process();
     },
@@ -214,6 +224,9 @@ var ScriptServer = (function ScriptServerClosure() {
         url: this.server + 'event/'
       });
     },
+    processBenchmark: function _processBenchmark(item, callback) {
+      // TODO
+    },
     processBenchmarkRun: function _processBenchmarkRun(item, callback) {
       this.processing = true;
 
@@ -256,7 +269,7 @@ var ScriptServer = (function ScriptServerClosure() {
         processData: false,
         type: 'POST',
         timeout: 15000,
-        url: server + 'benchmark_run/'
+        url: this.server + 'benchmark_run/'
       });
 
       return null;
@@ -433,7 +446,15 @@ var ScriptServer = (function ScriptServerClosure() {
         success: function(data, textStatus, jqXHR) {
           scriptLog.log(data, textStatus, jqXHR);
           var benchmarks = data;
-          cont(benchmarks);
+          // convert capture string to capture array
+          var converted = benchmarks.map(function(b) {
+            var c = {}
+            c.id = b.id;
+            c.script = b.script;
+            c.successCaptures = JSON.parse(b.success_captures);
+            return c;
+          });
+          cont(converted);
         },
         url: server + 'benchmark/?format=json',
         type: 'GET',

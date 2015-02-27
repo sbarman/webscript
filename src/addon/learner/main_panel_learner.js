@@ -271,8 +271,8 @@ function findUniqueParams(events) {
     // initialize paramToValues
     var e = events[0];
     var search = e.processedData.search;
-    for (var k in search) {
-      paramToValues[
+//    for (var k in search) {
+//      paramToValues[
 
     for (var i = 0, ii = events.length; i < ii; ++i) {
       var e = events[i];

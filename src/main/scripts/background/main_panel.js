@@ -1413,7 +1413,12 @@ chrome.tabs.onRemoved.addListener(function(tabId, removeInfo) {
   ports.removeTab(tabId);
 });
 
-/* Listen to web requests */
+/* Listen and record web requests in the trace*/
+
+/* Need to add request bodies (only found to onBeforeRequest) to response
+ * details */
+var requestIdToRequestBody = {};
+
 function addBackgroundEvent(e) {
   if (record.recordState == RecordState.RECORDING)
     record.addEvent(e);
@@ -1424,11 +1429,11 @@ function addBackgroundEvent(e) {
 function addWebRequestEvent(details, type) {
   var data = {};
   data.requestId = details.requestId;
+  data.url = details.url;
   data.method = details.method;
   data.parentFrameId = details.parentFrameId;
   data.tabId = details.tabId;
   data.type = details.type;
-  data.url = details.url;
   data.reqTimeStamp = details.timeStamp;
   data.timeStamp = (new Date()).getTime();
 
@@ -1452,21 +1457,33 @@ chrome.webRequest.onBeforeRequest.addListener(function(details) {
   if (details.url.indexOf(params.server.url) === 0)
     return;
 
+  var requestBody = details.requestBody;
+  if (requestBody)
+    requestIdToRequestBody[details.requestId] = requestBody;
+
   bgLog.log('Request start', details);
   addWebRequestEvent(details, 'start');
-}, filter, ['requestBody'/*, 'blocking'*/]);
+}, filter, ['requestBody']);
 
-chrome.webRequest.onResponseStarted.addListener(function(details) {
+chrome.webRequest.onErrorOccurred.addListener(function(details) {
   if (details.url.indexOf(params.server.url) === 0)
     return;
 
-  bgLog.log('Request complete: ', details);
-  addWebRequestEvent(details, 'responseStarted');
+  var requestId = details.requestId;
+  if (requestId in requestIdToRequestBody)
+    details.requestBody = requestIdToRequestBody[requestId];
+
+  bgLog.log('Request error: ', details);
+  addWebRequestEvent(details, 'error');
 }, filter);
 
 chrome.webRequest.onCompleted.addListener(function(details) {
   if (details.url.indexOf(params.server.url) === 0)
     return;
+
+  var requestId = details.requestId;
+  if (requestId in requestIdToRequestBody)
+    details.requestBody = requestIdToRequestBody[requestId];
 
   bgLog.log('Request complete: ', details);
   addWebRequestEvent(details, 'completed');
@@ -1480,6 +1497,7 @@ chrome.storage.local.get('scriptName', function(info) {
   if (name)
     controller.getScript(name);
 });
+
 /*
 function printEvents() {
   var events = record.events;

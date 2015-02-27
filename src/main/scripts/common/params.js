@@ -197,6 +197,9 @@ var TimeoutStrategy = {
       url: 'http://127.0.0.1:8000/api/',
       user: 'sbarman',
     },
+    benchmark: {
+      timeout: 300
+    }
   };
 
   if (window.jQuery)
