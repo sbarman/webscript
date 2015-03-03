@@ -93,8 +93,9 @@ Replay.prototype.saveCapture = function _saveCapture(capture) {
     addonCapture[j].call(this, capture);
   }
 
-  this.captures.push(capture);
-  this.updateListeners({type: 'captureText', value: capture.innerText.trim()});
+  var text = capture.innerText.trim();
+  this.captures.push(text);
+  this.updateListeners({type: 'captureText', value: text});
 
   /* set the success ack so the script continues */
   this.ack = {type: Ack.SUCCESS};

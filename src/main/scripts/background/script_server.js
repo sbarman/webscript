@@ -107,14 +107,17 @@ var ScriptServer = (function ScriptServerClosure() {
       });
     },
     saveBenchmarkRun: function _saveBenchmarkRun(benchmarkId, successful, 
-        eventsExecuted, eventsTotal, notes) {
+        eventsExecuted, eventsTotal, time, notes, captures, errors) {
       this.queue.push({
         type: 'benchmarkrun',
         id: benchmarkId,
         successful: successful,
         eventsExecuted: eventsExecuted,
         eventsTotal: eventsTotal,
+        time: time,
         notes: notes,
+        captures: captures,
+        errors: errors
       });
       this.process();
     },
@@ -236,6 +239,8 @@ var ScriptServer = (function ScriptServerClosure() {
       postMsg['successful'] = item.successful;
       postMsg['events_executed'] = item.eventsExecuted;
       postMsg['events_total'] = item.eventsTotal;
+      postMsg['captures'] = JSON.stringify(item.captures, null, 2);
+      postMsg['time'] = item.time;
 
       var errors = item.errors;
       var notes = item.notes;

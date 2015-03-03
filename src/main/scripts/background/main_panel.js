@@ -709,6 +709,7 @@ var Replay = (function ReplayClosure() {
 
       this.pause();
       this.time = new Date().getTime() - this.startTime;
+      this.errorMsg = errorMsg;
       this.record.stopRecording();
 
       var record = this.record;
@@ -720,11 +721,14 @@ var Replay = (function ReplayClosure() {
         var replayEvents = record.getEvents();
         var scriptId = replay.scriptId;
         var captures = replay.captures;
+        var notes = "";
+        if (errorMsg)
+          notes += errorMsg;
 
         if (params.replay.saveReplay && scriptId &&
             replayEvents.length > 0) {
           scriptServer.saveScript('replay ' + scriptId, replayEvents,
-              scriptId, params, captures, "");
+              scriptId, params, captures, notes);
           replayLog.log('Saving replay:', replayEvents);
         }
       }, 1000);

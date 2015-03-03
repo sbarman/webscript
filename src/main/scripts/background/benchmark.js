@@ -77,10 +77,10 @@ var Benchmarker = (function BenchmarkerClosure() {
           var correctCaptures = [];
           for (var i = 0, ii = rcaptures.length; i < ii; ++i) {
             if (i < captures.length) {
-              var c = rcaptures[i].trim() == captures[i].innerText.trim();
+              var c = rcaptures[i].trim() == captures[i];
               correctCaptures.push({
                   correct: rcaptures[i],
-                  actual: captures[i].innerText,
+                  actual: captures[i],
                   match: c
               });
             } else {
@@ -100,10 +100,11 @@ var Benchmarker = (function BenchmarkerClosure() {
 
           var time = replay.time;
           var notes = note;
+          var error = replay.errorMsg;
 
           log.debug('Finished benchmark');
           scriptServer.saveBenchmarkRun(benchmark.id, success, replay.index,
-              replay.events.length, notes);
+              replay.events.length, time, notes, correctCaptures, error);
 
           if (cont)
             cont(replay);
