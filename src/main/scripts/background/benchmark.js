@@ -9,7 +9,6 @@
  * python manage.py makebenchmarks <script_id ...>
  */
 
-
 var Benchmarker = (function BenchmarkerClosure() {
   var log = getLog('benchmark');
 
@@ -21,10 +20,6 @@ var Benchmarker = (function BenchmarkerClosure() {
   }
 
   Benchmarker.prototype = {
-    getBenchmarks: function _getBenchmarks(cont) {
-      var scriptServer = this.scriptServer;
-      scriptServer.getBenchmarks(cont);
-    },
     resetParams: function _resetParams() {
       params = jQuery.extend(true, {}, defaultParams);
       this.updateParams();
@@ -32,36 +27,68 @@ var Benchmarker = (function BenchmarkerClosure() {
     updateParams: function _updateParams() {
       this.controller.updateParams();
     },
-    runBenchmarks: function _runBenchmarks(benchmarks, initFunctions, notes) {
+    getBenchmarks: function _getBenchmarks(cont) {
       var scriptServer = this.scriptServer;
-      var benchmarker = this;
+      scriptServer.getBenchmarks(cont);
+    },
+    getBenchmarkByName: function _getBenchmarkByName(name, cont) {
+      var filteredList = [];
+      this.getBenchmarks(function(benchmarks) {
+        for (var i = 0, ii = benchmarks.length; i < ii; ++i) {
+          var benchmark = benchmarks[i];
+          if (benchmark.script.name == name)
+            filteredList.push(benchmark);
+        }
+        cont(filteredList);
+      });
+    },
+    runBenchmarkMultiple: function _runBenchmarkMultiple(benchmark, init, 
+        notes, runs, cont) {
+      var benchmarkList = [];
+      for (var i = 0; i < runs; ++i) {
+        var newNotes = $.extend({}, notes)
+        newNotes.trail = i;
+        benchmarkList.push({
+          benchmark: benchmark,
+          init: init,
+          notes: newNotes
+        });
+      }
+      this.runBenchmarks(benchmarkList, cont);
+    },
+    /* Runs a set of benchmarks
+     * @param benchmarks[array] a list of objects, with each object containing
+     *     the following fields: benchmark, init, notes
+     */
+    runBenchmarks: function _runBenchmarks(benchmarks, cont) {
+      var scriptServer = this.scriptServer;
+      var b = this;
 
       function helper(index) {
         if (index >= benchmarks.length)
           return;
 
-        benchmarker.resetParams();
-        // params.replay.eventTimeout = 60;
-        if (initFunctions)
-          initFunctions[index]();
-        benchmarker.updateParams();
-
-        var benchmark = benchmarks[index];
-        var note = '';
-        if (notes)
-          note = notes[index];
-
-        benchmarker.runBenchmark(benchmark, note,
+        var info = benchmarks[index];
+        var benchmark = info.benchmark;
+        var init = info.init;
+        var notes = info.notes;
+        
+        b.runBenchmark(benchmark, init, notes,
           function(replay) {
             helper(index + 1);
           }
         );
       }
-
       helper(0);
     },
-    runBenchmark: function _runBenchmark(benchmark, note, cont) {
+    runBenchmark: function _runBenchmark(benchmark, init, notes, cont) {
       var b = this;
+
+      this.resetParams();
+      // params.replay.eventTimeout = 60;
+      if (init)
+        init();
+      this.updateParams();
 
       scriptServer.getScript(benchmark.script.id, function(script) {
         log.debug('Starting benchmark:', benchmark.script.id, events);
@@ -69,7 +96,7 @@ var Benchmarker = (function BenchmarkerClosure() {
         var timeoutId = -1;
 
         var r = b.controller.replayScript(script.events, 
-          {scriptId: script.id}, function(replay) {
+            {scriptId: script.id}, function(replay) {
           clearTimeout(timeoutId);
           var rcaptures = benchmark.successCaptures;
           var captures = replay.captures;
@@ -77,7 +104,7 @@ var Benchmarker = (function BenchmarkerClosure() {
           var correctCaptures = [];
           for (var i = 0, ii = rcaptures.length; i < ii; ++i) {
             if (i < captures.length) {
-              var c = rcaptures[i].trim() == captures[i];
+              var c = rcaptures[i].trim() == captures[i].trim();
               correctCaptures.push({
                   correct: rcaptures[i],
                   actual: captures[i],
@@ -99,7 +126,6 @@ var Benchmarker = (function BenchmarkerClosure() {
           }
 
           var time = replay.time;
-          var notes = note;
           var error = replay.errorMsg;
 
           log.debug('Finished benchmark');
@@ -126,112 +152,124 @@ var Benchmarker = (function BenchmarkerClosure() {
 /* singleton object */
 var b = new Benchmarker(ports, record, scriptServer, controller);
 
-function runBenchmarks(benchmarkList, initList) {
-  b.runBenchmarks(benchmarkList, initList);
+/* User timing between events */
+function setTimingMimic() {
+  params.replay.timingStrategy = TimingStrategy.MIMIC;
+};
+
+/* 0 wait between events */
+function setTimingNoWait() {
+  params.replay.timingStrategy = TimingStrategy.SPEED;
+};
+
+function runBenchmark(name, runs) {
+  b.getBenchmarkByName(name, function(matches) {
+    if (matches.length > 0)
+      b.runBenchmarkMultiple(matches[0], null, {name: name}, runs, null)
+  })
 }
 
-function runAllBenchmarks() {
-  b.getBenchmarks(function(benchmarks) {
-    b.runBenchmarks(benchmarks);
-  });
+function runBenchmarkMimic(name, runs) {
+  b.getBenchmarkByName(name, function(matches) {
+    if (matches.length > 0)
+      b.runBenchmarkMultiple(matches[0], setTimingMimic, 
+          {name: name, timing: "mimic"}, runs, null)
+  })
 }
 
-function runBenchmark(name) {
-  var filteredList = [];
-  b.getBenchmarks(function(benchmarks) {
-    for (var i = 0, ii = benchmarks.length; i < ii; ++i) {
-      var benchmark = benchmarks[i];
-      if (benchmark.script.name == name)
-        filteredList.push(benchmark);
-    }
-    b.runBenchmarks(filteredList);
-  });
+function runBenchmarkNoWait(name, runs) {
+  b.getBenchmarkByName(name, function(matches) {
+    if (matches.length > 0)
+      b.runBenchmarkMultiple(matches[0], setTimingNoWait, 
+          {name: name, timing: "nowait"}, runs, null)
+  })
 }
 
-function runBenchmarkAllTimes(selector, trials) {
-  b.getBenchmarks(function(benchmarks) {
-    var timingStrategies = Object.keys(TimingStrategy);
-
-    var benchmarkList = [];
-    var initList = [];
-    var notes = [];
-
-    for (var i = 0, ii = benchmarks.length; i < ii; ++i) {
-      var benchmark = benchmarks[i];
-      if (selector(benchmark)) {
-        for (var j = 0, jj = timingStrategies.length; j < jj; ++j) {
-          for (var k = 0; k < trials; ++k) {
-            benchmarkList.push(benchmark);
-            (function() {
-              var timingName = timingStrategies[j];
-              notes.push(timingName);
-              var timingStrategy = TimingStrategy[timingName];
-              initList.push(function() {
-                params.replaying.timingStrategy = timingStrategy;
-              });
-            })();
-          }
-        }
-      }
-    }
-
-    b.runBenchmarks(benchmarkList, initList, notes);
-  });
-}
-
-function runBenchmarkPaper(ids) {
-  b.getBenchmarks(function(benchmarks) {
-    var timingStrategies = Object.keys(TimingStrategy);
-
-    var benchmarkList = [];
-    var initList = [];
-    var notes = [];
-
-    for (var i = 0, ii = benchmarks.length; i < ii; ++i) {
-      var benchmark = benchmarks[i];
-      if (ids.indexOf(benchmark.id) != -1) {
-        // add basic replay
-        benchmarkList.push(benchmark);
-        initList.push(function() {});
-        notes.push('Plain old replay');
-
-        // replay without compensation
-        benchmarkList.push(benchmark);
-        initList.push(function() {
-          params.replaying.compensation = Compensation.NONE;
-        });
-        notes.push('No compensation');
-
-        // replay without atomic events
-        benchmarkList.push(benchmark);
-        initList.push(function() {
-          params.replaying.atomic = false;
-        });
-        notes.push('No atomic events');
-
-        // replay without cascading event check
-        benchmarkList.push(benchmark);
-        initList.push(function() {
-          params.replaying.cascadeCheck = false;
-        });
-        notes.push('No cascading event check');
-
-        // replay as fast as possible
-        benchmarkList.push(benchmark);
-        initList.push(function() {
-          params.replaying.timingStrategy = TimingStrategy.SPEED;
-        });
-        notes.push('Speed timing');
-
-        // replay with perturbed timing
-        benchmarkList.push(benchmark);
-        initList.push(function() {
-          params.replaying.timingStrategy = TimingStrategy.PERTURB;
-        });
-        notes.push('Perturb timing');
-      }
-    }
-
-    b.runBenchmarks(benchmarkList, initList, notes);
-  });
-}
+//
+//function runBenchmarkAllTimes(selector, trials) {
+//  b.getBenchmarks(function(benchmarks) {
+//    var timingStrategies = Object.keys(TimingStrategy);
+//
+//    var benchmarkList = [];
+//    var initList = [];
+//    var notes = [];
+//
+//    for (var i = 0, ii = benchmarks.length; i < ii; ++i) {
+//      var benchmark = benchmarks[i];
+//      if (selector(benchmark)) {
+//        for (var j = 0, jj = timingStrategies.length; j < jj; ++j) {
+//          for (var k = 0; k < trials; ++k) {
+//            benchmarkList.push(benchmark);
+//            (function() {
+//              var timingName = timingStrategies[j];
+//              notes.push(timingName);
+//              var timingStrategy = TimingStrategy[timingName];
+//              initList.push(function() {
+//                params.replaying.timingStrategy = timingStrategy;
+//              });
+//            })();
+//          }
+//        }
+//      }
+//    }
+//
+//    b.runBenchmarks(benchmarkList, initList, notes);
+//  });
+//}
+//
+//function runBenchmarkPaper(ids) {
+//  b.getBenchmarks(function(benchmarks) {
+//    var timingStrategies = Object.keys(TimingStrategy);
+//
+//    var benchmarkList = [];
+//    var initList = [];
+//    var notes = [];
+//
+//    for (var i = 0, ii = benchmarks.length; i < ii; ++i) {
+//      var benchmark = benchmarks[i];
+//      if (ids.indexOf(benchmark.id) != -1) {
+//        // add basic replay
+//        benchmarkList.push(benchmark);
+//        initList.push(function() {});
+//        notes.push('Plain old replay');
+//
+//        // replay without compensation
+//        benchmarkList.push(benchmark);
+//        initList.push(function() {
+//          params.replaying.compensation = Compensation.NONE;
+//        });
+//        notes.push('No compensation');
+//
+//        // replay without atomic events
+//        benchmarkList.push(benchmark);
+//        initList.push(function() {
+//          params.replaying.atomic = false;
+//        });
+//        notes.push('No atomic events');
+//
+//        // replay without cascading event check
+//        benchmarkList.push(benchmark);
+//        initList.push(function() {
+//          params.replaying.cascadeCheck = false;
+//        });
+//        notes.push('No cascading event check');
+//
+//        // replay as fast as possible
+//        benchmarkList.push(benchmark);
+//        initList.push(function() {
+//          params.replaying.timingStrategy = TimingStrategy.SPEED;
+//        });
+//        notes.push('Speed timing');
+//
+//        // replay with perturbed timing
+//        benchmarkList.push(benchmark);
+//        initList.push(function() {
+//          params.replaying.timingStrategy = TimingStrategy.PERTURB;
+//        });
+//        notes.push('Perturb timing');
+//      }
+//    }
+//
+//    b.runBenchmarks(benchmarkList, initList, notes);
+//  });
+//}

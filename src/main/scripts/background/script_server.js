@@ -75,7 +75,8 @@ var ScriptServer = (function ScriptServerClosure() {
 
       this.queue.splice(0, 0, item);
     },
-    saveScript: function _saveScript(name, events, parentId, params, captures, notes) {
+    saveScript: function _saveScript(name, events, parentId, params, captures, 
+        notes) {
       this.queue.push({
         type: 'script',
         name: name,
@@ -147,7 +148,10 @@ var ScriptServer = (function ScriptServerClosure() {
 
       if (typeof notes == 'string') {
         postMsg['notes'] = notes;
+      } if (notes && typeof notes == 'object') {
+        postMsg['notes'] = JSON.stringify(notes, null, 2);
       }
+
 
       scriptLog.log('Saving script:', postMsg);
 
@@ -250,7 +254,7 @@ var ScriptServer = (function ScriptServerClosure() {
         postMsg['errors'] = errors;
 
       if (notes)
-        postMsg['notes'] = notes;
+        postMsg['notes'] = JSON.stringify(notes, null, 2);
 
       if (log)
         postMsg['log'] = log;
