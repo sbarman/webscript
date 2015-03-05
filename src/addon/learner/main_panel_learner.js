@@ -156,7 +156,7 @@ function runScriptPassing(events, numRuns, timeout, callback) {
 // given a script, modify script so that eventId fires immediately after
 // the previous event, add trigger condition if needed
 function clearWaits(events, eventId) {
-  var lastEventIndex = 0;
+  var lastEventIndex = -1;
   var eventIndex = -1;
 
   for (var j = 0, jj = events.length; j < jj; ++j) {
@@ -424,7 +424,7 @@ function getPotentialTriggers(origEvents, passingRuns) {
 /* Main function to learn triggers by replaying the script */
 function synthesizeTriggers(scriptName) {
   /* create a unique id for this suite of replays */
-  var uniqueId = scriptName + ':' + (new Date()).getTime();
+  var uniqueId = scriptName + '-' + (new Date()).toLocaleString();
   console.log('Running synthesis on:', uniqueId);
 
   /* update the params so things will go faster */
@@ -464,7 +464,9 @@ function synthesizeTriggers_cont(uniqueId, script) {
     }
 
     allPassingRuns = allPassingRuns.concat(runs);
-    perturbScriptLoop( script.events, 0);
+    setTimeout(function() {
+      perturbScriptLoop( script.events, 0);
+    }, 0);
   });
 
   function perturbScriptLoop(events, index) {
@@ -518,7 +520,9 @@ function synthesizeTriggers_cont(uniqueId, script) {
          * single event, notice that the default timing is not changed */
         var updatedEvents = copyEvents(events);
         addTriggers(getEvent(updatedEvents, userEventId), potentialTriggers);
-        perturbScriptLoop(updatedEvents, userEventIdx + 1);
+        setTimeout(function() {
+          perturbScriptLoop(updatedEvents, userEventIdx + 1);
+        }, 0);
         return;
       }
 
@@ -590,6 +594,7 @@ function synthesizeTriggers_cont(uniqueId, script) {
             });
             assignedTriggers = assignedTriggers.concat(triggerEventIds);
 
+            /* break when we hit the current event */
             if (id == userEventId)
               break;
           }
@@ -606,7 +611,9 @@ function synthesizeTriggers_cont(uniqueId, script) {
           console.log('Passed. Adding triggers:', userEventId,
               unassignedTriggers);
           
-          perturbScriptLoop(runs, updatedEvents, userEventIdx + 1);
+          setTimeout(function() {
+            perturbScriptLoop(updatedEvents, userEventIdx + 1);
+          }, 0);
           return;
         /* continue trying to perturb the execution with a different trigger */
         } else {
