@@ -49,10 +49,6 @@ function isCaptureEvent(e) {
   return e.type == 'capture';
 }
 
-function isStartEvent(e) {
-  return e.type == 'start';
-}
-
 function copyEvents(events) {
   return jQuery.extend(true, [], events);
 }
@@ -189,11 +185,11 @@ function getTriggers(evnt) {
   return [];
 }
 
-function getPrefix(url) {
+function getPrefix(evnt) {
+  var url = evnt.data.url;
   var a = $('<a>', {href:url})[0];
   return a.hostname + a.pathname;
 }
-
 
 // get the event with eventId from the sequence of events
 function getEvent(events, eventId) {
