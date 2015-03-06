@@ -449,21 +449,29 @@ function synthesizeTriggers_cont(uniqueId, script) {
 
   var allPassingRuns = [];
 
-  // get passing runs of the script
-  scriptServer.saveScript(uniqueId, script.events, scriptId, {}, {}, 
-      {state: 'original'});
-  runScriptPassing(script.events, numInitialRuns, timeout, function(err, runs) {
-    learningReplays.push(runs);
-    for (var i = 0, ii = runs.length; i < ii; ++i) {
-      scriptServer.saveScript(uniqueId, runs[i].events, scriptId, {}, {},
-          {state: 'original', replay: true, run: i});
-    }
-
-    allPassingRuns = allPassingRuns.concat(runs);
-    setTimeout(function() {
-      perturbScriptLoop( script.events, 0);
-    }, 0);
+  // get a passing run that starts from when the page opens
+  runScriptPassing(script.events, 1, timeout, function(err, runs) {
+    var events = runs[0].events;
+    scriptServer.saveScript(uniqueId, events, scriptId, {}, {}, 
+        {state: 'original'});
+    getPassingRuns(events);
   });
+
+  // get passing runs of the script
+  function getPassingRuns(events) {
+    runScriptPassing(events, numInitialRuns, timeout, function(err, runs) {
+      learningReplays.push(runs);
+      for (var i = 0, ii = runs.length; i < ii; ++i) {
+        scriptServer.saveScript(uniqueId, runs[i].events, scriptId, {}, {},
+            {state: 'original', replay: true, run: i});
+      }
+
+      allPassingRuns = allPassingRuns.concat(runs);
+      setTimeout(function() {
+        perturbScriptLoop(events, 0);
+      }, 0);
+    });
+  }
 
   function perturbScriptLoop(events, index) {
     /* find the next user event after a certain time. since there's no point
