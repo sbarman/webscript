@@ -185,6 +185,33 @@ function runBenchmarkNoWait(name, runs) {
   })
 }
 
+function makeBenchmarks(name) {
+  scriptServer.getScripts(name, function(scripts) {
+    for (var i = 0, ii = scripts.length; i < ii; ++i) {
+      // create local scope
+      (function() {
+        var s = scripts[i];
+        var notes = JSON.parse(s.notes);
+        var whitelist = ['original', 'initial', 'final'];
+        if (whitelist.indexOf(notes.state) >= 0 && !notes.replay) {
+          scriptServer.getScript(s.id, function(script) {
+            var captures = script.events.filter(function(e) {
+              return e.type == "capture";
+            });
+            
+            var success = captures.map(function(c) {
+              return c.target.snapshot.prop.innerText;
+            });
+
+            scriptServer.saveBenchmark(s.name + '-' + notes.state, s.id, success,
+                true);
+          });
+        }
+      })();
+    }
+  });
+}
+
 //
 //function runBenchmarkAllTimes(selector, trials) {
 //  b.getBenchmarks(function(benchmarks) {

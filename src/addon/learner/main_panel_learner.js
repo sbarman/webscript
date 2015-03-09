@@ -417,10 +417,27 @@ function getPotentialTriggers(origEvents, passingRuns) {
   return triggerMapping;
 }
 
+function synthesizeTriggersLoop(scriptNames) {
+  var ids = [];
+  function helper(index) {
+    if (index >= scriptNames.length) {
+      console.log(ids);
+      return;
+    }
+
+    synthesizeTriggers(scriptNames[index], function(id) {
+      ids.push(id);
+      helper(index + 1);
+    });
+  }
+  helper(0);
+}
+
+
 /* Main function to learn triggers by replaying the script */
-function synthesizeTriggers(scriptName) {
+function synthesizeTriggers(scriptName, callback) {
   /* create a unique id for this suite of replays */
-  var uniqueId = scriptName + '-' + (new Date()).toLocaleString();
+  var uniqueId = scriptName + '-' + (new Date()).toString();
   console.log('Running synthesis on:', uniqueId);
 
   /* update the params so things will go faster */
@@ -432,11 +449,11 @@ function synthesizeTriggers(scriptName) {
   controller.updateParams();
 
   scriptServer.getScript(scriptName, function(script) {
-    synthesizeTriggers_cont(uniqueId, script);
+    synthesizeTriggers_cont(uniqueId, script, callback);
   });
 }
 
-function synthesizeTriggers_cont(uniqueId, script) {
+function synthesizeTriggers_cont(uniqueId, script, callback) {
   var learningScript = script;
   var learningReplays = [];
   var learningTriggers = [];
@@ -466,9 +483,24 @@ function synthesizeTriggers_cont(uniqueId, script) {
             {state: 'original', replay: true, run: i});
       }
 
+
       allPassingRuns = allPassingRuns.concat(runs);
+
+      var triggerEvents = copyEvents(events);
+      var triggers = getPotentialTriggers(triggerEvents, allPassingRuns);
+      var userEvents = triggerEvents.filter(isUserEvent); 
+
+      for (var i = 0, ii = userEvents.length; i < ii; ++i) {
+        var e = userEvents[i];
+        var id = e.meta.id;
+        addTriggers(e, triggers[id]);
+      }
+
+      scriptServer.saveScript(uniqueId, triggerEvents, scriptId, {}, {},
+          {state: 'initial'});
+
       setTimeout(function() {
-        perturbScriptLoop(events, 0);
+        perturbScriptLoop(events, 0, callback);
       }, 0);
     });
   }
@@ -500,6 +532,7 @@ function synthesizeTriggers_cont(uniqueId, script) {
       console.log('Finished');
       scriptServer.saveScript(uniqueId, events, scriptId, {}, {}, 
           {state: 'final'});
+      callback(uniqueId);
       return;
     }
 
