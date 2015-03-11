@@ -135,9 +135,6 @@ var ScriptServer = (function ScriptServerClosure() {
       var params = item.params;
       var captures = item.captures;
 
-      if (events.length == 0)
-        return;
-
       var scriptServer = this;
       var server = this.server;
       var postMsg = {};

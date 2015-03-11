@@ -7,6 +7,25 @@
  * using the following command:
  * 
  * python manage.py makebenchmarks <script_id ...>
+ *
+ * Steps to benchmarking:
+ *
+ * 1) Record and save scrpt 'foo'.
+ * 2) Run learning on script.
+ *    synthesizeTriggers('foo') or synthesizeTriggersLoop(['foo'])
+ * 3) Create benchmarks from inferred scripts
+ *    synthesizeTriggers('foo', function(name) {
+ *      makeBenchmarks(name);
+ *    })
+ * 4) Run enabled benchmarks in all the different configurations (we can
+ *    hardcode this to make it easier).
+ * 5) Get stats from all benchmarks. For each benchmark, show name, number
+ *    of runs, successful, failed, time for passing (avg, min, max), timing,
+ *    element strategy
+ *
+ *    Have ability to filter
+ *
+ *    Get stats from learning - # of executions
  */
 
 var Benchmarker = (function BenchmarkerClosure() {
@@ -203,8 +222,8 @@ function makeBenchmarks(name) {
               return c.target.snapshot.prop.innerText;
             });
 
-            scriptServer.saveBenchmark(s.name + '-' + notes.state, s.id, success,
-                true);
+            scriptServer.saveBenchmark(s.name + '-' + notes.state, s.id,
+                success, true);
           });
         }
       })();

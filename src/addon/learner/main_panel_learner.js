@@ -11,6 +11,8 @@ var learningPassingRuns = [];
 
 // Average reaction time for visual recognition
 var reactionTime = 190 // in ms
+var saveEvents = false;
+
 
 function saveReplayInfo() {
   chrome.storage.local.set({
@@ -454,13 +456,13 @@ function synthesizeTriggers(scriptName, callback) {
 }
 
 function synthesizeTriggers_cont(uniqueId, script, callback) {
-  var learningScript = script;
-  var learningReplays = [];
-  var learningTriggers = [];
-  var learningPassingRuns = [];
+//  var learningScript = script;
+//  var learningReplays = [];
+//  var learningTriggers = [];
+//  var learningPassingRuns = [];
 
-  var numInitialRuns = 4;
-  var numRuns = 2;
+  var numInitialRuns = 2;
+  var numRuns = 1;
   var timeout = 300 * 1000; /* 5 minutes */
   var scriptId = script.id;
 
@@ -477,9 +479,10 @@ function synthesizeTriggers_cont(uniqueId, script, callback) {
   // get passing runs of the script
   function getPassingRuns(events) {
     runScriptPassing(events, numInitialRuns, timeout, function(err, runs) {
-      learningReplays.push(runs);
+      // learningReplays.push(runs);
       for (var i = 0, ii = runs.length; i < ii; ++i) {
-        scriptServer.saveScript(uniqueId, runs[i].events, scriptId, {}, {},
+        var runEvents = saveEvents ? runs[i].events : [];
+        scriptServer.saveScript(uniqueId, runEvents, scriptId, {}, {},
             {state: 'original', replay: true, run: i});
       }
 
@@ -508,42 +511,66 @@ function synthesizeTriggers_cont(uniqueId, script, callback) {
   function perturbScriptLoop(events, index) {
     /* find the next user event after a certain time. since there's no point
      * to perturb a sequence of events that happen rapidly together */
-    var userEvent = null;
-    var userEventIdx;
+    var userEvents = [];
+    var userEventIdxStart;
+    var userEventIdxEnd;
 
-    /* total time since the starting index */
-    // commented out for now, implementation issues with ensuring 
-    // var totalTime = 0;
-
+    /* want to find a set of user events such that there adjacent events occur
+     * within some amount of time of each other */
     for (var i = index, ii = events.length; i < ii; ++i) {
       var e = events[i];
-      // totalTime += e.timing.waitTime;
 
-      // if (isUserEvent(events[i]) && totalTime > reactionTime) {
-      if (isUserEvent(events[i])) {
-        userEvent = events[i];
-        userEventIdx = i;
+      /* found a user event */
+      if (isUserEvent(e)) {
+        userEvents.push(e);
+        userEventIdxStart = i;
+        userEventIdxEnd = i;
+
+        /* time since last user event in userEvents */
+        var wait = 0;
+        for (var j = i + 1, jj = events.length; j < jj; ++j) {
+          var e2 = events[j];
+          wait += e2.timing.waitTime;
+
+          if (wait > reactionTime)
+            break;
+
+          if (isUserEvent(e2)) {
+            userEvents.push(e2);
+            userEventIdxEnd = j;
+            wait = 0;
+          }
+        };
         break;
       }
     }
 
     /* check if we don't have any more events */
-    if (!userEvent) {
+    if (userEvents.length == 0) {
       console.log('Finished');
       scriptServer.saveScript(uniqueId, events, scriptId, {}, {}, 
           {state: 'final'});
-      callback(uniqueId);
+      if (callback)
+        callback(uniqueId);
       return;
     }
 
-    var userEventId = userEvent.meta.id;
-    console.log('Finding triggers for event:', userEventId);
+    var userEventIds = userEvents.map(function(e) {return e.meta.id;});
+    console.log('Finding triggers for event:', userEventIds);
 
     // mapping between user events and potential trigger events
     var triggerMapping = getPotentialTriggers(events, allPassingRuns);
-    learningTriggers.push(triggerMapping);
+    // learningTriggers.push(triggerMapping);
 
-    var potentialTriggers = triggerMapping[userEventId];
+    var potentialTriggers = [];
+    
+    for (var i = 0, ii = userEventIds; i < ii; ++i) {
+      var id = userEventIds[i];
+      var triggers = triggerMapping[id];
+      potentialTriggers = potentialTriggers.concat(triggers.map(function(t) {
+        return {id: id, trigger: t};
+      }));
+    } 
     console.log('Found potential triggers:', potentialTriggers);
 
     /* slight hack, if triggerIdx == -1, then we try no trigger */
@@ -556,9 +583,12 @@ function synthesizeTriggers_cont(uniqueId, script, callback) {
         /* add all potential triggers to this event, since we could not find a
          * single event, notice that the default timing is not changed */
         var updatedEvents = copyEvents(events);
-        addTriggers(getEvent(updatedEvents, userEventId), potentialTriggers);
+        for (var i = 0, ii = potentialTriggers.length; i < ii; ++i) {
+          var t = potentialTriggers[i];
+          addTriggers(getEvent(updatedEvents, t.id), t.trigger);
+        }
         setTimeout(function() {
-          perturbScriptLoop(updatedEvents, userEventIdx + 1);
+          perturbScriptLoop(updatedEvents, userEventIdxEnd + 1);
         }, 0);
         return;
       }
@@ -566,21 +596,20 @@ function synthesizeTriggers_cont(uniqueId, script, callback) {
       /* make a copy of the events */
       var testEvents = copyEvents(events);
 
+      userEventIds.forEach(function(id) {
+        clearWaits(testEvents, id);
+      });
       var triggerDesc = {};
       /* update script with new trigger, -1 index means that we clear timing */
       if (triggerIdx == -1) {
-        clearWaits(testEvents, userEventId);
-
-        triggerDesc = {event: userEventId, trigger: "nowait"} ;
+        triggerDesc = {event: userEventIds, trigger: "nowait"} ;
         console.log('Checking trigger: no wait');
       } else {
-        clearWaits(testEvents, userEventId);
+        var t = potentialTriggers[triggerIdx];
+        addTriggers(getEvent(testEvents, t.id), [t.trigger]);
 
-        var trigger = potentialTriggers[triggerIdx];
-        addTriggers(getEvent(testEvents, userEventId), [trigger]);
-
-        triggerDesc = {event: userEventId, trigger: trigger.eventId} ;
-        console.log('Checking trigger:', trigger);
+        triggerDesc = {event: t.id, trigger: t.trigger.eventId} ;
+        console.log('Checking trigger:', t);
       }
       
       scriptServer.saveScript(uniqueId, testEvents, scriptId, {}, {},
@@ -588,11 +617,12 @@ function synthesizeTriggers_cont(uniqueId, script, callback) {
 
       /* run script */
       runScript(testEvents, numRuns, timeout, function(err, runs) {
-        learningReplays.push(runs);
+        // learningReplays.push(runs);
 
         for (var i = 0, ii = runs.length; i < ii; ++i) {
           var success = checkReplaySuccess(testEvents, runs[i]);
-          scriptServer.saveScript(uniqueId, runs[i].events, scriptId, {}, {},
+          var runEvents = saveEvents ? runs[i].events : [];
+          scriptServer.saveScript(uniqueId, runEvents, scriptId, {}, {},
               {state: 'perturb', replay: true, run: i, trigger: triggerDesc,
                success: success});
         }
@@ -613,43 +643,48 @@ function synthesizeTriggers_cont(uniqueId, script, callback) {
           var updatedTriggers = getPotentialTriggers(testEvents,
               allPassingRuns);
 
-          var userEvents = testEvents.filter(isUserEvent); 
-
-          /* collect all potential triggers up until the current event */
-          var allTriggers = [];
-          /* find all triggers that are already assigned */
-          var assignedTriggers = [];
-
-          for (var i = 0, ii = userEvents.length; i < ii; ++i) {
-            var e = userEvents[i];
-            var id = e.meta.id;
-
-            allTriggers = allTriggers.concat(updatedTriggers[id]);
-
-            var triggerEventIds = getTriggers(e).map(function(t) {
-              return t.eventId;
-            });
-            assignedTriggers = assignedTriggers.concat(triggerEventIds);
-
-            /* break when we hit the current event */
-            if (id == userEventId)
-              break;
-          }
-
-          /* remove triggers that are already assigned */
-          var unassignedTriggers = allTriggers.filter(function(t) {
-            return assignedTriggers.indexOf(t.eventId) < 0;
-          });
-
-          /* add remaining triggers to current event */
           var updatedEvents = copyEvents(events);
-          clearWaits(updatedEvents, userEventId);
-          addTriggers(getEvent(updatedEvents, userEventId), unassignedTriggers);
-          console.log('Passed. Adding triggers:', userEventId,
-              unassignedTriggers);
+
+          for (var i = 0, ii = userEventIds.length; i < ii; ++i) {
+            var userEventId = userEventIds[i];
+            var allUserEvents = updatedEvents.filter(isUserEvent); 
+
+            /* collect all potential triggers up until the current event */
+            var allTriggers = [];
+            /* find all triggers that are already assigned */
+            var assignedTriggers = [];
+
+            for (var j = 0, jj = allUserEvents.length; j < jj; ++j) {
+              var e = allUserEvents[j];
+              var id = e.meta.id;
+
+              allTriggers = allTriggers.concat(updatedTriggers[id]);
+
+              var triggerEventIds = getTriggers(e).map(function(t) {
+                return t.eventId;
+              });
+              assignedTriggers = assignedTriggers.concat(triggerEventIds);
+
+              /* break when we hit the current event */
+              if (id == userEventId)
+                break;
+            }
+
+            /* remove triggers that are already assigned */
+            var unassignedTriggers = allTriggers.filter(function(t) {
+              return assignedTriggers.indexOf(t.eventId) < 0;
+            });
+
+            /* add remaining triggers to current event */
+            clearWaits(updatedEvents, userEventId);
+            addTriggers(getEvent(updatedEvents, userEventId),
+                unassignedTriggers);
+            console.log('Passed. Adding triggers:', userEventId,
+                unassignedTriggers);
+          }
           
           setTimeout(function() {
-            perturbScriptLoop(updatedEvents, userEventIdx + 1);
+            perturbScriptLoop(updatedEvents, userEventIdxEnd + 1);
           }, 0);
           return;
         /* continue trying to perturb the execution with a different trigger */
