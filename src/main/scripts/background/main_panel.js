@@ -423,6 +423,7 @@ var Replay = (function ReplayClosure() {
       this.replayState = this.updateStatus(ReplayState.STOPPED);
       /* record the first execution attempt of the first event */
       this.timeoutInfo = {startTime: 0, index: -1};
+      this.triggerTimeoutInfo = {startTime: 0, index: -1};
       /* stores responses from the content script */
       this.ack = null;
       /* list of events */
@@ -663,7 +664,7 @@ var Replay = (function ReplayClosure() {
       var replay = this;
       this.callbackHandle = setTimeout(function() {
         replay.guts();
-      }, time);
+      }, time + 10);
     },
     /* Pause the execution by clearing out the callback */
     pause: function _pause() {
@@ -908,9 +909,15 @@ var Replay = (function ReplayClosure() {
     guts: function _guts() {
       if (this.checkTimeout()) {
         /* lets call the end of this script */
-        var msg = 'Event ' + this.index + ' has timed out';
-        replayLog.warn(msg);
-        this.finish(msg);
+        // var msg = 'Event ' + this.index + ' has timed out';
+        // replayLog.warn(msg);
+        // this.finish(msg);
+
+        /* lets just skip the event */
+        this.incrementIndex();
+        this.setNextTimeout();
+
+        this.updateStatus(ReplayState.REPLAYING);
         return;
       }
 
@@ -960,7 +967,30 @@ var Replay = (function ReplayClosure() {
 
       replayFunction.call(this, e);
     },
+    /* Check if a trigger has timed out */
+    checkTriggerTimeout: function _checkTriggerTimeout() {
+      var triggerTimeout = params.replay.triggerTimeout;
+      if (triggerTimeout != null && triggerTimeout > 0) {
+        var timeoutInfo = this.triggerTimeoutInfo;
+        var curTime = new Date().getTime();
+
+        /* we havent changed events */
+        var index = this.index;
+        if (timeoutInfo.index == index) {
+          if (curTime - timeoutInfo.startTime > triggerTimeout * 1000) {
+            return true;
+          }
+        } else {
+          this.triggerTimeoutInfo = {startTime: curTime, index: index};
+        }
+      }
+      return false;
+    },
     triggerCheck: function _triggerCheck(v) {
+      /* trigger has timed out, so no need to check trigger */
+      if (this.checkTriggerTimeout())
+        return true;
+
       /* if there is a trigger, then check if trigger was observed */
       var triggerEvent = this.getEvent(v.timing.triggerEvent);
       if (triggerEvent) {
@@ -1047,7 +1077,6 @@ var Replay = (function ReplayClosure() {
         if (!replayPort)
           return;
 
-        // TODO: generalize so it works for captures
         if (!this.triggerCheck(v)) {
           this.setNextTimeout(params.replay.defaultWait);
           return;

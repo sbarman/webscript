@@ -55,31 +55,17 @@ var Benchmarker = (function BenchmarkerClosure() {
       this.getBenchmarks(function(benchmarks) {
         for (var i = 0, ii = benchmarks.length; i < ii; ++i) {
           var benchmark = benchmarks[i];
-          if (benchmark.script.name == name)
+          if (benchmark.name == name)
             filteredList.push(benchmark);
         }
         cont(filteredList);
       });
     },
-    runBenchmarkMultiple: function _runBenchmarkMultiple(benchmark, init, 
-        notes, runs, cont) {
-      var benchmarkList = [];
-      for (var i = 0; i < runs; ++i) {
-        var newNotes = $.extend({}, notes)
-        newNotes.trail = i;
-        benchmarkList.push({
-          benchmark: benchmark,
-          init: init,
-          notes: newNotes
-        });
-      }
-      this.runBenchmarks(benchmarkList, cont);
-    },
     /* Runs a set of benchmarks
      * @param benchmarks[array] a list of objects, with each object containing
      *     the following fields: benchmark, init, notes
      */
-    runBenchmarks: function _runBenchmarks(benchmarks, cont) {
+    runBenchmarks: function _runBenchmarks(benchmarks, numRuns, cont) {
       var scriptServer = this.scriptServer;
       var b = this;
 
@@ -92,19 +78,22 @@ var Benchmarker = (function BenchmarkerClosure() {
         var init = info.init;
         var notes = info.notes;
         
-        b.runBenchmark(benchmark, init, notes,
-          function(replay) {
+        b.runBenchmark(benchmark, init, notes, numRuns,
+          function() {
             helper(index + 1);
           }
         );
       }
       helper(0);
     },
-    runBenchmark: function _runBenchmark(benchmark, init, notes, cont) {
+    runBenchmark: function _runBenchmark(benchmark, init, notes, numRuns, cont) {
       var b = this;
 
       this.resetParams();
       // params.replay.eventTimeout = 60;
+      params.panel.enableEdit = false;
+      params.replay.saveReplay = false;
+
       if (init)
         init();
       this.updateParams();
@@ -112,55 +101,85 @@ var Benchmarker = (function BenchmarkerClosure() {
       scriptServer.getScript(benchmark.script.id, function(script) {
         log.debug('Starting benchmark:', benchmark.script.id, events);
 
-        var timeoutId = -1;
+        function replayOnce(pastRuns) {
+          if (pastRuns >= numRuns) {
+            if (cont)
+              cont();
+            return;
+          }
 
-        var r = b.controller.replayScript(script.events, 
-            {scriptId: script.id}, function(replay) {
-          clearTimeout(timeoutId);
-          var rcaptures = benchmark.successCaptures;
-          var captures = replay.captures;
+          var timeoutId = -1;
 
-          var correctCaptures = [];
-          for (var i = 0, ii = rcaptures.length; i < ii; ++i) {
-            if (i < captures.length) {
-              var c = rcaptures[i].trim() == captures[i].trim();
-              correctCaptures.push({
-                  correct: rcaptures[i],
-                  actual: captures[i],
-                  match: c
-              });
-            } else {
-              correctCaptures.push({
-                correct: rcaptures[i],
-                actual: '',
-                match: false
-              });
+          var r = b.controller.replayScript(script.events, 
+              {scriptId: script.id}, function(replay) {
+            clearTimeout(timeoutId);
+
+            /* remove all the tabs created during execution */
+            var events = replay.record.events;
+            var allTabs = [];
+            for (var i = 0, ii = events.length; i < ii; ++i) {
+              var e = events[i];
+              var tab = "";
+              if (e.frame && e.frame.tab)
+                tab = e.frame.tab;
+              if (e.data && e.data.tabId)
+                tab = e.data.tabId;
+
+              if (tab && allTabs.indexOf(tab) < 0)
+                allTabs.push(tab);
             }
-          }
 
-          var success = replay.events.length == replay.index;
-          for (var i = 0, ii = correctCaptures.length; i < ii; ++i) {
-            if (!correctCaptures[i].match)
-              success = false;
-          }
+            for (var i = 0, ii = allTabs.length; i < ii; ++i) {
+              var tabId = parseInt(allTabs[i]);
+              if (tabId >= 0)
+                chrome.tabs.remove(parseInt(tabId));
+            }
 
-          var time = replay.time;
-          var error = replay.errorMsg;
+            var rcaptures = benchmark.successCaptures;
+            var captures = replay.captures;
 
-          log.debug('Finished benchmark');
-          scriptServer.saveBenchmarkRun(benchmark.id, success, replay.index,
-              replay.events.length, time, notes, correctCaptures, error);
+            var correctCaptures = [];
+            for (var i = 0, ii = rcaptures.length; i < ii; ++i) {
+              if (i < captures.length) {
+                var c = rcaptures[i].trim() == captures[i].trim();
+                correctCaptures.push({
+                    correct: rcaptures[i],
+                    actual: captures[i],
+                    match: c
+                });
+              } else {
+                correctCaptures.push({
+                  correct: rcaptures[i],
+                  actual: '',
+                  match: false
+                });
+              }
+            }
 
-          if (cont)
-            cont(replay);
-        });
+            var success = replay.events.length == replay.index;
+            for (var i = 0, ii = correctCaptures.length; i < ii; ++i) {
+              if (!correctCaptures[i].match)
+                success = false;
+            }
 
-        controller.replay = r;
+            var time = replay.time;
+            var error = replay.errorMsg;
 
-        // kill script after timeout period
-        timeoutId = setTimeout(function() {
-          r.finish();
-        }, params.benchmark.timeout * 1000);
+            log.debug('Finished benchmark');
+            scriptServer.saveBenchmarkRun(benchmark.id, success, replay.index,
+                replay.events.length, time, notes, correctCaptures, error);
+
+            replayOnce(pastRuns + 1);
+          });
+
+          controller.replay = r;
+
+          // kill script after timeout period
+          timeoutId = setTimeout(function() {
+            r.finish();
+          }, params.benchmark.timeout * 1000);
+        }
+        replayOnce(0);
       });
     }
   };
@@ -171,47 +190,37 @@ var Benchmarker = (function BenchmarkerClosure() {
 /* singleton object */
 var b = new Benchmarker(ports, record, scriptServer, controller);
 
-/* User timing between events */
-function setTimingMimic() {
-  params.replay.timingStrategy = TimingStrategy.MIMIC;
-};
+function runAllBenchmarks(numRuns) {
+  b.getBenchmarks(function(matches) {
+    var benchmarks = [];
+    for (var i = 0, ii = matches.length; i < ii; ++i) {
+      benchmarks.push({benchmark: matches[i], notes: {}});
+    }
+    b.runBenchmarks(benchmarks, numRuns)
+  });
+}
 
-/* 0 wait between events */
-function setTimingNoWait() {
-  params.replay.timingStrategy = TimingStrategy.SPEED;
-};
-
-function runBenchmark(name, runs) {
+function runBenchmark(name, numRuns) {
   b.getBenchmarkByName(name, function(matches) {
-    if (matches.length > 0)
-      b.runBenchmarkMultiple(matches[0], null, {name: name}, runs, null)
+    if (matches.length > 0) {
+      var benchmark = matches[0];
+      var benchmarks = [];
+      benchmarks.push({benchmark: benchmark, notes: {}});
+      b.runBenchmarks(benchmarks, numRuns);
+    }
   })
 }
 
-function runBenchmarkMimic(name, runs) {
-  b.getBenchmarkByName(name, function(matches) {
-    if (matches.length > 0)
-      b.runBenchmarkMultiple(matches[0], setTimingMimic, 
-          {name: name, timing: "mimic"}, runs, null)
-  })
-}
-
-function runBenchmarkNoWait(name, runs) {
-  b.getBenchmarkByName(name, function(matches) {
-    if (matches.length > 0)
-      b.runBenchmarkMultiple(matches[0], setTimingNoWait, 
-          {name: name, timing: "nowait"}, runs, null)
-  })
-}
-
-function makeBenchmarks(name) {
+function makeBenchmarks(name, callback) {
   scriptServer.getScripts(name, function(scripts) {
+    var whitelist = ['original', 'original-nowait', 'original-triggers',
+                     'initial-triggers', 'final', 'final-triggers'];
+
     for (var i = 0, ii = scripts.length; i < ii; ++i) {
       // create local scope
       (function() {
         var s = scripts[i];
         var notes = JSON.parse(s.notes);
-        var whitelist = ['original', 'initial', 'final'];
         if (whitelist.indexOf(notes.state) >= 0 && !notes.replay) {
           scriptServer.getScript(s.id, function(script) {
             var captures = script.events.filter(function(e) {
@@ -223,99 +232,96 @@ function makeBenchmarks(name) {
             });
 
             scriptServer.saveBenchmark(s.name + '-' + notes.state, s.id,
-                success, true);
+                success, true, callbackReady);
           });
         }
       })();
     }
+
+    var ids = [];
+    function callbackReady(id) {
+      ids.push(id);
+      if (callback && ids.length == whitelist.length)
+        callback(ids);
+    }
   });
 }
 
-//
-//function runBenchmarkAllTimes(selector, trials) {
-//  b.getBenchmarks(function(benchmarks) {
-//    var timingStrategies = Object.keys(TimingStrategy);
-//
-//    var benchmarkList = [];
-//    var initList = [];
-//    var notes = [];
-//
-//    for (var i = 0, ii = benchmarks.length; i < ii; ++i) {
-//      var benchmark = benchmarks[i];
-//      if (selector(benchmark)) {
-//        for (var j = 0, jj = timingStrategies.length; j < jj; ++j) {
-//          for (var k = 0; k < trials; ++k) {
-//            benchmarkList.push(benchmark);
-//            (function() {
-//              var timingName = timingStrategies[j];
-//              notes.push(timingName);
-//              var timingStrategy = TimingStrategy[timingName];
-//              initList.push(function() {
-//                params.replaying.timingStrategy = timingStrategy;
-//              });
-//            })();
-//          }
-//        }
-//      }
-//    }
-//
-//    b.runBenchmarks(benchmarkList, initList, notes);
-//  });
-//}
-//
-//function runBenchmarkPaper(ids) {
-//  b.getBenchmarks(function(benchmarks) {
-//    var timingStrategies = Object.keys(TimingStrategy);
-//
-//    var benchmarkList = [];
-//    var initList = [];
-//    var notes = [];
-//
-//    for (var i = 0, ii = benchmarks.length; i < ii; ++i) {
-//      var benchmark = benchmarks[i];
-//      if (ids.indexOf(benchmark.id) != -1) {
-//        // add basic replay
-//        benchmarkList.push(benchmark);
-//        initList.push(function() {});
-//        notes.push('Plain old replay');
-//
-//        // replay without compensation
-//        benchmarkList.push(benchmark);
-//        initList.push(function() {
-//          params.replaying.compensation = Compensation.NONE;
-//        });
-//        notes.push('No compensation');
-//
-//        // replay without atomic events
-//        benchmarkList.push(benchmark);
-//        initList.push(function() {
-//          params.replaying.atomic = false;
-//        });
-//        notes.push('No atomic events');
-//
-//        // replay without cascading event check
-//        benchmarkList.push(benchmark);
-//        initList.push(function() {
-//          params.replaying.cascadeCheck = false;
-//        });
-//        notes.push('No cascading event check');
-//
-//        // replay as fast as possible
-//        benchmarkList.push(benchmark);
-//        initList.push(function() {
-//          params.replaying.timingStrategy = TimingStrategy.SPEED;
-//        });
-//        notes.push('Speed timing');
-//
-//        // replay with perturbed timing
-//        benchmarkList.push(benchmark);
-//        initList.push(function() {
-//          params.replaying.timingStrategy = TimingStrategy.PERTURB;
-//        });
-//        notes.push('Perturb timing');
-//      }
-//    }
-//
-//    b.runBenchmarks(benchmarkList, initList, notes);
-//  });
-//}
+function runSynthesizeBenchmarks(name, numRuns) {
+  synthesizeTriggers(name, function(timestampName) {
+    scriptServer.finishedProcessing(function() {
+      makeBenchmarks(timestampName, function(benchmarkIds) {
+        b.getBenchmarks(function(allBenchmarks) {
+          var benchmarks = [];
+          for (var i = 0, ii = allBenchmarks.length; i < ii; ++i) {
+            var benchmark = allBenchmarks[i];
+            if (benchmarkIds.indexOf(benchmark.id) >= 0) {
+              benchmarks.push({benchmark: benchmark, notes: {}});
+            }
+          }
+          console.log(benchmarks);
+          b.runBenchmarks(benchmarks, numRuns)
+        });
+        console.log(benchmarkIds);
+      });
+    });
+  });
+}
+
+////
+////function runBenchmarkPaper(ids) {
+////  b.getBenchmarks(function(benchmarks) {
+////    var timingStrategies = Object.keys(TimingStrategy);
+////
+////    var benchmarkList = [];
+////    var initList = [];
+////    var notes = [];
+////
+////    for (var i = 0, ii = benchmarks.length; i < ii; ++i) {
+////      var benchmark = benchmarks[i];
+////      if (ids.indexOf(benchmark.id) != -1) {
+////        // add basic replay
+////        benchmarkList.push(benchmark);
+////        initList.push(function() {});
+////        notes.push('Plain old replay');
+////
+////        // replay without compensation
+////        benchmarkList.push(benchmark);
+////        initList.push(function() {
+////          params.replaying.compensation = Compensation.NONE;
+////        });
+////        notes.push('No compensation');
+////
+////        // replay without atomic events
+////        benchmarkList.push(benchmark);
+////        initList.push(function() {
+////          params.replaying.atomic = false;
+////        });
+////        notes.push('No atomic events');
+////
+////        // replay without cascading event check
+////        benchmarkList.push(benchmark);
+////        initList.push(function() {
+////          params.replaying.cascadeCheck = false;
+////        });
+////        notes.push('No cascading event check');
+////
+////        // replay as fast as possible
+////        benchmarkList.push(benchmark);
+////        initList.push(function() {
+////          params.replaying.timingStrategy = TimingStrategy.SPEED;
+////        });
+////        notes.push('Speed timing');
+////
+////        // replay with perturbed timing
+////        benchmarkList.push(benchmark);
+////        initList.push(function() {
+////          params.replaying.timingStrategy = TimingStrategy.PERTURB;
+////        });
+////        notes.push('Perturb timing');
+////      }
+////    }
+////
+////    b.runBenchmarks(benchmarkList, initList, notes);
+////  });
+////}

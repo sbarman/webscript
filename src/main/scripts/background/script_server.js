@@ -11,6 +11,7 @@ var ScriptServer = (function ScriptServerClosure() {
     this.server = server;
     this.queue = [];
     this.processing = false;
+    this.callbacks = [];
     this.timeout = 50;
   }
 
@@ -65,7 +66,17 @@ var ScriptServer = (function ScriptServerClosure() {
         }
       } else {
         scriptLog.debug('Finished processing queue');
+        this.callbacks.forEach(function(c) {
+          setTimeout(c, 0);
+        });
+        this.callbacks = [];
       }
+    },
+    finishedProcessing: function _finishedProcessing(callback) {
+      if (this.processing || this.queue.length > 0)
+        this.callbacks.push(callback);
+      else
+        setTimeout(callback, 0);
     },
     retry: function _retry(item) {
       if ('retries' in item) {
@@ -102,13 +113,15 @@ var ScriptServer = (function ScriptServerClosure() {
         });
       }
     },
-    saveBenchmark: function _saveEvents(name, scriptId, captures, enabled) {
+    saveBenchmark: function _saveEvents(name, scriptId, captures, enabled,
+        callback) {
       this.queue.push({
         type: 'benchmark',
         name: name,
         scriptId: scriptId,
         successCaptures: captures,
-        enabled: enabled
+        enabled: enabled,
+        callback: callback
       });
       this.process();
     },
@@ -251,6 +264,9 @@ var ScriptServer = (function ScriptServerClosure() {
         },
         success: function(data, textStatus, jqXHR) {
           scriptLog.log(data, jqXHR, textStatus);
+          if (item.callback) {
+            item.callback(data.id);
+          }
         },
         complete: function(jqXHR, textSataus) {
           callback();
@@ -512,11 +528,9 @@ var ScriptServer = (function ScriptServerClosure() {
           var benchmarks = data;
           // convert capture string to capture array
           var converted = benchmarks.map(function(b) {
-            var c = {}
-            c.id = b.id;
-            c.script = b.script;
-            c.successCaptures = JSON.parse(b.success_captures);
-            return c;
+            b.successCaptures = JSON.parse(b.success_captures);
+            delete b.success_captures;
+            return b;
           });
           cont(converted);
         },
@@ -528,6 +542,27 @@ var ScriptServer = (function ScriptServerClosure() {
       });
       return null;
     },
+    getBenchmarkRuns: function _getBenchmarkRuns(cont) {
+      var server = this.server;
+
+      $.ajax({
+        error: function(jqXHR, textStatus, errorThrown) {
+          scriptLog.log(jqXHR, textStatus, errorThrown);
+        },
+        success: function(data, textStatus, jqXHR) {
+          scriptLog.log(data, textStatus, jqXHR);
+          var benchmarks = data;
+          cont(benchmarks);
+        },
+        url: server + 'benchmark_run/?format=json',
+        type: 'GET',
+        processData: false,
+        accepts: 'application/json',
+        dataType: 'json'
+      });
+      return null;
+    },
+
 //    getCapture: function _getCapture(scriptId, cont) {
 //      var scriptServer = this;
 //      var server = this.server;

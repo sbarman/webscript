@@ -11,8 +11,7 @@ var learningPassingRuns = [];
 
 // Average reaction time for visual recognition
 var reactionTime = 190 // in ms
-var saveEvents = false;
-
+var saveEvents = true;
 
 function saveReplayInfo() {
   chrome.storage.local.set({
@@ -177,6 +176,11 @@ function clearWaits(events, eventId) {
 function addTriggers(evnt, triggers) {
   if (triggers && triggers.length > 0)
     evnt.timing.triggerCondition = triggers;
+}
+
+function clearTriggers(evnt) {
+  if ('triggerCondition' in evnt.timing)
+    delete evnt.timing.triggerCondition;
 }
 
 // get the triggers for an event
@@ -419,6 +423,39 @@ function getPotentialTriggers(origEvents, passingRuns) {
   return triggerMapping;
 }
 
+/* remove any wait times for all the events */
+function clearWaitsEvents(events) {
+  var userEventIds = events.filter(isUserEvent).map(function(e) {
+    return e.meta.id;
+  }); 
+  userEventIds.forEach(function(id) {
+    clearWaits(events, id);
+  });
+}
+
+/* remove any triggers from these events */
+function clearTriggersEvents(events) {
+  var userEvents = events.filter(isUserEvent); 
+
+  for (var i = 0, ii = userEvents.length; i < ii; ++i) {
+    var e = userEvents[i];
+    clearTriggers(e);
+  }
+}
+
+
+/* add triggers based upon the passing runs for all the events */
+function addTriggersEvents(events, passingRuns) {
+  var triggers = getPotentialTriggers(events, passingRuns);
+  var userEvents = events.filter(isUserEvent); 
+
+  for (var i = 0, ii = userEvents.length; i < ii; ++i) {
+    var e = userEvents[i];
+    var id = e.meta.id;
+    addTriggers(e, triggers[id]);
+  }
+} 
+
 function synthesizeTriggersLoop(scriptNames) {
   var ids = [];
   function helper(index) {
@@ -473,6 +510,18 @@ function synthesizeTriggers_cont(uniqueId, script, callback) {
     var events = runs[0].events;
     scriptServer.saveScript(uniqueId, events, scriptId, {}, {}, 
         {state: 'original'});
+
+    var noWaitEvents = copyEvents(events);
+    clearWaitsEvents(noWaitEvents);
+    scriptServer.saveScript(uniqueId, noWaitEvents, scriptId, {}, {},
+        {state: 'original-nowait'});
+
+    var triggerEvents = copyEvents(events);
+    clearWaitsEvents(triggerEvents);
+    addTriggersEvents(triggerEvents, allPassingRuns);
+    scriptServer.saveScript(uniqueId, triggerEvents, scriptId, {}, {},
+        {state: 'original-triggers'});
+
     getPassingRuns(events);
   });
 
@@ -486,27 +535,21 @@ function synthesizeTriggers_cont(uniqueId, script, callback) {
             {state: 'original', replay: true, run: i});
       }
 
-
       allPassingRuns = allPassingRuns.concat(runs);
 
       var triggerEvents = copyEvents(events);
-      var triggers = getPotentialTriggers(triggerEvents, allPassingRuns);
-      var userEvents = triggerEvents.filter(isUserEvent); 
-
-      for (var i = 0, ii = userEvents.length; i < ii; ++i) {
-        var e = userEvents[i];
-        var id = e.meta.id;
-        addTriggers(e, triggers[id]);
-      }
-
+      clearWaitsEvents(triggerEvents);
+      addTriggersEvents(triggerEvents, allPassingRuns);
       scriptServer.saveScript(uniqueId, triggerEvents, scriptId, {}, {},
-          {state: 'initial'});
+          {state: 'initial-triggers'});
 
       setTimeout(function() {
         perturbScriptLoop(events, 0, callback);
       }, 0);
     });
   }
+
+
 
   function perturbScriptLoop(events, index) {
     /* find the next user event after a certain time. since there's no point
@@ -550,6 +593,13 @@ function synthesizeTriggers_cont(uniqueId, script, callback) {
       console.log('Finished');
       scriptServer.saveScript(uniqueId, events, scriptId, {}, {}, 
           {state: 'final'});
+
+      var finalTriggerEvents = copyEvents(events);
+      clearTriggersEvents(finalTriggerEvents);
+      addTriggersEvents(finalTriggerEvents, allPassingRuns);
+      scriptServer.saveScript(uniqueId, finalTriggerEvents, scriptId, {}, {},
+          {state: 'final-triggers'});
+
       if (callback)
         callback(uniqueId);
       return;
@@ -578,7 +628,7 @@ function synthesizeTriggers_cont(uniqueId, script, callback) {
       /* we gone through all possible triggers */
       if (triggerIdx >= potentialTriggers.length) {
         /* lets add all possible triggers + timeout */
-        console.warn('Cannot find working trigger:', userEventId);
+        console.warn('Cannot find working trigger:', userEventIds);
 
         /* add all potential triggers to this event, since we could not find a
          * single event, notice that the default timing is not changed */
