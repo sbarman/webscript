@@ -186,32 +186,6 @@ function getPrefix(evnt) {
   return a.hostname + a.pathname;
 }
 
-/* convert an event URL (plus optional post data) to a data structure */
-function getUrlData(evnt) {
-  var uri = new URI(evnt.data.url);
-  var data = {};
-  data.hostname = uri.hostname();
-  data.path = uri.pathname();
-  data.prefix = data.hostname + data.path;
-  var method = evnt.data.method;
-  data.method = method;
-
-  // find parameters if they exist
-  if (method == "GET") {
-    data.search = uri.search(true);
-  } else if (method == "POST") {
-    if (evnt.data.requestBody && evnt.data.requestBody.formData) {
-      data.search = evnt.data.requestBody.formData;
-    }
-  }
-
-  if (!data.search) {
-    data.search = {};
-  }
-
-  return data;
-}
-
 /* Given a list of url data, return a mapping between prefix (hostname and path)
  * and a set of parameters, that have unique values across all urls */
 function getUniqueParams(urlDataList) {
@@ -397,9 +371,13 @@ function getPotentialTriggers2(origEvents, passingRuns) {
 
           if (runTrigger.prefix == prefix) {
             var paramMatch = true;
-            var runSeach = runTrigger.urlData.search;
+            var runSearch = runTrigger.urlData.search;
             for (var k in actualParams) {
-              if (runSeach[k] != actualParams[k]) {
+              var search = runSearch[k];
+              var actual = actualParams[k];
+              if (typeof(search) != 'string' && typeof(actual) != 'string')
+                console.warn("Using not string values");
+              else if (search != actual) {
                 paramMatch = false;
               }
             }
@@ -410,65 +388,46 @@ function getPotentialTriggers2(origEvents, passingRuns) {
           matchAllRuns = false;
       });
       if (matchAllRuns) {
-        triggers.push({
+        var triggerInfo = {
           prefix: prefix,
-          params: actualParams
-        });
+          eventId: trigger.eventInfo.meta.id // only used for debugging purposes
+        };
+        if (Object.keys(actualParams).length > 0)
+          triggerInfo.params = actualParams;
+        triggers.push(triggerInfo);
       }
     });
 
-    
-
-
-    var possibleTriggers = [];
-    var prefixesToRemove = [];
-
-    for (var prefix in prefixToTrigger) {
-      var triggerEvent = prefixToTrigger[prefix];
-      /* ignore duplicates */
-      if (triggerEvent != "duplicate") {
-        /* check if its seen in all other runs */
-        var seenInRuns = true;
-        for (var j = 0, jj = runs.length; j < jj; ++j) {
-          var runPrefixes = runs[j].prefixToTrigger;
-          if (!(prefix in runPrefixes) || 
-              runPrefixes[prefix] == "duplicate") {
-            seenInRuns = false;
-            break;
-          }
-        }
-
-        /* matched across all runs, lets add it as a potential trigger */
-        if (seenInRuns) {
-          var trigger = {eventId: triggerEvent};
-          /* a unique id for a trigger can be used multiple times, if its for
-           * different user events. if so, lets say the trigger must appear
-           * after the earlier user event for which it was used. */
-          var start = prefixToLastUserEvent[prefix];
-          if (start)
-            trigger.start = start;
-
-          possibleTriggers.push(trigger);
-
-          prefixesToRemove.push(prefix);
-          prefixToLastUserEvent[prefix] = curEventId;
-        }
-      }
-    }
+    triggers.forEach(function(trigger) {
+      /* a unique id for a trigger can be used multiple times, if its for
+       * different user events. if so, lets say the trigger must appear
+       * after the earlier user event for which it was used. */
+      var prefix = trigger.prefix;
+      var start = prefixToLastUserEvent[prefix];
+      if (start)
+        trigger.start = start;
+      prefixToLastUserEvent[prefix] = curEventId;
+    });
     /* add the mapping from user event to triggers */
-    triggerMapping[curEventId] = possibleTriggers;
+    triggerMapping[curEventId] = triggers;
 
     /* remove the triggers that we just added from the pool */
-    prefixesToRemove.forEach(function(prefix) {
-      var prefixToTrigger = baseRun.prefixToTrigger;
-      if (prefix in prefixToTrigger)
-        delete prefixToTrigger[prefix];
+    function noMatchingTrigger(t) {
+      var matches = 0;
+      for (var i = 0, ii = triggers.length; i < ii; ++i) {
+        if (matchTrigger(t.eventInfo, triggers[i])) {
+          matches += 1;
+        }
+      }
+      if (matches > 1)
+        console.warn('More than one event matched');
+      return matches == 0;
+    }
 
-      runs.forEach(function(run) {
-        var prefixToTrigger = run.prefixToTrigger;
-        if (prefix in prefixToTrigger)
-          delete prefixToTrigger[prefix];
-      });
+    baseRun.triggers = baseRun.triggers.filter(noMatchingTrigger);
+
+    runs.forEach(function(run) {
+      run.triggers = run.triggers.filter(noMatchingTrigger);
     });
   }
   return triggerMapping;
