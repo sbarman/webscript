@@ -130,7 +130,6 @@ function checkReplaySuccess(origEvents, replay) {
   return true;
 }
 
-
 // augment run script so that it only returns passing scripts
 function runScriptPassing(events, numRuns, timeout, callback) {
   function runOnce(allRuns) {
@@ -172,31 +171,6 @@ function clearWaits(events, eventId) {
   return events;
 }
 
-// set the triggers for an event
-function addTriggers(evnt, triggers) {
-  if (triggers && triggers.length > 0)
-    evnt.timing.triggerCondition = triggers;
-}
-
-function clearTriggers(evnt) {
-  if ('triggerCondition' in evnt.timing)
-    delete evnt.timing.triggerCondition;
-}
-
-// get the triggers for an event
-function getTriggers(evnt) {
-  var triggers = evnt.timing.triggerCondition;
-  if (triggers)
-    return triggers;
-  return [];
-}
-
-function getPrefix(evnt) {
-  var url = evnt.data.url;
-  var a = $('<a>', {href:url})[0];
-  return a.hostname + a.pathname;
-}
-
 // get the event with eventId from the sequence of events
 function getEvent(events, eventId) {
   for (var i = 0, ii = events.length; i < ii; ++i) {
@@ -206,13 +180,19 @@ function getEvent(events, eventId) {
   return null;
 }
 
-// convert an event URL (plus optional post data) to a data structure
+function getPrefix(evnt) {
+  var url = evnt.data.url;
+  var a = $('<a>', {href:url})[0];
+  return a.hostname + a.pathname;
+}
+
+/* convert an event URL (plus optional post data) to a data structure */
 function getUrlData(evnt) {
   var uri = new URI(evnt.data.url);
   var data = {};
-  data.domain = uri.domain();
+  data.hostname = uri.hostname();
   data.path = uri.pathname();
-  data.prefix = data.domain + data.path;
+  data.prefix = data.hostname + data.path;
   var method = evnt.data.method;
   data.method = method;
 
@@ -232,50 +212,266 @@ function getUrlData(evnt) {
   return data;
 }
 
-// not actually being used now, but potentially can improve accuracy in the
-// future
-function findUniqueParams(events) {
-  // add search params to all completed events
-  for (var i = 0, ii = events.length; i < ii; ++i) {
-    var e = events[i];
-    var type = e.type;
-    if (type == 'completed') {
-      // add search data to event
-      e.processedData = getUrlData(e);
+/* Given a list of url data, return a mapping between prefix (hostname and path)
+ * and a set of parameters, that have unique values across all urls */
+function getUniqueParams(urlDataList) {
+
+  var prefixGroups = _.groupBy(urlDataList, function(url) {
+    return url.prefix;
+  });
+
+  /* Find unique parameters in each group (which is clustered by URL prefix) */
+  var prefixToUniqueParams = {};
+  for (var prefix in prefixGroups) {
+    var urls = prefixGroups[prefix];
+    var paramsList = urls.map(function(url) { return url.search; });
+    var allParams = {};
+    /* get the list of all parameters */
+    paramsList.forEach(function(p) {
+      for (var k in p) {
+        allParams[k] = true;
+      }
+    });
+
+    var uniqueParams = {};
+    for (var k in allParams) {
+      var unique = true;
+      var values = [];
+      paramsList.forEach(function(p) {
+        if (k in p) {
+          var value = p[k];
+          if (values.indexOf(value) >= 0)
+            unique = false;
+          else
+            values.push(value);
+        }
+      });
+      if (unique)
+        uniqueParams[k] = true;
     }
+    prefixToUniqueParams[prefix] = Object.keys(uniqueParams);
+  }
+  return prefixToUniqueParams;
+}
+
+/* Get the best trigger mapping give the runs that we have seen */
+function getPotentialTriggers2(origEvents, passingRuns) {
+  /* The first run is a bit special, since it defines the order of events */
+  var baseRun = {
+    events: origEvents,
+    index: 0,
+    triggers: []
+  };
+
+  /* All other runs */
+  var runs = [];
+  for (var i = 0, ii = passingRuns.length; i < ii; ++i) {
+    var run = passingRuns[i];
+    runs.push({
+      events: run.events,
+      index: 0,
+      triggers: []
+    });
   }
 
-  var completedEvents = events.filter(isCompletedEvent);
-  var prefixToEvents = {};
+  var prefixToLastUserEvent = {};
+  var triggerMapping = {};
+  var userEvents = baseRun.events.filter(isUserEvent);
 
-  for (var i = 0, ii = completedEvents.length; i < ii; ++i) {
-    var e = completedEvents[i];
-    var prefix = e.processedData.prefix;
-    if (!(prefix in prefixToEvents)) {
-      prefixToEvents = [];
+  /* Find triggers for each user event (dom and capture events) */
+  for (var i = 0, ii = userEvents.length; i < ii; ++i) {
+    var curEvent = userEvents[i];
+    var curEventId = curEvent.meta.id;
+
+    /* handle base run */
+    var eventIdx = baseRun.index;
+    var events = baseRun.events;
+    var triggers = baseRun.triggers;
+
+    /* process all triggers until the next user event. for each trigger, save the
+     * event, the url info and its url prefix */
+    while (events[eventIdx].meta.id != curEventId) {
+      var e = events[eventIdx];
+      if (isTriggerEvent(e)) {
+        var urlData = getUrlData(e);
+
+        triggers.push({
+          eventInfo: e,
+          urlData: urlData,
+          prefix: urlData.prefix
+        });
+      }
+      ++eventIdx;
     }
-    prefixToEvents[prefix].push(e);
-  }
+    baseRun.index = eventIdx;
 
-  for (var prefix in prefixToEvents) {
-    var events = prefixToEvents[prefix];
-    var paramToValues = {};
+    /* Repeat the same process for each passing run */
+    runs.forEach(function(run) {
+      var eventIdx = run.index;
+      var events = run.events;
+      var triggers = run.triggers;
 
-    // initialize paramToValues
-    var e = events[0];
-    var search = e.processedData.search;
-//    for (var k in search) {
-//      paramToValues[
+      /* check if current event exists in the replay */
+      /* not sure why this check exists, since all replays are passing they
+       * should all contain all user events */
+      var exists = false;
+      for (var j = 0, jj = events.length; j < jj; ++j) {
+        if (events[j].meta.recordId == curEventId) {
+          exists = true;
+          break;
+        }
+      }
+      if (!exists) {
+        console.error('Missing user event in recording of successful run');
+        return;
+      }
 
-    for (var i = 0, ii = events.length; i < ii; ++i) {
-      var e = events[i];
-      var search = e.processedData.search;
-      for (var k in search) {
+      /* process triggers until the current user event */
+      while (events[eventIdx].meta.recordId != curEventId) {
+        var e = events[eventIdx];
+        if (isTriggerEvent(e)) {
+          var e = events[eventIdx];
+          var urlData = getUrlData(e);
+
+          triggers.push({
+            eventInfo: e,
+            urlData: urlData,
+            prefix: urlData.prefix
+          });
+        }
+        ++eventIdx;
+      }
+      run.index = eventIdx;
+    });
+
+    /* find triggers that have been observed across all the runs */
+    var baseRunTriggers = baseRun.triggers;
+    var triggersForRuns = runs.map(function(r) {return r.triggers;});
+    triggersForRuns.push(baseRunTriggers);
+
+    /* find a list of prefixes that are common in all runs*/
+    var getPrefix = function(t) { return t.prefix; }
+    var commonPrefixes = baseRunTriggers.map(getPrefix);
+    triggersForRuns.forEach(function(triggers) {
+      commonPrefixes = _.intersection(commonPrefixes, triggers.map(getPrefix));
+    });
+
+    /* lets see if we can develop a trigger for each common prefix */
+    var uniqueParamsForRuns = triggersForRuns.map(function(triggers) {
+      var urlDataList = triggers.map(function(t) { return t.urlData; });
+      return getUniqueParams(urlDataList);
+    });
+
+    var prefixToParams = {};
+    commonPrefixes.forEach(function(prefix) {
+      var uniqueParamsList = uniqueParamsForRuns.map(function(u) {
+        return u[prefix];
+      });
+      /* find intersection of the list of params */
+      var commonParams = uniqueParamsList[0];
+      uniqueParamsList.forEach(function(uniqueParams) {
+        commonParams = _.intersection(commonParams, uniqueParams);
+      })
+      prefixToParams[prefix] = commonParams
+    });
+
+    var triggers = [];
+    baseRunTriggers.forEach(function(trigger) {
+      var prefix = trigger.prefix;
+      if (commonPrefixes.indexOf(prefix) < 0)
+        return;
+
+      var params = prefixToParams[prefix];
+      var actualParams = {};
+      params.forEach(function(p) {
+        var search = trigger.urlData.search;
+        if (p in search)
+          actualParams[p] = search[p];
+      });
+      var matchAllRuns = true;
+      triggersForRuns.forEach(function(runTriggers) {
+        var match = false;
+        runTriggers.forEach(function(runTrigger) {
+          if (match)
+            return;
+
+          if (runTrigger.prefix == prefix) {
+            var paramMatch = true;
+            var runSeach = runTrigger.urlData.search;
+            for (var k in actualParams) {
+              if (runSeach[k] != actualParams[k]) {
+                paramMatch = false;
+              }
+            }
+            match = paramMatch;
+          }
+        })
+        if (!match)
+          matchAllRuns = false;
+      });
+      if (matchAllRuns) {
+        triggers.push({
+          prefix: prefix,
+          params: actualParams
+        });
+      }
+    });
+
+    
 
 
+    var possibleTriggers = [];
+    var prefixesToRemove = [];
+
+    for (var prefix in prefixToTrigger) {
+      var triggerEvent = prefixToTrigger[prefix];
+      /* ignore duplicates */
+      if (triggerEvent != "duplicate") {
+        /* check if its seen in all other runs */
+        var seenInRuns = true;
+        for (var j = 0, jj = runs.length; j < jj; ++j) {
+          var runPrefixes = runs[j].prefixToTrigger;
+          if (!(prefix in runPrefixes) || 
+              runPrefixes[prefix] == "duplicate") {
+            seenInRuns = false;
+            break;
+          }
+        }
+
+        /* matched across all runs, lets add it as a potential trigger */
+        if (seenInRuns) {
+          var trigger = {eventId: triggerEvent};
+          /* a unique id for a trigger can be used multiple times, if its for
+           * different user events. if so, lets say the trigger must appear
+           * after the earlier user event for which it was used. */
+          var start = prefixToLastUserEvent[prefix];
+          if (start)
+            trigger.start = start;
+
+          possibleTriggers.push(trigger);
+
+          prefixesToRemove.push(prefix);
+          prefixToLastUserEvent[prefix] = curEventId;
+        }
       }
     }
+    /* add the mapping from user event to triggers */
+    triggerMapping[curEventId] = possibleTriggers;
+
+    /* remove the triggers that we just added from the pool */
+    prefixesToRemove.forEach(function(prefix) {
+      var prefixToTrigger = baseRun.prefixToTrigger;
+      if (prefix in prefixToTrigger)
+        delete prefixToTrigger[prefix];
+
+      runs.forEach(function(run) {
+        var prefixToTrigger = run.prefixToTrigger;
+        if (prefix in prefixToTrigger)
+          delete prefixToTrigger[prefix];
+      });
+    });
   }
+  return triggerMapping;
 }
 
 /* Get the best trigger mapping give the runs that we have seen */
@@ -423,6 +619,7 @@ function getPotentialTriggers(origEvents, passingRuns) {
   return triggerMapping;
 }
 
+
 /* remove any wait times for all the events */
 function clearWaitsEvents(events) {
   var userEventIds = events.filter(isUserEvent).map(function(e) {
@@ -493,11 +690,6 @@ function synthesizeTriggers(scriptName, callback) {
 }
 
 function synthesizeTriggers_cont(uniqueId, script, callback) {
-//  var learningScript = script;
-//  var learningReplays = [];
-//  var learningTriggers = [];
-//  var learningPassingRuns = [];
-
   var numInitialRuns = 2;
   var numRuns = 1;
   var timeout = 300 * 1000; /* 5 minutes */
@@ -522,13 +714,15 @@ function synthesizeTriggers_cont(uniqueId, script, callback) {
     scriptServer.saveScript(uniqueId, triggerEvents, scriptId, {}, {},
         {state: 'original-triggers'});
 
+    learningScript = events;
+    learningReplays = [];
+
     getPassingRuns(events);
   });
 
   // get passing runs of the script
   function getPassingRuns(events) {
     runScriptPassing(events, numInitialRuns, timeout, function(err, runs) {
-      // learningReplays.push(runs);
       for (var i = 0, ii = runs.length; i < ii; ++i) {
         var runEvents = saveEvents ? runs[i].events : [];
         scriptServer.saveScript(uniqueId, runEvents, scriptId, {}, {},
@@ -536,6 +730,7 @@ function synthesizeTriggers_cont(uniqueId, script, callback) {
       }
 
       allPassingRuns = allPassingRuns.concat(runs);
+      learningReplays = learningReplays.concat(runs);
 
       var triggerEvents = copyEvents(events);
       clearWaitsEvents(triggerEvents);
@@ -548,8 +743,6 @@ function synthesizeTriggers_cont(uniqueId, script, callback) {
       }, 0);
     });
   }
-
-
 
   function perturbScriptLoop(events, index) {
     /* find the next user event after a certain time. since there's no point
@@ -667,8 +860,6 @@ function synthesizeTriggers_cont(uniqueId, script, callback) {
 
       /* run script */
       runScript(testEvents, numRuns, timeout, function(err, runs) {
-        // learningReplays.push(runs);
-
         for (var i = 0, ii = runs.length; i < ii; ++i) {
           var success = checkReplaySuccess(testEvents, runs[i]);
           var runEvents = saveEvents ? runs[i].events : [];
@@ -690,6 +881,8 @@ function synthesizeTriggers_cont(uniqueId, script, callback) {
          * current event */
         if (allPassed) {
           allPassingRuns = allPassingRuns.concat(runs);
+          learningReplays = learningReplays.concat(runs);
+
           var updatedTriggers = getPotentialTriggers(testEvents,
               allPassingRuns);
 

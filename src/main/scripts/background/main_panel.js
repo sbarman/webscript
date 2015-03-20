@@ -987,73 +987,7 @@ var Replay = (function ReplayClosure() {
       return false;
     },
     triggerCheck: function _triggerCheck(v) {
-      /* trigger has timed out, so no need to check trigger */
-      if (this.checkTriggerTimeout())
-        return true;
-
-      /* if there is a trigger, then check if trigger was observed */
-      var triggerEvent = this.getEvent(v.timing.triggerEvent);
-      if (triggerEvent) {
-        var recordEvents = this.record.events;
-
-        var matchedEvent = null;
-        for (var i = recordEvents.length - 1; i >= 0; --i) {
-          var otherEvent = recordEvents[i];
-          if (otherEvent.type == triggerEvent.type &&
-              otherEvent.data.type == triggerEvent.data.type &&
-              matchUrls(otherEvent.data.url,
-                        triggerEvent.data.url, 0.9)) {
-            matchedEvent = otherEvent;
-            break;
-          }
-        }
-
-        if (!matchedEvent) {
-          return false;
-        }
-      }
-
-      /* if there is a trigger, then check if trigger was observed */
-      var triggerCondition = v.timing.triggerCondition;
-      if (triggerCondition) {
-        var recordEvents = this.record.events;
-
-        for (var j = 0, jj = triggerCondition.length; j < jj; ++j) {
-
-          var getPrefix = function(url) {
-            var a = $('<a>', {href:url})[0];
-            return a.hostname + a.pathname;
-          }
-
-          var trigger = triggerCondition[j];
-          var triggerEvent = this.getEvent(trigger.eventId);
-          var triggerPrefix = getPrefix(triggerEvent.data.url);
-
-          var matched = false;
-          var startSeen = false;
-          if (!trigger.start)
-            startSeen = true;
-
-          for (var i = recordEvents.length - 1; i >= 0; --i) {
-            var e = recordEvents[i];
-            if (e.meta.recordId && e.meta.recordId == trigger.start) {
-              startSeen = true;
-            }
-
-            if (startSeen && e.type == "completed") {
-              var prefix = getPrefix(e.data.url);
-              if (prefix == triggerPrefix) {
-                matched = true;
-                break;
-              }
-            }
-          }
-
-          if (!matched) {
-            return false;
-          }
-        }
-      }
+      // TODO: implement me
       return true;
     },
     /* The main function which dispatches events to the content script */
