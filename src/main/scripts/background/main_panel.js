@@ -987,7 +987,41 @@ var Replay = (function ReplayClosure() {
       return false;
     },
     triggerCheck: function _triggerCheck(v) {
-      // TODO: implement me
+      /* trigger has timed out, so no need to check trigger */
+      if (this.checkTriggerTimeout())
+        return true;
+
+      /* if there is a trigger, then check if trigger was observed */
+      var triggerCondition = v.timing.triggerCondition;
+      if (triggerCondition) {
+        var recordEvents = this.record.events;
+
+        for (var j = 0, jj = triggerCondition.length; j < jj; ++j) {
+          var trigger = triggerCondition[j];
+          var triggerEvent = this.getEvent(trigger.eventId);
+
+          var matched = false;
+          var startSeen = false;
+          if (!trigger.start)
+            startSeen = true;
+
+          for (var i = recordEvents.length - 1; i >= 0; --i) {
+            var e = recordEvents[i];
+            if (e.meta.recordId && e.meta.recordId == trigger.start) {
+              startSeen = true;
+            }
+            
+            if (matchTrigger(e, trigger, triggerEvent)) {
+              matched = true;
+              break;
+            }
+          }
+
+          if (!matched) {
+            return false;
+          }
+        }
+      }
       return true;
     },
     /* The main function which dispatches events to the content script */
@@ -1267,6 +1301,9 @@ var Controller = (function ControllerClosure() {
     userUpdate: function _userUpdate(eventId, field, value) {
       ctlLog.log('Update:', eventId, field, value);
       this.record.userUpdate(eventId, field, value);
+    },
+    clearMessages: function _clearMessages() {
+      this.updateListeners({type: 'clearMessages'});
     }
   };
 
@@ -1429,7 +1466,8 @@ chrome.webRequest.onBeforeRequest.addListener(function(details) {
     requestIdToRequestBody[details.requestId] = requestBody;
 
   bgLog.log('Request start', details);
-  addWebRequestEvent(details, 'start');
+  /* for time / space issues, lets not save start events for now */
+  // addWebRequestEvent(details, 'start');
 }, filter, ['requestBody']);
 
 chrome.webRequest.onErrorOccurred.addListener(function(details) {

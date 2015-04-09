@@ -70,8 +70,11 @@ var Benchmarker = (function BenchmarkerClosure() {
       var b = this;
 
       function helper(index) {
-        if (index >= benchmarks.length)
+        if (index >= benchmarks.length) {
+          if (cont)
+            cont();
           return;
+        }
 
         var info = benchmarks[index];
         var benchmark = info.benchmark;
@@ -92,11 +95,17 @@ var Benchmarker = (function BenchmarkerClosure() {
       this.resetParams();
       // params.replay.eventTimeout = 60;
       params.panel.enableEdit = false;
-      params.replay.saveReplay = false;
+      params.replay.saveReplay = true;
+      params.replay.defaultWaitNewTab = 100;
+      params.replay.defaultWaitNextEvent = 100;
+      params.logging.saved = false;
+      params.logging.level = 4;
 
       if (init)
         init();
       this.updateParams();
+
+      this.controller.clearMessages();
 
       scriptServer.getScript(benchmark.script.id, function(script) {
         log.debug('Starting benchmark:', benchmark.script.id, events);
@@ -216,12 +225,14 @@ function makeBenchmarks(name, callback) {
     var whitelist = ['original', 'original-nowait', 'original-triggers',
                      'initial-triggers', 'final', 'final-triggers'];
 
+    var numBenchmarks = 0;
     for (var i = 0, ii = scripts.length; i < ii; ++i) {
       // create local scope
       (function() {
         var s = scripts[i];
         var notes = JSON.parse(s.notes);
         if (whitelist.indexOf(notes.state) >= 0 && !notes.replay) {
+          numBenchmarks += 1;
           scriptServer.getScript(s.id, function(script) {
             var captures = script.events.filter(function(e) {
               return e.type == "capture";
@@ -241,13 +252,25 @@ function makeBenchmarks(name, callback) {
     var ids = [];
     function callbackReady(id) {
       ids.push(id);
-      if (callback && ids.length == whitelist.length)
+      if (callback && ids.length == numBenchmarks)
         callback(ids);
     }
   });
 }
 
-function runSynthesizeBenchmarks(name, numRuns) {
+function runSynthesizeBenchmarksLoop(names, numRuns) {
+  function helper(index) {
+    if (index >= names.length)
+      return;
+
+    runSynthesizeBenchmarks(names[index], numRuns, function() {
+      helper(index + 1);
+    });
+  }
+  helper(0);
+}
+
+function runSynthesizeBenchmarks(name, numRuns, cont) {
   synthesizeTriggers(name, function(timestampName) {
     scriptServer.finishedProcessing(function() {
       makeBenchmarks(timestampName, function(benchmarkIds) {
@@ -260,7 +283,7 @@ function runSynthesizeBenchmarks(name, numRuns) {
             }
           }
           console.log(benchmarks);
-          b.runBenchmarks(benchmarks, numRuns)
+          b.runBenchmarks(benchmarks, numRuns, cont)
         });
         console.log(benchmarkIds);
       });
@@ -268,60 +291,15 @@ function runSynthesizeBenchmarks(name, numRuns) {
   });
 }
 
-////
-////function runBenchmarkPaper(ids) {
-////  b.getBenchmarks(function(benchmarks) {
-////    var timingStrategies = Object.keys(TimingStrategy);
-////
-////    var benchmarkList = [];
-////    var initList = [];
-////    var notes = [];
-////
-////    for (var i = 0, ii = benchmarks.length; i < ii; ++i) {
-////      var benchmark = benchmarks[i];
-////      if (ids.indexOf(benchmark.id) != -1) {
-////        // add basic replay
-////        benchmarkList.push(benchmark);
-////        initList.push(function() {});
-////        notes.push('Plain old replay');
-////
-////        // replay without compensation
-////        benchmarkList.push(benchmark);
-////        initList.push(function() {
-////          params.replaying.compensation = Compensation.NONE;
-////        });
-////        notes.push('No compensation');
-////
-////        // replay without atomic events
-////        benchmarkList.push(benchmark);
-////        initList.push(function() {
-////          params.replaying.atomic = false;
-////        });
-////        notes.push('No atomic events');
-////
-////        // replay without cascading event check
-////        benchmarkList.push(benchmark);
-////        initList.push(function() {
-////          params.replaying.cascadeCheck = false;
-////        });
-////        notes.push('No cascading event check');
-////
-////        // replay as fast as possible
-////        benchmarkList.push(benchmark);
-////        initList.push(function() {
-////          params.replaying.timingStrategy = TimingStrategy.SPEED;
-////        });
-////        notes.push('Speed timing');
-////
-////        // replay with perturbed timing
-////        benchmarkList.push(benchmark);
-////        initList.push(function() {
-////          params.replaying.timingStrategy = TimingStrategy.PERTURB;
-////        });
-////        notes.push('Perturb timing');
-////      }
-////    }
-////
-////    b.runBenchmarks(benchmarkList, initList, notes);
-////  });
-////}
+function saveCurrentSnapshot(tabId, filename) {
+  chrome.tabs.get(tabId, function(tabInfo) {
+    var windowId = tabInfo.windowId;
+    chrome.tabs.captureVisibleTab(windowId, {format: 'png'}, function(dataUrl) {
+      chrome.downloads.download({
+        url: dataUrl,
+        filename: './snapshots/' + filename
+      });
+    });
+  });
+}
+

@@ -1,91 +1,55 @@
-function checkTriggers(observedEvents, recordedEvents, currentEvent) {
-  /* trigger has timed out, so no need to check trigger */
-  if (this.checkTriggerTimeout())
-    return true;
-
-  /* if there is a trigger, then check if trigger was observed */
-  var triggerEvent = this.getEvent(v.timing.triggerEvent);
-  if (triggerEvent) {
-    var recordEvents = this.record.events;
-
-    var matchedEvent = null;
-    for (var i = recordEvents.length - 1; i >= 0; --i) {
-      var otherEvent = recordEvents[i];
-      if (otherEvent.type == triggerEvent.type &&
-          otherEvent.data.type == triggerEvent.data.type &&
-          matchUrls(otherEvent.data.url,
-                    triggerEvent.data.url, 0.9)) {
-        matchedEvent = otherEvent;
-        break;
-      }
-    }
-
-    if (!matchedEvent) {
-      return false;
-    }
-  }
-
-  /* if there is a trigger, then check if trigger was observed */
-  var triggerCondition = v.timing.triggerCondition;
-  if (triggerCondition) {
-    var recordEvents = this.record.events;
-
-    for (var j = 0, jj = triggerCondition.length; j < jj; ++j) {
-
-      var getPrefix = function(url) {
-        var a = $('<a>', {href:url})[0];
-        return a.hostname + a.pathname;
-      }
-
-      var trigger = triggerCondition[j];
-      var triggerEvent = this.getEvent(trigger.eventId);
-      var triggerPrefix = getPrefix(triggerEvent.data.url);
-
-      var matched = false;
-      var startSeen = false;
-      if (!trigger.start)
-        startSeen = true;
-
-      for (var i = recordEvents.length - 1; i >= 0; --i) {
-        var e = recordEvents[i];
-        if (e.meta.recordId && e.meta.recordId == trigger.start) {
-          startSeen = true;
-        }
-
-        if (startSeen && e.type == "completed") {
-          var prefix = getPrefix(e.data.url);
-          if (prefix == triggerPrefix) {
-            matched = true;
-            break;
-          }
-        }
-      }
-
-      if (!matched) {
-        return false;
-      }
-    }
-  }
-  return true;
-}
+// function checkTriggers(observedEvents, recordedEvents, currentEvent) {
+//
+//   /* if there is a trigger, then check if trigger was observed */
+//   var triggerEvent = this.getEvent(v.timing.triggerEvent);
+//   if (triggerEvent) {
+//     var recordEvents = this.record.events;
+// 
+//     var matchedEvent = null;
+//     for (var i = recordEvents.length - 1; i >= 0; --i) {
+//       var otherEvent = recordEvents[i];
+//       if (otherEvent.type == triggerEvent.type &&
+//           otherEvent.data.type == triggerEvent.data.type &&
+//           matchUrls(otherEvent.data.url,
+//                     triggerEvent.data.url, 0.9)) {
+//         matchedEvent = otherEvent;
+//         break;
+//       }
+//     }
+// 
+//     if (!matchedEvent) {
+//       return false;
+//     }
+//   }
+//  return true;
+//}
 
 /* convert an event URL (plus optional post data) to a data structure */
 function getUrlData(evnt) {
-  var uri = new URI(evnt.data.url);
   var data = {};
-  data.hostname = uri.hostname();
-  data.path = uri.pathname();
-  data.prefix = data.hostname + data.path;
-  var method = evnt.data.method;
-  data.method = method;
+  /* search params were throwing errors */
+  try {
+    var uri = new URI(evnt.data.url);
+    data.hostname = uri.hostname();
+    data.path = uri.pathname();
+    data.prefix = data.hostname + data.path;
+    var method = evnt.data.method;
+    data.method = method;
 
-  // find parameters if they exist
-  if (method == "GET") {
-    data.search = uri.search(true);
-  } else if (method == "POST") {
-    if (evnt.data.requestBody && evnt.data.requestBody.formData) {
-      data.search = evnt.data.requestBody.formData;
+    // find parameters if they exist
+    if (method == "GET") {
+      data.search = uri.search(true);
+    } else if (method == "POST") {
+      if (evnt.data.requestBody && evnt.data.requestBody.formData) {
+        data.search = evnt.data.requestBody.formData;
+      }
     }
+  } catch (err) {
+    data.hostname = "foo.com";
+    data.path = "/";
+    data.prefix = data.hostname + data.path;
+    data.method = "GET";
+    data.search = {};
   }
 
   if (!data.search) {
@@ -103,8 +67,11 @@ function getUrlData(evnt) {
   return data;
 }
 
-function matchTrigger(triggerEvent, condition) {
-  var urlData = getUrlData(triggerEvent);
+function matchTrigger(replayEvent, condition) {
+  if (replayEvent.type != 'completed')
+    return false;
+
+  var urlData = getUrlData(replayEvent);
   if (urlData.prefix != condition.prefix)
     return false;
 

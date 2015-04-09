@@ -61,6 +61,7 @@
     "storage",
     "unlimitedStorage",
     "cookies",
+    "downloads",
     "http://*/*",
     "https://*/*",
     "<all_urls>"

@@ -63,7 +63,7 @@ Replay.prototype.simulateCapture = function _simulateCapture(v) {
     /* delay this message so page can finish processing AJAX requests */
     setTimeout(function() {
       replayPort.postMessage({type: 'simulateCapture', value: v});
-    }, 200);
+    }, 300);
     this.replayState = ReplayState.ACK;
     this.ack = null;
 

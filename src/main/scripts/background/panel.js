@@ -60,6 +60,9 @@ var Panel = (function PanelClosure() {
         case 'message':
           this.addMessage(value);
           break;
+        case 'clearMessages':
+          this.clearMessages();
+          break;
         default:
           throw 'unknown controller update';
       }
@@ -378,6 +381,9 @@ var Panel = (function PanelClosure() {
       var newDiv = $('<div/>', {class: 'message wordwrap'});
       newDiv.text(message);
       $('#messages').prepend(newDiv);
+    },
+    clearMessages: function _clearMessages() {
+      $('#messages').empty();
     },
     question: function _question(text, callback) {
       this.addMessage(text);
