@@ -174,7 +174,7 @@ var TimeoutStrategy = {
       saveReplay: true,
       cancelUnknownEvents: false,
       skipCascadingEvents: true,
-      eventTimeout: 6,
+      eventTimeout: 10,
       targetTimeout: 5,
       triggerTimeout: 5,
       compensation: CompensationAction.FORCED,
@@ -188,7 +188,8 @@ var TimeoutStrategy = {
       atomic: true,
       cascadeCheck: true,
       urlSimilarity: 0.8,
-      defaultUser: false
+      defaultUser: false,
+      screenshot: false
     },
     capture: {
       saveCaptureLocal: true,

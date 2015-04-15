@@ -89,7 +89,8 @@ var Benchmarker = (function BenchmarkerClosure() {
       }
       helper(0);
     },
-    runBenchmark: function _runBenchmark(benchmark, init, notes, numRuns, cont) {
+    runBenchmark: function _runBenchmark(benchmark, init, notes, numRuns,
+        cont) {
       var b = this;
 
       this.resetParams();
@@ -98,6 +99,7 @@ var Benchmarker = (function BenchmarkerClosure() {
       params.replay.saveReplay = true;
       params.replay.defaultWaitNewTab = 100;
       params.replay.defaultWaitNextEvent = 100;
+      params.replay.snapshot = true;
       params.logging.saved = false;
       params.logging.level = 4;
 
@@ -118,6 +120,8 @@ var Benchmarker = (function BenchmarkerClosure() {
           }
 
           var timeoutId = -1;
+
+          saveText(notes, benchmark.name);
 
           var r = b.controller.replayScript(script.events, 
               {scriptId: script.id}, function(replay) {
@@ -286,18 +290,6 @@ function runSynthesizeBenchmarks(name, numRuns, cont) {
           b.runBenchmarks(benchmarks, numRuns, cont)
         });
         console.log(benchmarkIds);
-      });
-    });
-  });
-}
-
-function saveCurrentSnapshot(tabId, filename) {
-  chrome.tabs.get(tabId, function(tabInfo) {
-    var windowId = tabInfo.windowId;
-    chrome.tabs.captureVisibleTab(windowId, {format: 'png'}, function(dataUrl) {
-      chrome.downloads.download({
-        url: dataUrl,
-        filename: './snapshots/' + filename
       });
     });
   });

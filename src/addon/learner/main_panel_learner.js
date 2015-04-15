@@ -131,22 +131,30 @@ function checkReplaySuccess(origEvents, replay) {
 }
 
 // augment run script so that it only returns passing scripts
-function runScriptPassing(events, numRuns, timeout, callback) {
-  function runOnce(allRuns) {
-    if (allRuns.length < numRuns) {
-      runScript(events, 1, timeout, function(err, runs) {
-        var run = runs[0];
-        if (checkReplaySuccess(events, run)) {
-          // add run
-          allRuns.push(run);
-        }
-        return runOnce(allRuns);
-      });
-    } else {
-      return callback(null, allRuns);
+function runScriptPassing(events, numRuns, maxRuns, timeout, callback) {
+  var allPassingRuns = [];
+  var totalRuns = 0;
+
+  function runOnce() {
+    if (totalRuns >= maxRuns) {
+      return callback("Exceeded maxRuns", []);
     }
+
+    if (allPassingRuns.length >= numRuns) {
+      return callback(null, allPassingRuns);
+    }
+
+    runScript(events, 1, timeout, function(err, runs) {
+      var run = runs[0];
+      totalRuns += 1;
+      if (checkReplaySuccess(events, run)) {
+        // add run
+        allPassingRuns.push(run);
+      }
+      return runOnce();
+    });
   }
-  return runOnce([]);
+  return runOnce();
 }
 
 // given a script, modify script so that eventId fires immediately after
@@ -694,7 +702,10 @@ function synthesizeTriggers_cont(uniqueId, script, callback) {
   var allPassingRuns = [];
 
   // get a passing run that starts from when the page opens
-  runScriptPassing(script.events, 1, timeout, function(err, runs) {
+  runScriptPassing(script.events, 1, 4, timeout, function(err, runs) {
+    if (err)
+      return callback(uniqueId);
+
     var events = runs[0].events;
     scriptServer.saveScript(uniqueId, events, scriptId, {}, {}, 
         {state: 'original'});
@@ -718,7 +729,12 @@ function synthesizeTriggers_cont(uniqueId, script, callback) {
 
   // get passing runs of the script
   function getPassingRuns(events) {
-    runScriptPassing(events, numInitialRuns, timeout, function(err, runs) {
+    runScriptPassing(events, numInitialRuns, numInitialRuns * 2, timeout,
+        function(err, runs) {
+
+      if (err)
+        return callback(uniqueId);
+
       for (var i = 0, ii = runs.length; i < ii; ++i) {
         var runEvents = saveEvents ? runs[i].events : [];
         scriptServer.saveScript(uniqueId, runEvents, scriptId, {}, {},

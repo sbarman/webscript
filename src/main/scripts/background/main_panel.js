@@ -433,6 +433,7 @@ var Replay = (function ReplayClosure() {
       /* maps between the record and replay time ports and tabs */
       this.portMapping = {};
       this.tabMapping = {};
+      this.lastTab = null;
       /* used to link the replayed events with the original recording */
       this.scriptId = null;
       /* callback executed after replay has finished */
@@ -791,6 +792,7 @@ var Replay = (function ReplayClosure() {
          * tab, then lets assume this new tab should match */
         if (this.firstEventReplayed && unusedTabs.length == 1) {
           tabMapping[frame.tab] = unusedTabs[0];
+          this.lastTab = unusedTabs[0];
           this.setNextTimeout(0);
           return;
         }
@@ -804,6 +806,7 @@ var Replay = (function ReplayClosure() {
               replayLog.log('New tab opened:', newTab);
               var newTabId = newTab.id;
               replay.tabMapping[frame.tab] = newTabId;
+              replay.lastTab = newTabId;
               replay.ports.tabIdToTab[newTabId] = newTab;
               replay.setNextTimeout(params.replay.defaultWaitNewTab);
             }
@@ -827,6 +830,7 @@ var Replay = (function ReplayClosure() {
                 replayLog.log('Mapping tab:', tab);
                 var tabId = tab.id;
                 replay.tabMapping[frame.tab] = tabId;
+                replay.lastTab = tabId;
                 replay.setNextTimeout(0);
               });
             }
@@ -913,9 +917,13 @@ var Replay = (function ReplayClosure() {
         // replayLog.warn(msg);
         // this.finish(msg);
 
+        this.screenshot("timeout");
+
         /* lets just skip the event */
         this.incrementIndex();
         this.setNextTimeout();
+
+        replayLog.warn('Event timeout');
 
         this.updateStatus(ReplayState.REPLAYING);
         return;
@@ -1124,6 +1132,13 @@ var Replay = (function ReplayClosure() {
       this.ack = ack;
       if (ack.setTimeout)
         this.setNextTimeout(0);
+    },
+    screenshot: function _screenshot(text) {
+      var fileName = JSON.stringify(new Date());
+      if (text)
+        fileName += '-' + text;
+      if (this.lastTab)
+        saveScreenshot(this.lastTab, fileName)
     }
   };
 
@@ -1503,6 +1518,8 @@ chrome.storage.local.get('scriptName', function(info) {
     controller.getScript(name);
 });
 
+/* Random utility methods */
+
 /*
 function printEvents() {
   var events = record.events;
@@ -1516,3 +1533,24 @@ function printReplayEvents() {
   bgLog.log(text);
 }
 */
+
+function saveScreenshot(tabId, filename) {
+  chrome.tabs.get(tabId, function(tabInfo) {
+    var windowId = tabInfo.windowId;
+    chrome.tabs.captureVisibleTab(windowId, {format: 'png'}, function(dataUrl) {
+      filename = filename.replace(/[\,\/#!$%\^&\*;:{}=\`~()"']/g,"");
+      chrome.downloads.download({
+        url: dataUrl,
+        filename: './snapshots/' + filename + '.png'
+      });
+    });
+  });
+}
+
+function saveText(text, filename) {
+  filename = filename.replace(/[\,\/#!$%\^&\*;:{}=\`~()"']/g,"");
+  chrome.downloads.download({
+    url: 'data:text/plain;charset=utf-8,' + text,
+    filename: './snapshots/' + filename + '.txt'
+  });
+}

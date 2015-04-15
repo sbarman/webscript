@@ -6,7 +6,8 @@
 /* Convert a node to a xpath expression representing the path from the
  * document element */
 
-var htmlTags = ['html','base','head','head','link','meta','style','title','address','article','body','footer','header','h1','hgroup','nav','section','blockquote','dd','div','dl','dt','figcaption','figure','hr','li','main','ol','p','pre','ul','a','abbr','b','bdi','bdo','br','cite','code','data','dfn','em','i','kbd','mark','q','rp','rt','rtc','ruby','s','samp','small','span','strong','sub','sup','time','u','var','wbr','area','audio','img','map','track','video','embed','iframe','object','param','source','canvas','noscript','script','del','ins','caption','col','colgroup','table','tbody','td','tfoot','th','thead','tr','button','datalist','fieldset','form','input','keygen','label','legend','meter','optgroup','option','output','progress','select','textarea','details','dialog','menu','menuitem','summary','content','decorator','element','shadow','template','acronym','applet','basefont','big','blink','center','dir','frame','frameset','isindex','listing','noembed','plaintext','spacer','strike','tt','xmp'];
+/* https://developer.mozilla.org/en-US/docs/Web/HTML/Element */
+var htmlTags = ['html','base','head','head','link','meta','style','title','address','article','body','footer','header','h1','h2','h3','h4','h5','h6','hgroup','nav','section','blockquote','dd','div','dl','dt','figcaption','figure','hr','li','main','ol','p','pre','ul','a','abbr','b','bdi','bdo','br','cite','code','data','dfn','em','i','kbd','mark','q','rp','rt','rtc','ruby','s','samp','small','span','strong','sub','sup','time','u','var','wbr','area','audio','img','map','track','video','embed','iframe','object','param','source','canvas','noscript','script','del','ins','caption','col','colgroup','table','tbody','td','tfoot','th','thead','tr','button','datalist','fieldset','form','input','keygen','label','legend','meter','optgroup','option','output','progress','select','textarea','details','dialog','menu','menuitem','summary','content','decorator','element','shadow','template','acronym','applet','basefont','big','blink','center','dir','frame','frameset','isindex','listing','noembed','plaintext','spacer','strike','tt','xmp'];
 
 function nodeToXPath(element) {
   if (!element.tagName) {
@@ -29,7 +30,7 @@ function nodeToXPath(element) {
     if (sibling === element) {
       var tagIdentifier = element.tagName;
       if (htmlTags.indexOf(tagIdentifier.toLowerCase()) < 0)
-        tagIdentifier = "*[name()='" + element.tagName + "']";
+        tagIdentifier = "*[name()='" + element.tagName.toLowerCase() + "']";
       return nodeToXPath(element.parentNode) + '/' + tagIdentifier +
              '[' + (ix + 1) + ']';
     }

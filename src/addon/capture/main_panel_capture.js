@@ -46,7 +46,7 @@ Replay.prototype.addonTiming.push(function() {
 Replay.prototype.simulateCapture = function _simulateCapture(v) {
   var meta = v.meta;
 
-  log.log('background replay:', meta.id, v);
+  log.log('background replay capture:', meta.id, v);
 
   /* if no matching port, try again later */
   var replayPort = this.getMatchingPort(v);
@@ -96,9 +96,12 @@ Replay.prototype.saveCapture = function _saveCapture(capture) {
     addonCapture[j].call(this, capture);
   }
 
+
   var text = capture.innerText.trim();
   this.captures.push(text);
   this.updateListeners({type: 'captureText', value: text});
+
+  log.log('Captured text:', text, capture);
 
   /* set the success ack so the script continues */
   this.ack = {type: Ack.SUCCESS};
@@ -110,6 +113,8 @@ Replay.prototype.saveCapture = function _saveCapture(capture) {
     storage[captureId] = JSON.stringify(capture);
     chrome.storage.local.set(storage);
   }
+
+  this.screenshot('capture');
 };
 
 /* Callback when capture button is clicked */

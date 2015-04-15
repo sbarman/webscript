@@ -295,10 +295,10 @@ var Panel = (function PanelClosure() {
         $('#events').append(eventDiv);
       }
  
+      var panel = this;
       // do this in a timeout so it doesn't block the main thread
       setTimeout(function() {
         var title = $('<div><b>[' + id + ']type:' + '</b>' + type + '</div>');
-        var panel = this;
         title.click(function(e) {
           panel.updateSelectedEvents(e);
         });
