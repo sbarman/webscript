@@ -1,10 +1,10 @@
 {
-  "name": "Hmmm!",
+  "name": "Ringer",
   "version": "1.0",
   "manifest_version": 2,
-  "description": "Programing for all.",
+  "description": "A record and replay tool for even the most complicated websites.",
   "browser_action": {
-    "default_title": "WebScript",
+    "default_title": "Ringer",
     "default_icon": "icons/16-full-color.png"
   },
   "background": {
@@ -35,7 +35,6 @@
              "main/scripts/content/simple_record.js",
              "addon/capture/content_script_capture.js",
              "addon/copypaste/content_script_copypaste.js"
-//             "addon/generalize/content_script_generalize.js"
       ],
       "run_at": "document_start",
       // Bug with Chrome extensions doesn't allow extension code to access
