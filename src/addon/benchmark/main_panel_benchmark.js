@@ -4,30 +4,19 @@
 'use strict';
 
 /* Benchmarks can automatically be created from the django command line 
- * using the following command:
+ * using the following command (deprecated):
  * 
  * python manage.py makebenchmarks <script_id ...>
  *
  * Steps to benchmarking:
  *
- * 1) Record and save scrpt 'foo'.
- * 2) Run learning on script.
- *    synthesizeTriggers('foo') or synthesizeTriggersLoop(['foo'])
- * 3) Create benchmarks from inferred scripts
- *    synthesizeTriggers('foo', function(name) {
- *      makeBenchmarks(name);
- *    })
- * 4) Run enabled benchmarks in all the different configurations (we can
- *    hardcode this to make it easier).
- * 5) Get stats from all benchmarks. For each benchmark, show name, number
- *    of runs, successful, failed, time for passing (avg, min, max), timing,
- *    element strategy
+ * 1) Record and save script 'foo'.
+ * 2) Run learning and benchmarks on script.
  *
- *    Have ability to filter
- *
- *    Get stats from learning - # of executions
+ *    runSynthesizeBenchmarksLoop(names, numRuns)
  */
 
+/* Paramaterizable, but should only need to use singleton object */
 var Benchmarker = (function BenchmarkerClosure() {
   var log = getLog('benchmark');
 
@@ -48,17 +37,20 @@ var Benchmarker = (function BenchmarkerClosure() {
     },
     getBenchmarks: function _getBenchmarks(cont) {
       var scriptServer = this.scriptServer;
-      scriptServer.getBenchmarks(cont);
+      scriptServer.getBenchmarks(function(benchmarks) {
+        return cont(null, benchmarks)
+      });
     },
     getBenchmarkByName: function _getBenchmarkByName(name, cont) {
-      var filteredList = [];
-      this.getBenchmarks(function(benchmarks) {
-        for (var i = 0, ii = benchmarks.length; i < ii; ++i) {
-          var benchmark = benchmarks[i];
-          if (benchmark.name == name)
-            filteredList.push(benchmark);
-        }
-        cont(filteredList);
+      this.getBenchmarks(function(err, benchmarks) {
+        if (err)
+          return cont(err, null);
+
+        var filtered = benchmarks.filter(function(b) {
+          return benchmark.name == name;
+        });
+        
+        return cont(null, filtered);
       });
     },
     /* Runs a set of benchmarks
@@ -72,7 +64,7 @@ var Benchmarker = (function BenchmarkerClosure() {
       function helper(index) {
         if (index >= benchmarks.length) {
           if (cont)
-            cont();
+            return cont(null);
           return;
         }
 
@@ -81,17 +73,20 @@ var Benchmarker = (function BenchmarkerClosure() {
         var init = info.init;
         var notes = info.notes;
         
-        b.runBenchmark(benchmark, init, notes, numRuns,
-          function() {
-            helper(index + 1);
-          }
-        );
+        b.runBenchmark(benchmark, init, notes, numRuns, function(err) {
+          if (err)
+            return cont(err);
+          helper(index + 1);
+        });
       }
       helper(0);
     },
     runBenchmark: function _runBenchmark(benchmark, init, notes, numRuns,
         cont) {
       var b = this;
+
+      if (!notes)
+        notes = {};
 
       this.resetParams();
       // params.replay.eventTimeout = 60;
@@ -105,8 +100,8 @@ var Benchmarker = (function BenchmarkerClosure() {
 
       if (init)
         init();
-      this.updateParams();
 
+      this.updateParams();
       this.controller.clearMessages();
 
       scriptServer.getScript(benchmark.script.id, function(script) {
@@ -115,12 +110,13 @@ var Benchmarker = (function BenchmarkerClosure() {
         function replayOnce(pastRuns) {
           if (pastRuns >= numRuns) {
             if (cont)
-              cont();
+              cont(null);
             return;
           }
 
           var timeoutId = -1;
 
+          /* save a file indicating that the benchmark started */
           saveText(notes, benchmark.name);
 
           var r = b.controller.replayScript(script.events, 
@@ -133,8 +129,10 @@ var Benchmarker = (function BenchmarkerClosure() {
             for (var i = 0, ii = events.length; i < ii; ++i) {
               var e = events[i];
               var tab = "";
+              /* tabs from DOM events */
               if (e.frame && e.frame.tab)
                 tab = e.frame.tab;
+              /* tabs from web requests */
               if (e.data && e.data.tabId)
                 tab = e.data.tabId;
 
@@ -142,12 +140,20 @@ var Benchmarker = (function BenchmarkerClosure() {
                 allTabs.push(tab);
             }
 
+            /* Remove all tabs seen during demonstration */
             for (var i = 0, ii = allTabs.length; i < ii; ++i) {
               var tabId = parseInt(allTabs[i]);
-              if (tabId >= 0)
-                chrome.tabs.remove(parseInt(tabId));
+              if (tabId >= 0) {
+                chrome.tabs.get(tabId, function(tabInfo) {
+                  if (chrome.runtime.lastError)
+                    log.info('Tab does not exists');
+                  else
+                    chrome.tabs.remove(tabId);
+                });
+              }
             }
 
+            /* Check if captures match */
             var rcaptures = benchmark.successCaptures;
             var captures = replay.captures;
 
@@ -169,7 +175,9 @@ var Benchmarker = (function BenchmarkerClosure() {
               }
             }
 
-            var success = replay.events.length == replay.index;
+            /* define success as capturing the correct text */
+            // var success = replay.events.length == replay.index;
+            var success = true;
             for (var i = 0, ii = correctCaptures.length; i < ii; ++i) {
               if (!correctCaptures[i].match)
                 success = false;
@@ -203,38 +211,42 @@ var Benchmarker = (function BenchmarkerClosure() {
 /* singleton object */
 var b = new Benchmarker(ports, record, scriptServer, controller);
 
+/* set of benchmarks for the paper */
+var paperBenchmarks = ['allrecipes','gmail','drugs','goodreads','google translate','myfitnesspal','thesaurus','xe','yahoo finance','yelp','zillow','mapquest','google','opentable','target','walmart','facebook','booking','expedia','hotels','southwest','trip advisor'];
+
 function runAllBenchmarks(numRuns) {
-  b.getBenchmarks(function(matches) {
+  b.getBenchmarks(function(err, matches) {
     var benchmarks = [];
     for (var i = 0, ii = matches.length; i < ii; ++i) {
-      benchmarks.push({benchmark: matches[i], notes: {}});
+      benchmarks.push({benchmark: matches[i]});
     }
     b.runBenchmarks(benchmarks, numRuns)
   });
 }
 
 function runBenchmark(name, numRuns) {
-  b.getBenchmarkByName(name, function(matches) {
+  b.getBenchmarkByName(name, function(err, matches) {
     if (matches.length > 0) {
       var benchmark = matches[0];
       var benchmarks = [];
-      benchmarks.push({benchmark: benchmark, notes: {}});
+      benchmarks.push({benchmark: benchmark});
       b.runBenchmarks(benchmarks, numRuns);
     }
-  })
+  });
 }
 
-function makeBenchmarks(name, callback) {
+function makeSynthesizedBenchmarks(name, callback) {
   scriptServer.getScripts(name, function(scripts) {
     var whitelist = ['original', 'original-nowait', 'original-triggers',
                      'initial-triggers', 'final', 'final-triggers'];
 
     var numBenchmarks = 0;
     for (var i = 0, ii = scripts.length; i < ii; ++i) {
-      // create local scope
+      /* create local scope */
       (function() {
         var s = scripts[i];
         var notes = JSON.parse(s.notes);
+        /* find scripts that contain whitelisted type, and are not replays */
         if (whitelist.indexOf(notes.state) >= 0 && !notes.replay) {
           numBenchmarks += 1;
           scriptServer.getScript(s.id, function(script) {
@@ -253,43 +265,49 @@ function makeBenchmarks(name, callback) {
       })();
     }
 
+    /* if no benchmarks matched, then immediately return to callback */
+    if (numBenchmarks == 0)
+      return callback(null, []);
+
     var ids = [];
     function callbackReady(id) {
       ids.push(id);
       if (callback && ids.length == numBenchmarks)
-        callback(ids);
+        return callback(null, ids);
     }
   });
 }
 
-function runSynthesizeBenchmarksLoop(names, numRuns) {
+function runSynthesizeBenchmarkLoop(names, numRuns) {
   function helper(index) {
     if (index >= names.length)
       return;
 
-    runSynthesizeBenchmarks(names[index], numRuns, function() {
+    runSynthesizeBenchmark(names[index], numRuns, function(err) {
+      if (err)
+        log.error('Error in runSynthesizeBenchmarkLoop:', err);
       helper(index + 1);
     });
   }
   helper(0);
 }
 
-function runSynthesizeBenchmarks(name, numRuns, cont) {
-  synthesizeTriggers(name, function(timestampName) {
+function runSynthesizeBenchmark(name, numRuns, cont) {
+  synthesizeTriggers(name, function(err, timestampName) {
     scriptServer.finishedProcessing(function() {
-      makeBenchmarks(timestampName, function(benchmarkIds) {
-        b.getBenchmarks(function(allBenchmarks) {
-          var benchmarks = [];
-          for (var i = 0, ii = allBenchmarks.length; i < ii; ++i) {
-            var benchmark = allBenchmarks[i];
-            if (benchmarkIds.indexOf(benchmark.id) >= 0) {
-              benchmarks.push({benchmark: benchmark, notes: {}});
-            }
-          }
-          console.log(benchmarks);
-          b.runBenchmarks(benchmarks, numRuns, cont)
-        });
-        console.log(benchmarkIds);
+      makeSynthesizedBenchmarks(timestampName, function(err, benchmarkIds) {
+        log.log(benchmarkIds);
+        scriptServer.finishedProcessing(function() {
+          b.getBenchmarks(function(err, benchmarks) {
+            benchmarks = benchmarks.filter(function(b) {
+              return benchmarkIds.indexOf(b.id) >= 0;
+            });
+            benchmarks =  benchmarks.map(function(b) {
+              return benchmarks.push({benchmark: b});
+            });
+            log.log(benchmarks);
+            b.runBenchmarks(benchmarks, numRuns, cont)
+          });
       });
     });
   });

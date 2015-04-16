@@ -433,42 +433,51 @@ var ScriptServer = (function ScriptServerClosure() {
         success: function(data, textStatus, jqXHR) {
           scriptLog.debug('Got script:', data, textStatus, jqXHR);
           var scripts = data;
-          if (scripts.length != 0) {
-            // find the lastest script saved with this name
-            var script = scripts[0];
-            for (var i = 0, ii = scripts.length; i < ii; ++i) {
-              var s = scripts[i];
-              if (parseInt(script.id) < parseInt(s.id)) {
-                script = s;
-              }
-            }
-
-            scriptServer.getEvents(script.events, function(scriptEvents) {
-              var serverEvents = scriptEvents.sort(function(a, b) {
-                return a.execution_order - b.execution_order;
-              });
-
-              var events = [];
-              for (var i = 0, ii = serverEvents.length; i < ii; ++i) {
-                var serverEvent = serverEvents[i];
-                var serverParams = serverEvent.parameters;
-                var e = {};
-
-                for (var j = 0, jj = serverParams.length; j < jj; ++j) {
-                  var p = serverParams[j];
-                  e[p.name] = JSON.parse(p.value);
-                }
-                events.push(e);
-              }
-              cont({
-                name: script.name,
-                id: script.id,
-                events: events,
-                parentId: script.parentId,
-                notes: script.notes
-              });
+          if (scripts.length == 0) {
+            return cont({
+              name: null,
+              id: null,
+              events: null,
+              parentId: null,
+              notes: null
             });
           }
+
+          // find the lastest script saved with this name
+          var script = scripts[0];
+          for (var i = 0, ii = scripts.length; i < ii; ++i) {
+            var s = scripts[i];
+            if (parseInt(script.id) < parseInt(s.id)) {
+              script = s;
+            }
+          }
+
+          scriptServer.getEvents(script.events, function(scriptEvents) {
+            var serverEvents = scriptEvents.sort(function(a, b) {
+              return a.execution_order - b.execution_order;
+            });
+
+            var events = [];
+            for (var i = 0, ii = serverEvents.length; i < ii; ++i) {
+              var serverEvent = serverEvents[i];
+              var serverParams = serverEvent.parameters;
+              var e = {};
+
+              for (var j = 0, jj = serverParams.length; j < jj; ++j) {
+                var p = serverParams[j];
+                e[p.name] = JSON.parse(p.value);
+              }
+              events.push(e);
+            }
+            cont({
+              name: script.name,
+              id: script.id,
+              events: events,
+              parentId: script.parentId,
+              notes: script.notes
+            });
+          });
+          
         },
         url: server + 'script/' + name + '/?format=json',
         type: 'GET',
