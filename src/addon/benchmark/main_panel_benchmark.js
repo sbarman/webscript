@@ -186,6 +186,8 @@ var Benchmarker = (function BenchmarkerClosure() {
             var time = replay.time;
             var error = replay.errorMsg;
 
+            saveText("", JSON.stringify(success));
+
             log.debug('Finished benchmark');
             scriptServer.saveBenchmarkRun(benchmark.id, success, replay.index,
                 replay.events.length, time, notes, correctCaptures, error);
@@ -303,11 +305,12 @@ function runSynthesizeBenchmark(name, numRuns, cont) {
               return benchmarkIds.indexOf(b.id) >= 0;
             });
             benchmarks =  benchmarks.map(function(b) {
-              return benchmarks.push({benchmark: b});
+              return {benchmark: b};
             });
             log.log(benchmarks);
             b.runBenchmarks(benchmarks, numRuns, cont)
           });
+        });
       });
     });
   });

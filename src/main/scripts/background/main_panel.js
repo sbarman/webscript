@@ -1134,11 +1134,8 @@ var Replay = (function ReplayClosure() {
         this.setNextTimeout(0);
     },
     screenshot: function _screenshot(text) {
-      var fileName = JSON.stringify(new Date());
-      if (text)
-        fileName += '-' + text;
       if (this.lastTab)
-        saveScreenshot(this.lastTab, fileName)
+        saveScreenshot(this.lastTab, text)
     }
   };
 
@@ -1534,7 +1531,11 @@ function printReplayEvents() {
 }
 */
 
-function saveScreenshot(tabId, filename) {
+function saveScreenshot(tabId, text) {
+  var filename = JSON.stringify(new Date());
+  if (text)
+    filename += '-' + text;
+
   chrome.tabs.get(tabId, function(tabInfo) {
     var windowId = tabInfo.windowId;
     chrome.tabs.captureVisibleTab(windowId, {format: 'png'}, function(dataUrl) {
@@ -1548,9 +1549,11 @@ function saveScreenshot(tabId, filename) {
 }
 
 function saveText(text, filename) {
+  var filename = JSON.stringify(new Date()) + '-' + filename;
+
   filename = filename.replace(/[\,\/#!$%\^&\*;:{}=\`~()"']/g,"");
   chrome.downloads.download({
-    url: 'data:text/plain;charset=utf-8,' + text,
+    url: 'data:text/plain;charset=utf-8,' + JSON.stringify(text),
     filename: './snapshots/' + filename + '.txt'
   });
 }

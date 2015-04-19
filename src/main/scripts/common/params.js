@@ -69,7 +69,9 @@ var TimeoutStrategy = {
       'mouseout': false,
       'mouseover': false,
       'mouseup': true,
-      'mousewheel': false
+      'mousewheel': false,
+      'mouseenter': false,
+      'mouseleave': false
       // 'dragenter': false,
       // 'dragleave': false,
     },
