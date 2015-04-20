@@ -104,7 +104,7 @@ var Benchmarker = (function BenchmarkerClosure() {
       this.updateParams();
       this.controller.clearMessages();
 
-      scriptServer.getScript(benchmark.script.id, function(script) {
+      scriptServer.getScript(benchmark.script.id, function(err, script) {
         log.debug('Starting benchmark:', benchmark.script.id, events);
 
         function replayOnce(pastRuns) {
@@ -238,7 +238,7 @@ function runBenchmark(name, numRuns) {
 }
 
 function makeSynthesizedBenchmarks(name, callback) {
-  scriptServer.getScripts(name, function(scripts) {
+  scriptServer.getScripts(name, function(err, scripts) {
     var whitelist = ['original', 'original-nowait', 'original-triggers',
                      'initial-triggers', 'final', 'final-triggers'];
 
@@ -251,7 +251,7 @@ function makeSynthesizedBenchmarks(name, callback) {
         /* find scripts that contain whitelisted type, and are not replays */
         if (whitelist.indexOf(notes.state) >= 0 && !notes.replay) {
           numBenchmarks += 1;
-          scriptServer.getScript(s.id, function(script) {
+          scriptServer.getScript(s.id, function(err, script) {
             var captures = script.events.filter(function(e) {
               return e.type == "capture";
             });

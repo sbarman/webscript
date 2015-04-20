@@ -461,7 +461,7 @@ function getPotentialTriggers(origEvents, passingRuns) {
     triggerMapping[curEventId] = triggers;
 
     /* remove the triggers that we just added from the pool */
-    function noMatchingTrigger(t) {
+    var noMatchingTrigger = function _noMatchingTrigger(t) {
       var matches = 0;
       for (var i = 0, ii = triggers.length; i < ii; ++i) {
         if (matchTrigger(t.eventInfo, triggers[i])) {
@@ -557,7 +557,10 @@ function synthesizeTriggers(scriptName, callback) {
   controller.updateParams();
   controller.clearMessages();
 
-  scriptServer.getScript(scriptName, function(script) {
+  scriptServer.getScript(scriptName, function(err, script) {
+    if (err)
+      return callback("No such script", null);
+
     synthesizeTriggers_cont(uniqueId, script, callback);
   });
 }

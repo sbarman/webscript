@@ -1282,8 +1282,8 @@ var Controller = (function ControllerClosure() {
       ctlLog.log('Getting script');
       var controller = this;
       this.scriptServer.getScript(name,
-          function(script) {
-            if (script) {
+          function(err, script) {
+            if (!err) {
               chrome.storage.local.set({scriptName: name});
               controller.setEvents(script.id, script.events);
             }

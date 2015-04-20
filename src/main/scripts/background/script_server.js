@@ -405,12 +405,12 @@ var ScriptServer = (function ScriptServerClosure() {
         error: function(jqXHR, textStatus, errorThrown) {
           scriptLog.error('Error getting scripts:', jqXHR, textStatus,
             errorThrown);
-          cont(null);
+          return cont("Error retrieving script", null);
         },
         success: function(data, textStatus, jqXHR) {
           scriptLog.debug('Got script:', data, textStatus, jqXHR);
           var scripts = data;
-          cont(scripts);
+          return cont(null, scripts);
         },
         url: server + 'script/' + name + '/?format=json',
         type: 'GET',
@@ -428,19 +428,13 @@ var ScriptServer = (function ScriptServerClosure() {
         error: function(jqXHR, textStatus, errorThrown) {
           scriptLog.error('Error getting script:', jqXHR, textStatus,
             errorThrown);
-          cont(null);
+          return cont("Error retrieving script", null);
         },
         success: function(data, textStatus, jqXHR) {
           scriptLog.debug('Got script:', data, textStatus, jqXHR);
           var scripts = data;
           if (scripts.length == 0) {
-            return cont({
-              name: null,
-              id: null,
-              events: null,
-              parentId: null,
-              notes: null
-            });
+            return cont("No script found", null);
           }
 
           // find the lastest script saved with this name
@@ -469,7 +463,7 @@ var ScriptServer = (function ScriptServerClosure() {
               }
               events.push(e);
             }
-            cont({
+            cont(null, {
               name: script.name,
               id: script.id,
               events: events,
@@ -477,7 +471,6 @@ var ScriptServer = (function ScriptServerClosure() {
               notes: script.notes
             });
           });
-          
         },
         url: server + 'script/' + name + '/?format=json',
         type: 'GET',
