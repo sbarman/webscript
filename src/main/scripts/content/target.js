@@ -15,6 +15,52 @@ var createLabel;
 (function() {
   var log = getLog('target');
 
+  function getFeatures(element) {
+    var info = {};
+    info.xpath = nodeToXPath(element);
+    for (var prop in element) {
+      if (element.hasOwnProperty(prop)) {
+        var val = element[prop];
+        if (val !== null && typeof val === 'object'){
+          val = val.toString();
+        }
+        info[prop] = val;
+      }
+    }
+    var text = element.textContent;
+    info.textContent = text;
+    var trimmedText = text.trim();
+    info.firstWord = trimmedText.slice(0,trimmedText.indexOf(" "));
+    info.lastWord = trimmedText.slice(trimmedText.lastIndexOf(" "),trimmedText.length);
+    var colonIndex = trimmedText.indexOf(":")
+      if (colonIndex > -1){
+        info.preColonText = trimmedText.slice(0,colonIndex);
+      }
+    var children = element.childNodes;
+    var l = children.length;
+    for (var i = 0; i< l; i++){
+      var childText = children[i].textContent;
+      info["child"+i+"text"] = childText;
+      info["lastChild"+(l-i)+"text"] = childText;
+    }
+    var prev = element.previousElementSibling;
+    if (prev !== null){
+      info.previousElementSiblingText = prev.textContent;
+    }
+    var boundingBox = element.getBoundingClientRect();
+    for (var prop in boundingBox) {
+      if (boundingBox.hasOwnProperty(prop)) {
+        info[prop] = boundingBox.prop;
+      }
+    }
+    var style = window.getComputedStyle(element, null);
+    for (var i = 0; i < style.length; i++) {
+      var prop = style[i];
+      info[prop] = style.getPropertyValue(prop);
+    }
+    return info;
+  }
+
   /* Store information about the DOM node */
   saveTargetInfo = function _saveTargetInfo(target, recording) {
     var allFeatures = ["tagName", "className", 
@@ -73,87 +119,87 @@ var createLabel;
     return targetInfo;
   };
 
-  createLabel = function(e) {
-    var tagName = e.tagName;
-    var label = {tagName: tagName};
-
-    // list of tags taken from 
-    // https://developer.mozilla.org/en-US/docs/Web/HTML/Element
-    // these all add visual clues to the 
-    if (["A", "BUTTON", "LABEL", "OPTION"].indexOf(tagName) != -1) {
-      label.textContent = e.textContent;
-    } else if (["H1", "H2", "H3", "H4", "H5", "H6", "DIV", "SPAN"].
-        indexOf(tagName) != -1) {
-      var textContent = e.textContent;
-      if (textContent.length < 20)
-        label.textContent = textContent;
-    } else if (["IMG"].indexOf(tagName) != -1) {
-      if (e.alt)
-        label.alt = e.alt;
-    }
-    return label;
-  };
-
-  var getUniqueSubtree =  function(element, otherNodes) {
-    function checkContains(subtree, otherNodes) {
-      for (var i = 0, ii = otherNodes.length; i < ii; ++i) {
-        if (element.contains(otherNodes[i]))
-          return true;
-      }
-      return false;
-    }
-
-    var e = element;
-    var p = e.parentElement;
-    while (e != document.body && checkContains(p, otherNodes)) {
-      e = p;
-      p = e.parentElement;
-    }
-    return e;
-  };
-
-  getAnchors = function(target) {
-  // function getAnchors(target) {
-    var label = createLabel(target);
-    // sometimes we try to find anchors of the head element, which means the
-    // body doesnt exist
-    if (document.body)
-      var otherConflictElements = matchLabel(label, document.body);
-    else
-      var otherConflictElements = [];
-
-    return {
-      label: label,
-      numConflicts: otherConflictElements.length
-    }
-  };
-
-  matchLabel = function(label, root) {
-//  function findMatchingElements(label, root) {
-    function evaluateXPath(aNode, aExpr) {
-      var xpe = new XPathEvaluator();
-      var nsResolver = xpe.createNSResolver(aNode.ownerDocument == null ?
-        aNode.documentElement : aNode.ownerDocument.documentElement);
-      var result = xpe.evaluate(aExpr, aNode, nsResolver, 0, null);
-      var found = [];
-      var res;
-      while (res = result.iterateNext())
-        found.push(res);
-      return found;
-    }
-
-    var query = nodeToXPath(root.parentElement);
-    var tagName = label.tagName;
-    query += '//' + tagName;
-    if (label.textContent)
-      query += '[text()="' + label.textContent + '"]';
-
-    var matches = evaluateXPath(document, query);
-    if (label.alt)
-      matches = matches.filter(function(e) { return e.alt == label.alt; });
-
-    return matches;
-  };
+//  createLabel = function(e) {
+//    var tagName = e.tagName;
+//    var label = {tagName: tagName};
+//
+//    // list of tags taken from 
+//    // https://developer.mozilla.org/en-US/docs/Web/HTML/Element
+//    // these all add visual clues to the 
+//    if (["A", "BUTTON", "LABEL", "OPTION"].indexOf(tagName) != -1) {
+//      label.textContent = e.textContent;
+//    } else if (["H1", "H2", "H3", "H4", "H5", "H6", "DIV", "SPAN"].
+//        indexOf(tagName) != -1) {
+//      var textContent = e.textContent;
+//      if (textContent.length < 20)
+//        label.textContent = textContent;
+//    } else if (["IMG"].indexOf(tagName) != -1) {
+//      if (e.alt)
+//        label.alt = e.alt;
+//    }
+//    return label;
+//  };
+//
+//  var getUniqueSubtree =  function(element, otherNodes) {
+//    function checkContains(subtree, otherNodes) {
+//      for (var i = 0, ii = otherNodes.length; i < ii; ++i) {
+//        if (element.contains(otherNodes[i]))
+//          return true;
+//      }
+//      return false;
+//    }
+//
+//    var e = element;
+//    var p = e.parentElement;
+//    while (e != document.body && checkContains(p, otherNodes)) {
+//      e = p;
+//      p = e.parentElement;
+//    }
+//    return e;
+//  };
+//
+//  getAnchors = function(target) {
+//  // function getAnchors(target) {
+//    var label = createLabel(target);
+//    // sometimes we try to find anchors of the head element, which means the
+//    // body doesnt exist
+//    if (document.body)
+//      var otherConflictElements = matchLabel(label, document.body);
+//    else
+//      var otherConflictElements = [];
+//
+//    return {
+//      label: label,
+//      numConflicts: otherConflictElements.length
+//    }
+//  };
+//
+//  matchLabel = function(label, root) {
+////  function findMatchingElements(label, root) {
+//    function evaluateXPath(aNode, aExpr) {
+//      var xpe = new XPathEvaluator();
+//      var nsResolver = xpe.createNSResolver(aNode.ownerDocument == null ?
+//        aNode.documentElement : aNode.ownerDocument.documentElement);
+//      var result = xpe.evaluate(aExpr, aNode, nsResolver, 0, null);
+//      var found = [];
+//      var res;
+//      while (res = result.iterateNext())
+//        found.push(res);
+//      return found;
+//    }
+//
+//    var query = nodeToXPath(root.parentElement);
+//    var tagName = label.tagName;
+//    query += '//' + tagName;
+//    if (label.textContent)
+//      query += '[text()="' + label.textContent + '"]';
+//
+//    var matches = evaluateXPath(document, query);
+//    if (label.alt)
+//      matches = matches.filter(function(e) { return e.alt == label.alt; });
+//
+//    return matches;
+//  };
 
   /* The following functions are different implementations to take a target
    * info object, and convert it to a list of possible DOM nodes */ 
@@ -299,6 +345,36 @@ var createLabel;
 
     return maxTargets;
   }
+
+  function getAllSimilarityCandidates(targetInfo){
+    var tagName = "*";
+    if (targetInfo.nodeName){
+      tagName = targetInfo.nodeName;
+    }
+    return document.getElementsByTagName(tagName);
+  }
+
+  var getTargetForSimilarity = function(targetInfo) {
+    var candidates = getAllSimilarityCandidates(targetInfo);
+    var bestScore = -1;
+    var bestNode = null;
+    for (var i = 0, ii = candidates.length; i < ii; ++i){
+      var info = getFeatures(candidates[i]);
+      var similarityCount = 0;
+      for (var prop in targetInfo) {
+        if (targetInfo.hasOwnProperty(prop)) {
+          if (targetInfo[prop] === info[prop]){
+            similarityCount += 1;
+          }
+        }
+      }
+      if (similarityCount > bestScore){
+        bestScore = similarityCount;
+        bestNode = candidates[i];
+      }
+    }
+    return bestNode;
+  };
 
   /* Set the target function */
   getTargetFunction = getTargetComposite;
