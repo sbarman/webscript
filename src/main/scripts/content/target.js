@@ -15,7 +15,7 @@ var createLabel;
 (function() {
   var log = getLog('target');
 
-  function getFeatures(element) {
+  function getFeaturesSimilarity(element) {
     var info = {};
     info.xpath = nodeToXPath(element);
     for (var prop in element) {
@@ -30,21 +30,21 @@ var createLabel;
     var text = element.textContent;
     info.textContent = text;
     var trimmedText = text.trim();
-    info.firstWord = trimmedText.slice(0,trimmedText.indexOf(" "));
-    info.lastWord = trimmedText.slice(trimmedText.lastIndexOf(" "),trimmedText.length);
-    var colonIndex = trimmedText.indexOf(":")
-      if (colonIndex > -1){
-        info.preColonText = trimmedText.slice(0,colonIndex);
-      }
+    info.firstWord = trimmedText.slice(0, trimmedText.indexOf(" "));
+    info.lastWord = trimmedText.slice(trimmedText.lastIndexOf(" "),
+                                      trimmedText.length);
+    var colonIndex = trimmedText.indexOf(":");
+    if (colonIndex > -1) {
+      info.preColonText = trimmedText.slice(0, colonIndex);
+    }
     var children = element.childNodes;
-    var l = children.length;
-    for (var i = 0; i< l; i++){
+    for (var i = 0, ii = children.length; i < ii; i++) {
       var childText = children[i].textContent;
-      info["child"+i+"text"] = childText;
-      info["lastChild"+(l-i)+"text"] = childText;
+      info["child" + i + "text"] = childText;
+      info["lastChild" + (ii - i) + "text"] = childText;
     }
     var prev = element.previousElementSibling;
-    if (prev !== null){
+    if (prev !== null) {
       info.previousElementSiblingText = prev.textContent;
     }
     var boundingBox = element.getBoundingClientRect();
@@ -54,7 +54,7 @@ var createLabel;
       }
     }
     var style = window.getComputedStyle(element, null);
-    for (var i = 0; i < style.length; i++) {
+    for (var i = 0, ii = style.length; i < ii; i++) {
       var prop = style[i];
       info[prop] = style.getPropertyValue(prop);
     }
@@ -69,8 +69,9 @@ var createLabel;
       "background-color", 
       "preceding-text",
       "xpath",
-      "anchor",
-      "snapshot"];
+      "snapshot",
+      "similarity"
+    ];
 
     // if (recording == RecordState.RECORDING) {
     //   allFeatures.push('branch');
@@ -107,8 +108,8 @@ var createLabel;
         case "className":
           targetInfo[feature] = target[feature];
           break;
-        case "anchor":
-          targetInfo[feature] = getAnchors(target);
+        case "similarity":
+          targetInfo[feature] = getFeaturesSimilarity(target);
           break;
         default:
           var style = getComputedStyle(target, null);
@@ -346,38 +347,83 @@ var createLabel;
     return maxTargets;
   }
 
-  function getAllSimilarityCandidates(targetInfo){
-    var tagName = "*";
-    if (targetInfo.nodeName){
-      tagName = targetInfo.nodeName;
-    }
-    return document.getElementsByTagName(tagName);
-  }
+//  function getAllSimilarityCandidates(targetInfo){
+//    var tagName = "*";
+//    if (targetInfo.nodeName){
+//      tagName = targetInfo.nodeName;
+//    }
+//    return document.getElementsByTagName(tagName);
+//  }
 
-  var getTargetForSimilarity = function(targetInfo) {
-    var candidates = getAllSimilarityCandidates(targetInfo);
+  function rankTargetSimilarity(targetInfo, candidates) {
+    if (candidates.length == 0)
+      return [];
+
+    var features = targetInfo.similarity;
+
     var bestScore = -1;
     var bestNode = null;
-    for (var i = 0, ii = candidates.length; i < ii; ++i){
-      var info = getFeatures(candidates[i]);
+    for (var i = 0, ii = candidates.length; i < ii; ++i) {
+      var info = getFeaturesSimilarity(candidates[i]);
       var similarityCount = 0;
-      for (var prop in targetInfo) {
-        if (targetInfo.hasOwnProperty(prop)) {
-          if (targetInfo[prop] === info[prop]){
+      for (var prop in features) {
+        if (features.hasOwnProperty(prop)) {
+          if (features[prop] === info[prop]) {
             similarityCount += 1;
           }
         }
       }
-      if (similarityCount > bestScore){
+      if (similarityCount > bestScore) {
         bestScore = similarityCount;
         bestNode = candidates[i];
       }
     }
-    return bestNode;
+    return [bestNode];
+  };
+
+
+  function getTargetSimilarity(targetInfo) {
+    /* first, lets find all nodes returned by any of the target functions and
+       rank them based upon our similarity metric */
+
+    var targets = [];
+    var metaInfo = [];
+
+    for (var strategy in targetFunctions) {
+      try {
+        var strategyTargets = targetFunctions[strategy](targetInfo);
+        for (var i = 0, ii = strategyTargets.length; i < ii; ++i) {
+          var t = strategyTargets[i];
+          var targetIndex = targets.indexOf(t);
+          if (targetIndex == -1) {
+            targets.push(t);
+            metaInfo.push([strategy]);
+          } else {
+            metaInfo[targetIndex].push(strategy);
+          }
+        }
+      } catch (e) {}
+    }
+
+//    var maxStrategies = 0;
+//    var maxTargets = [];
+//    for (var i = 0, ii = targets.length; i < ii; ++i) {
+//      var numStrategies = metaInfo[i].length;
+//      if (numStrategies == maxStrategies) {
+//        maxTargets.push(targets[i]);
+//      } else if (numStrategies > maxStrategies) {
+//        maxTargets = [targets[i]];
+//        maxStrategies = numStrategies;
+//      }
+//    }
+//
+//    return maxTargets;
+    
+    return rankTargetSimilarity(targetInfo, targets);
   };
 
   /* Set the target function */
-  getTargetFunction = getTargetComposite;
+  getTargetFunction = getTargetSimilarity;
 
   /* Given the target info, produce a single target DOM node. May get several
    * possible candidates, and would just return the first candidate. */
@@ -401,7 +447,7 @@ var createLabel;
     text: getTargetText,
     class: getTargetClass,
     id: getTargetId,
-    search: getTargetSearch
+    search: getTargetSearch,
   };
 
 })();
