@@ -440,6 +440,8 @@ var Replay = (function ReplayClosure() {
       this.cont = null;
       this.firstEventReplayed = false;
       this.startTime = 0;
+      this.triggerTimeouts = 0;
+      this.elementTimeouts = 0;
 
       /* Call the resets for the addons */
       var addonReset = this.addonReset;
@@ -926,6 +928,7 @@ var Replay = (function ReplayClosure() {
         replayLog.warn('Event timeout');
 
         this.updateStatus(ReplayState.REPLAYING);
+        this.elementTimeouts += 1;
         return;
       }
 
@@ -996,8 +999,10 @@ var Replay = (function ReplayClosure() {
     },
     triggerCheck: function _triggerCheck(v) {
       /* trigger has timed out, so no need to check trigger */
-      if (this.checkTriggerTimeout())
+      if (this.checkTriggerTimeout()) {
+        this.triggerTimeouts += 1;
         return true;
+      }
 
       /* if there is a trigger, then check if trigger was observed */
       var triggerCondition = v.timing.triggerCondition;
