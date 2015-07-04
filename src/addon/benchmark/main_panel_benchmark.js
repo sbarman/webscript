@@ -47,7 +47,7 @@ var Benchmarker = (function BenchmarkerClosure() {
           return cont(err, null);
 
         var filtered = benchmarks.filter(function(b) {
-          return benchmark.name == name;
+          return b.name == name;
         });
         
         return cont(null, filtered);
