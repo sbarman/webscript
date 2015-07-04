@@ -126,7 +126,8 @@ var ScriptServer = (function ScriptServerClosure() {
       this.process();
     },
     saveBenchmarkRun: function _saveBenchmarkRun(benchmarkId, successful, 
-        eventsExecuted, eventsTotal, time, notes, captures, errors) {
+        eventsExecuted, eventsTotal, time, captures, triggerTimeouts,
+        elementTimeouts, version) {
       this.queue.push({
         type: 'benchmarkrun',
         id: benchmarkId,
@@ -134,9 +135,10 @@ var ScriptServer = (function ScriptServerClosure() {
         eventsExecuted: eventsExecuted,
         eventsTotal: eventsTotal,
         time: time,
-        notes: notes,
         captures: captures,
-        errors: errors
+        triggerTimeouts: triggerTimeouts,
+        elementTimeouts: elementTimeouts,
+        version: version
       });
       this.process();
     },
@@ -294,6 +296,13 @@ var ScriptServer = (function ScriptServerClosure() {
       postMsg['captures'] = JSON.stringify(item.captures, null, 2);
       postMsg['time'] = item.time;
 
+      postMsg['trigger_timeouts'] = item.triggerTimeouts;
+      postMsg['element_timeouts'] = item.elementTimeouts;
+      postMsg['version'] = item.version;
+
+      /* 
+       * Lets ignore these for now
+       *
       var errors = item.errors;
       var notes = item.notes;
       var log = item.log;
@@ -306,6 +315,7 @@ var ScriptServer = (function ScriptServerClosure() {
 
       if (log)
         postMsg['log'] = log;
+      */
 
       scriptLog.log('Saving benchmark run:', postMsg);
       var scriptServer = this;

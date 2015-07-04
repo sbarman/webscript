@@ -55,7 +55,7 @@ var Benchmarker = (function BenchmarkerClosure() {
     },
     /* Runs a set of benchmarks
      * @param benchmarks[array] a list of objects, with each object containing
-     *     the following fields: benchmark, init, notes
+     *     the following fields: benchmark, init, version
      */
     runBenchmarks: function _runBenchmarks(benchmarks, numRuns, cont) {
       var scriptServer = this.scriptServer;
@@ -71,9 +71,9 @@ var Benchmarker = (function BenchmarkerClosure() {
         var info = benchmarks[index];
         var benchmark = info.benchmark;
         var init = info.init;
-        var notes = info.notes;
+        var version = info.version;
         
-        b.runBenchmark(benchmark, init, notes, numRuns, function(err) {
+        b.runBenchmark(benchmark, init, version, numRuns, function(err) {
           if (err)
             return cont(err);
           helper(index + 1);
@@ -81,12 +81,12 @@ var Benchmarker = (function BenchmarkerClosure() {
       }
       helper(0);
     },
-    runBenchmark: function _runBenchmark(benchmark, init, notes, numRuns,
+    runBenchmark: function _runBenchmark(benchmark, init, version, numRuns,
         cont) {
       var b = this;
 
-      if (!notes)
-        notes = {};
+      if (!version)
+        version = '';
 
       this.resetParams();
       // params.replay.eventTimeout = 60;
@@ -117,7 +117,7 @@ var Benchmarker = (function BenchmarkerClosure() {
           var timeoutId = -1;
 
           /* save a file indicating that the benchmark started */
-          saveText(notes, benchmark.name);
+          saveText('', benchmark.name + ':' + version);
 
           var r = b.controller.replayScript(script.events, 
               {scriptId: script.id}, function(replay) {
@@ -185,12 +185,15 @@ var Benchmarker = (function BenchmarkerClosure() {
 
             var time = replay.time;
             var error = replay.errorMsg;
+            var triggerTimeouts = replay.triggerTimeouts;
+            var elementTimeouts = replay.elementTimeouts;
 
             saveText("", JSON.stringify(success));
 
             log.debug('Finished benchmark');
             scriptServer.saveBenchmarkRun(benchmark.id, success, replay.index,
-                replay.events.length, time, notes, correctCaptures, error);
+                replay.events.length, time, correctCaptures, triggerTimeouts,
+                elementTimeouts, version);
 
             replayOnce(pastRuns + 1);
           });
@@ -210,17 +213,50 @@ var Benchmarker = (function BenchmarkerClosure() {
   return Benchmarker;
 })();
 
+/* set of benchmarks for the paper */
+var paperBenchmarks = [
+  'allrecipes',
+  'gmail',
+  'drugs',
+  'goodreads',
+  'google translate',
+  'myfitnesspal',
+  'thesaurus',
+  'xe',
+  'yahoo finance',
+  'yelp',
+  'zillow',
+  'mapquest',
+  'google',
+  'opentable',
+  'target',
+  'walmart',
+  'facebook',
+  'booking',
+  'expedia',
+  'hotels',
+  'southwest',
+  'trip advisor'
+];
+
+var whitelist = [
+  'original',
+  'original-nowait',
+  'original-triggers',
+  'initial-triggers',
+  'final',
+  'final-triggers'
+];
+
+
 /* singleton object */
 var b = new Benchmarker(ports, record, scriptServer, controller);
-
-/* set of benchmarks for the paper */
-var paperBenchmarks = ['allrecipes','gmail','drugs','goodreads','google translate','myfitnesspal','thesaurus','xe','yahoo finance','yelp','zillow','mapquest','google','opentable','target','walmart','facebook','booking','expedia','hotels','southwest','trip advisor'];
 
 function runAllBenchmarks(numRuns) {
   b.getBenchmarks(function(err, matches) {
     var benchmarks = [];
     for (var i = 0, ii = matches.length; i < ii; ++i) {
-      benchmarks.push({benchmark: matches[i]});
+      benchmarks.push({benchmark: matches[i], version: 'basic'});
     }
     b.runBenchmarks(benchmarks, numRuns)
   });
@@ -231,7 +267,7 @@ function runBenchmark(name, numRuns) {
     if (matches.length > 0) {
       var benchmark = matches[0];
       var benchmarks = [];
-      benchmarks.push({benchmark: benchmark});
+      benchmarks.push({benchmark: benchmark, version: 'basic'});
       b.runBenchmarks(benchmarks, numRuns);
     }
   });
@@ -239,9 +275,6 @@ function runBenchmark(name, numRuns) {
 
 function makeSynthesizedBenchmarks(name, callback) {
   scriptServer.getScripts(name, function(err, scripts) {
-    var whitelist = ['original', 'original-nowait', 'original-triggers',
-                     'initial-triggers', 'final', 'final-triggers'];
-
     var numBenchmarks = 0;
     for (var i = 0, ii = scripts.length; i < ii; ++i) {
       /* create local scope */
@@ -315,4 +348,3 @@ function runSynthesizeBenchmark(name, numRuns, cont) {
     });
   });
 }
-
