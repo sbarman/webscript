@@ -175,7 +175,6 @@ var TimeoutStrategy = {
       openNewTab: true,
       saveReplay: true,
       cancelUnknownEvents: false,
-      skipCascadingEvents: true,
       eventTimeout: 10,
       targetTimeout: 5,
       triggerTimeout: 5,

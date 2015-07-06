@@ -56,7 +56,7 @@
             }
           }
         } catch (e) {
-          console.error('[inject] Error recording property:', prop, e);
+          console.error('[inject] Error modifying property:', prop, ':', e);
         }
       }
 

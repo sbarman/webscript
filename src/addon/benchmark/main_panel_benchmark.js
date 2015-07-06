@@ -252,28 +252,28 @@ var whitelist = [
 /* singleton object */
 var b = new Benchmarker(ports, record, scriptServer, controller);
 
-function runAllBenchmarks(numRuns) {
+function runAllBenchmarks(numRuns, cont) {
   b.getBenchmarks(function(err, matches) {
     var benchmarks = [];
     for (var i = 0, ii = matches.length; i < ii; ++i) {
       benchmarks.push({benchmark: matches[i], version: 'basic'});
     }
-    b.runBenchmarks(benchmarks, numRuns)
+    b.runBenchmarks(benchmarks, numRuns, cont)
   });
 }
 
-function runBenchmark(name, numRuns) {
+function runBenchmark(name, numRuns, cont) {
   b.getBenchmarkByName(name, function(err, matches) {
     if (matches.length > 0) {
       var benchmark = matches[0];
       var benchmarks = [];
       benchmarks.push({benchmark: benchmark, version: 'basic'});
-      b.runBenchmarks(benchmarks, numRuns);
+      b.runBenchmarks(benchmarks, numRuns, cont);
     }
   });
 }
 
-function makeSynthesizedBenchmarks(name, callback) {
+function makeSynthesizedBenchmarks(name, cont) {
   scriptServer.getScripts(name, function(err, scripts) {
     var numBenchmarks = 0;
     for (var i = 0, ii = scripts.length; i < ii; ++i) {
@@ -294,7 +294,7 @@ function makeSynthesizedBenchmarks(name, callback) {
             });
 
             scriptServer.saveBenchmark(s.name + '-' + notes.state, s.id,
-                success, true, callbackReady);
+                success, true, checkReady);
           });
         }
       })();
@@ -302,21 +302,24 @@ function makeSynthesizedBenchmarks(name, callback) {
 
     /* if no benchmarks matched, then immediately return to callback */
     if (numBenchmarks == 0)
-      return callback(null, []);
+      return cont(null, []);
 
     var ids = [];
-    function callbackReady(id) {
+    function checkReady(id) {
       ids.push(id);
-      if (callback && ids.length == numBenchmarks)
-        return callback(null, ids);
+      if (cont && ids.length == numBenchmarks)
+        return cont(null, ids);
     }
   });
 }
 
-function runSynthesizeBenchmarkLoop(names, numRuns) {
+function runSynthesizeBenchmarkLoop(names, numRuns, cont) {
   function helper(index) {
-    if (index >= names.length)
+    if (index >= names.length) {
+      if (cont)
+        cont(null);
       return;
+    }
 
     runSynthesizeBenchmark(names[index], numRuns, function(err) {
       if (err)
@@ -330,7 +333,7 @@ function runSynthesizeBenchmarkLoop(names, numRuns) {
 function runSynthesizeBenchmark(name, numRuns, cont) {
   synthesizeTriggers(name, function(err, timestampName) {
     scriptServer.finishedProcessing(function() {
-      makeSynthesizedBenchmarks(timestampName, function(err, benchmarkIds) {
+      makeSynthesizedBenchmarks(timestampName, function(benchmarkIds) {
         log.log(benchmarkIds);
         scriptServer.finishedProcessing(function() {
           b.getBenchmarks(function(err, benchmarks) {
@@ -348,3 +351,95 @@ function runSynthesizeBenchmark(name, numRuns, cont) {
     });
   });
 }
+
+function runThesisBenchmark(name, numRuns, cont) {
+  // create basic benchmark
+  scriptServer.getScript(name, function(err, script) {
+    var captures = script.events.filter(function(e) {
+      return e.type == "capture";
+    });
+    
+    var success = captures.map(function(c) {
+      return c.target.snapshot.prop.innerText;
+    });
+
+    scriptServer.saveBenchmark(script.name + '-basic', script.id,
+        success, true, _next);
+  });
+  
+  // create trigger benchmarks
+  function _next(basicBenchmarkId) {
+    synthesizeTriggers(name, function(err, timestampName) {
+      scriptServer.finishedProcessing(function() {
+        makeSynthesizedBenchmarks(timestampName, function(err, ids) {
+          scriptServer.finishedProcessing(function() {
+            return _next2(basicBenchmarkId, ids);
+          });
+        });
+      });
+    });
+  }
+
+  function _next2(basicBenchmarkId, triggerBenchmarkIds) {
+    scriptServer.getBenchmarks(function(benchmarks) {
+      var triggerBenchmarks = benchmarks.filter(function(b) {
+        return triggerBenchmarkIds.indexOf(b.id) >= 0;
+      });
+      var basicBenchmark = benchmarks.filter(function(b) {
+       return basicBenchmarkId == b.id;
+      })[0];
+
+      var benchmarks = [];
+      benchmarks.push({
+        benchmark: basicBenchmark,
+        version: 'regular',
+        init: function() {
+          params.replay.compensation = CompensationAction.FORCED;
+          params.replay.atomic = true;
+          params.replay.cascadeCheck = true;
+        }
+      });
+
+      benchmarks.push({
+        benchmark: basicBenchmark,
+        version: 'noCompensation',
+        init: function() {
+          params.replay.compensation = CompensationAction.NONE;
+          params.replay.atomic = true;
+          params.replay.cascadeCheck = true;
+        }
+      });
+
+      benchmarks.push({
+        benchmark: basicBenchmark,
+        version: 'noCascadeCheck',
+        init: function() {
+          params.replay.compensation = CompensationAction.FORCED;
+          params.replay.atomic = true;
+          params.replay.cascadeCheck = false;
+        }
+      });
+
+      benchmarks.push({
+        benchmark: basicBenchmark,
+        version: 'noAtomic',
+        init: function() {
+          params.replay.compensation = CompensationAction.FORCED;
+          params.replay.atomic = false;
+          params.replay.cascadeCheck = true;
+        }
+      });
+
+      for (var i = 0, ii = triggerBenchmarks.length; i < ii; ++i) {
+        benchmarks.push({
+          benchmark: triggerBenchmarks[i],
+	        version: 'regular'
+        });
+      }
+
+      log.log(benchmarks);
+      b.runBenchmarks(benchmarks, numRuns, cont)
+    });
+  } 
+}
+
