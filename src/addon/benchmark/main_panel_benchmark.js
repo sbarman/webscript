@@ -92,8 +92,6 @@ var Benchmarker = (function BenchmarkerClosure() {
       // params.replay.eventTimeout = 60;
       params.panel.enableEdit = false;
       params.replay.saveReplay = true;
-      params.replay.defaultWaitNewTab = 100;
-      params.replay.defaultWaitNextEvent = 100;
       params.replay.snapshot = true;
       params.logging.saved = false;
       params.logging.level = 4;
@@ -242,8 +240,10 @@ var paperBenchmarks = [
 var whitelist = [
   'original',
   'original-nowait',
-  'original-triggers',
-  'initial-triggers',
+  '1run-triggers',
+  '2run-triggers',
+  '3run-triggers',
+  '4run-triggers',
   'final',
   'final-triggers'
 ];
@@ -433,7 +433,11 @@ function runThesisBenchmark(name, numRuns, cont) {
       for (var i = 0, ii = triggerBenchmarks.length; i < ii; ++i) {
         benchmarks.push({
           benchmark: triggerBenchmarks[i],
-	        version: 'regular'
+	        version: 'regular',
+          init: function() {
+            params.replay.defaultWaitNewTab = 100;
+            params.replay.defaultWaitNextEvent = 100;
+          }
         });
       }
 
@@ -443,3 +447,25 @@ function runThesisBenchmark(name, numRuns, cont) {
   } 
 }
 
+/* Convert a function designed to test one benchmark, to multiple benchmarks */
+function makeLoop(baseFunction) {
+  return function(names, numRuns, cont) {
+    function helper(index) {
+      if (index >= names.length) {
+        if (cont)
+          cont(null);
+        return;
+      }
+
+      baseFunction(names[index], numRuns, function() {
+        helper(index + 1);
+      });
+    }
+    helper(0);
+  }
+}
+
+function runThesisBenchmarks(names, numRuns, cont) {
+  var loopFunction = makeLoop(runThesisBenchmark);
+  loopFunction(names, numRuns, cont);
+}

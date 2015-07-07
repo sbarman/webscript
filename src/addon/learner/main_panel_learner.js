@@ -591,7 +591,7 @@ function synthesizeTriggers_cont(uniqueId, script, callback) {
     clearWaitsEvents(triggerEvents);
     addTriggersEvents(triggerEvents, allPassingRuns);
     scriptServer.saveScript(uniqueId, triggerEvents, scriptId, {}, {},
-        {state: 'original-triggers'});
+        {state: '1run-triggers'});
 
     learningScript = events;
     learningReplays = [];
@@ -620,7 +620,7 @@ function synthesizeTriggers_cont(uniqueId, script, callback) {
       clearWaitsEvents(triggerEvents);
       addTriggersEvents(triggerEvents, allPassingRuns);
       scriptServer.saveScript(uniqueId, triggerEvents, scriptId, {}, {},
-          {state: 'initial-triggers'});
+          {state: '3run-triggers'});
 
       setTimeout(function() {
         /* simplified learning */
