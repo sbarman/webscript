@@ -566,7 +566,7 @@ function synthesizeTriggers(scriptName, callback) {
 }
 
 function synthesizeTriggers_cont(uniqueId, script, callback) {
-  var numInitialRuns = 2;
+  var numInitialRuns = 3;
   var numRuns = 1;
   var timeout = 300 * 1000; /* 5 minutes */
   var scriptId = script.id;
@@ -620,7 +620,7 @@ function synthesizeTriggers_cont(uniqueId, script, callback) {
       clearWaitsEvents(triggerEvents);
       addTriggersEvents(triggerEvents, allPassingRuns);
       scriptServer.saveScript(uniqueId, triggerEvents, scriptId, {}, {},
-          {state: '3run-triggers'});
+          {state: '4run-triggers'});
 
       setTimeout(function() {
         /* simplified learning */

@@ -14,7 +14,8 @@
     "main/scripts/content/injected.js",
     "main/scripts/common/params.js",
     "main/scripts/common/logging.js",
-    "main/scripts/content/misc.js"
+    "main/scripts/content/misc.js",
+    "main/scripts/content/dom.js"
   ],
   "content_scripts": [
     {

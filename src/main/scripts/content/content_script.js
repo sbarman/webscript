@@ -363,10 +363,27 @@ function updateDeltas(target) {
 
 /* Needed since some event properties are marked as read only */
 function setEventProp(e, prop, value) {
-  Object.defineProperty(e, prop, {value: value});
-  if (e.prop != value) {
-    Object.defineProperty(e, prop, {get: function() {value}});
-    Object.defineProperty(e, prop, {value: value});
+  try {
+    if (e[prop] != value) {
+      e[prop] = value;
+    }
+  } catch(err) {}
+  try {
+    if (e[prop] != value) {
+      Object.defineProperty(e, prop, {value: value});
+    }
+  } catch(err) {}
+  try {
+    if (e[prop] != value) {
+      (function() {
+        var v = value;
+        Object.defineProperty(e, prop, {get: function() {v},
+                                        set: function(arg) {v = arg;}});
+      })();
+      Object.defineProperty(e, prop, {value: value});
+    }
+  } catch(err) {
+    replayLog.log(err);
   }
 }
 
@@ -480,14 +497,13 @@ function simulate(events, startIndex) {
     if (eventType == 'Event') {
       oEvent.initEvent(eventName, options.bubbles, options.cancelable);
     } else if (eventType == 'FocusEvent') {
-      var relatedTarget = null;
-
-      if (eventRecord.relatedTarget)
-        relatedTarget = getTarget(eventData.relatedTarget);
-
       oEvent.initUIEvent(eventName, options.bubbles, options.cancelable,
           document.defaultView, options.detail);
-      setEventProp(oEvent, 'relatedTarget', relatedTarget);
+
+      if (eventRecord.relatedTarget) {
+        var relatedTarget = getTarget(eventRecord.relatedTarget);
+        setEventProp(oEvent, 'relatedTarget', relatedTarget);
+      }
     } else if (eventType == 'MouseEvent') {
       var relatedTarget = null;
 
@@ -838,5 +854,6 @@ function injectScripts(paths) {
 
 // TODO(sbarman): need to wrap these so variables don't escape into the
 // enclosing scope
-injectScripts(['main/scripts/common/params.js', 
+injectScripts(['main/scripts/common/params.js',
+               'main/scripts/content/dom.js',
                'main/scripts/content/injected.js']);
