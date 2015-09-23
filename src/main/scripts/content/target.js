@@ -423,7 +423,7 @@ var createLabel;
   };
 
   /* Set the target function */
-  getTargetFunction = getTargetSimilarity;
+  getTargetFunction = getTargetComposite;
 
   /* Given the target info, produce a single target DOM node. May get several
    * possible candidates, and would just return the first candidate. */
@@ -434,7 +434,7 @@ var createLabel;
       return null;
     } else if (targets.length > 1) {
       log.warn('Multiple targets found:', targets);
-      return null;
+      return rankTargetSimilarity(targetInfo, targets)[0];
     } else {
       return targets[0];
     }
