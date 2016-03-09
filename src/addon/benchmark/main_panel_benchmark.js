@@ -355,6 +355,10 @@ function runSynthesizeBenchmark(name, numRuns, cont) {
 function runThesisBenchmark(name, numRuns, cont) {
   // create basic benchmark
   scriptServer.getScript(name, function(err, script) {
+    if (err) {
+      return cont(null);
+    }
+
     var captures = script.events.filter(function(e) {
       return e.type == "capture";
     });
