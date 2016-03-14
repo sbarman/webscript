@@ -1,7 +1,7 @@
 webscript
 =========
 
-Webscript's (just a working name) goal is allow end-users to program simple
+Ringer's goal is allow end-users to program simple
 scripts for the browser without having to write any code. The idea behind this
 project is allow end-users to program by demonstration. The user should only
 have to demonstrate the task he/she wants to accomplish or answer some simple
