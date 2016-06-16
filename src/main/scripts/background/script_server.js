@@ -431,6 +431,15 @@ var ScriptServer = (function ScriptServerClosure() {
       return null;
     },
     getScript: function _getScript(name, cont) {
+      if (name in ringerExamples) {
+        cont(null, {
+          name: name,
+          id: null,
+          events: ringerExamples[name],
+          parentId: null,
+          notes: null
+        });
+      }
       var scriptServer = this;
       var server = this.server;
 

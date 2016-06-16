@@ -153,7 +153,7 @@ var TimeoutStrategy = {
     logging: {
       level: 2,
       enabled: 'all',
-      print: true,
+      print: false,
       saved: false
     },
     compensation: {

@@ -1138,7 +1138,7 @@ var Replay = (function ReplayClosure() {
         this.setNextTimeout(0);
     },
     screenshot: function _screenshot(text) {
-      if (this.lastTab)
+      if (params.replay.screenshot && this.lastTab)
         saveScreenshot(this.lastTab, text)
     }
   };
