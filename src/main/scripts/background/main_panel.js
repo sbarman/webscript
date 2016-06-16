@@ -1281,6 +1281,11 @@ var Controller = (function ControllerClosure() {
       ctlLog.log('Saving script');
       var events = this.record.getEvents();
       this.scriptServer.saveScript(name, events, null, params, {}, "");
+      var controller = this;
+      this.scriptServer.finishedProcessing(function() {
+        controller.updateListeners({type: 'message',
+                                   value: 'Finished saving script'});
+      });
     },
     getScript: function(name) {
       ctlLog.log('Getting script');
