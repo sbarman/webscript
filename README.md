@@ -1,7 +1,7 @@
 Ringer
 =========
 
-Ringer's goal is allow end users to produce simple
+Ringer's goal is to allow end users to produce simple
 scripts for the browser without having to write any code. The idea behind this
 project is to allow end users to program by demonstration. The user should only
 have to demonstrate the that task he or she wants to accomplish and perhaps answer some simple
@@ -53,4 +53,4 @@ button will skip over an event -- this is useful if a page is now different from
 expected and a particular event cannot be replayed. "Resend" will try 
 replaying an event a second time (in case the extension did not succeed the
 first time). Pressing "Play 1" while the replay is paused will cause the tool to execute 
-exctly one event, then pause the replay again.
+exactly one event, then pause the replay again.
