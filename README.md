@@ -1,4 +1,4 @@
-webscript
+Ringer
 =========
 
 Ringer's goal is allow end-users to program simple
