@@ -4,7 +4,7 @@ Ringer
 Ringer's goal is to allow end users to produce simple
 scripts for the browser without having to write any code. The idea behind this
 project is to allow end users to program by demonstration. The user should only
-have to demonstrate the that task he or she wants to accomplish and perhaps answer some simple
+have to demonstrate the task that he or she wants to accomplish and perhaps answer some simple
 questions.
 
 Dependencies
@@ -40,7 +40,7 @@ info box should now say "Recording."
 
 2) Demonstrate the series of actions you want executed on the page or pages. This should
 populate the middle section of the panel with information about all events
-that are raised on the page.
+that are raised on the page or pages.
 
 3) Once your demonstaton is over, click the "Stop" button.
 
